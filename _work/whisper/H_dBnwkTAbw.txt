@@ -1,0 +1,526 @@
+So welcome everyone to our talk about implementing UAV-based secure boot and
+over-the-air update for embedded ARM devices. So first of all who are we? So my
+name is Jan Kiska, this is Christian Storm. Let's start with a common part. We are
+both working for Siemens Technology. We are embedded Linux consultant and
+developers targeting in-house means not wherever but in quite a few cases where Siemens is using
+embedded Linux. We are involved at various levels and trying to get things the right way done or a
+better way done. We are also involved in the civil infrastructure platform project.
+Christian is part of the CIP work group on software update. I'm leading the kernel work group and I'm
+also maintaining the ESA-CIP core layer, what that is, we'll talk a little bit about later.
+We are both contributing to open source, whatever this is possible during our work.
+Also maintaining, I'm doing some other stuff, maintenance from time to time.
+So yeah, it's all about open source here.
+Regarding the topic of our talk, well, if you've joined, virtually at least, a talk of us two years ago,
+There was something about secure boot and over-the-air update or something like this as well.
+So, again, the same story.
+That was basically showing the concept and the X86 implementation.
+Today, we want to look further on that.
+So, where are we coming from?
+Well, the old story.
+The old days were the ROM firmware.
+Nowadays, we do that more flexible.
+We've come a long way because, well, connectivity is everywhere.
+Security is standard.
+secure updates are well no longer discussable even mandated in some of our domains by standards
+and you obviously want to do these updates not by sitting besides of this and
+picking up the pieces after it went wrong but you won't do it unattendedly and that also means you
+have to do it in a robust way when something really goes wrong and your testing failed for
+whatever reason you want to roll back and you get all your devices into a consistent state in the
+field so having all of that integrated and also presented in form of a reference implementation
+via our cip core layer that has been done in the past years and obviously also a couple of
+projects before for x86 based on uefi and now as i said today it's about looking beyond that
+what do we have to do on the arm side to come to something similar
+so a recap where are we on x86 well x86 for practical reason means today you are booting
+from uefi firmware wherever that comes from um you are booting into a bootloader which is uefi
+based and if you want to do it securely obviously um the firmware is validating um your chain of
+trust that the artifacts you are booting via uefi have been signed properly um for the purpose of
+our embedded systems doing a b update um we are running primarily with a bootloader which does
+the ab switching control you could rely on uefi for that but well if you are more skeptical or
+if you're dealing with a lot of various implementation of uefi um you better go with
+with a known bootloader and that also has the task of enabling a watchdog which is essential
+if you want to do a rollback when some of pieces of your boot chain um got south and are no longer
+reacting, that watchdog has to be started. That's not the service of your EFI. So that comes with
+our EFI bootguard firmware for X86. Continuing the secure boot chain there, what you normally do
+is booting assigned kernel image. Well, if you only boot the kernel image that way, you have a
+problem, as we've learned before in other talks with the initRD, for example. You may also have
+problem with the kernel command line therefore the common practice is to use a unified kernel
+image so combining the kernel and the command line and possibly the init rd into one binary
+and one uafi binary sign that and then boot up from there and then you hand over to the operating
+system domain um where you want to obviously also validate um that your file system you're booting
+from the root file system is as you shipped it um so the the read-only part of it um you may verify
+and as we learned this is a good choice um with the severity um and the persistent part that you
+want or have to change in the field um you may have to encrypt um and that's usually done with
+the encrypt um so then you have all the pieces together well for the encrypt you also need a
+a platform key and on x86 this is normally done with some form of tpm may it be physical or
+implemented via the firmware so to get some platform specific secret and decrypt this and
+well then you basically have all the pieces for a common secure boot system together which can be
+also updated a b wise in the field so that's the situation x86 we've done it a couple of times it
+works quite nicely, no rocket science,
+obviously a lot of pulling of pieces together.
+Now, how can we benefit from this pattern also on ARM side?
+So if you look at ARM today,
+and I know there are other bootloaders as well,
+but the common piece you often get on the embedded side
+is some U-Boot enablement,
+which can do quite a lot of things
+and basically can allow you to do the same thing,
+just with a different pattern here.
+and with a lot of more custom engineering needed
+to get things done.
+Well, every SOC vendor has a different way
+of validating the artifacts you're booting early,
+so the Firmberg here.
+You also have a different way of validating
+the OS images afterwards, or the kernel image better,
+typically done with a fit image, signed fit image here.
+You can use U-boot for quite a few things,
+is one example you can also do there the ab switching there's a scripting inside it's
+possible that to do it that way i think there's a talk these days also about this approach
+you can use you would obviously also as a driver for watchdogs um and and start up your watchdog
+there which is a good thing to do um but yeah there's a lot of customized engineer needed
+and furthermore you also need it um for um the getting out the the platform secrets um so
+mentioning the secrets to get in the end your decryption done so that's the situation today
+and while we could do it we were thinking about it but in the end the ideal case would be reusing
+much more from the previously shown x86 side so and if you look at how arm is evolving today we
+are rather looking into also having UEFI there as well you just think of system ready specification
+there so it's upcoming and with this inside but also with the motivation to unify not just for
+secure wood but rather just for booting um the right side more um alex raf quite a couple of
+years ago started the idea of having um you would as an ufp provider and that was one of the kick
+offs for also developing in that direction um that we have more unified infrastructure there
+available still from that point to where we are today that has been a long way but if we have it
+that way what could be done now so the pattern we see here basically if we have an embedded
+uefi provider is that everything after that provider basically can be the same as we have
+done before with x86 and we will look into further details on the right side later on
+what you also see if you look into the the infrastructure for trusted platform module
+you have also some sanitization approaches there so with opti being around for more and more of
+the modern platforms and even some of the 30-bit platforms that's now an option to host um the
+the platform secrets and manage basically the platform specific trusted storage there as well
+so there's also option to optimize and to unify that on that area as well
+so um the key element here is as i said then looking into who can provide you uefi um for
+your embedded device um so they're basically for nlexis six two key providers right now on the
+market as far as we see on the open source market well the standard one you may come into mind and
+say oh my gosh um edk2 is it's a uefi reference implementation and very commonly used or at
+least a common base on x86 firmware so even if you get a commercial one in the end there's often
+EDK2 bits included and it does have support for ARM and ARM64 as well however it doesn't
+commonly it doesn't commonly supported by your SOC vendor there are some exceptions for that
+but in the end you end up with something which is not yet directly fitting on your board in
+contrast to what you get via the BSP for your board and there's also very limited driver support
+upstream at least to what we've analyzed so far so also regarding how do I enable my watchdog now
+even if it's a simple task the infrastructure isn't there so this is something if you want
+to put it in the UEFI provider there's nothing like that. On the other side as I said UBoot
+by now is well it's the de facto standard for firmware if you look for your common
+silicon vendors they will probably provide you some enablement for that or someone else with
+in a nice way.
+So it's vendor-backed.
+It has plenty of drivers for all bits that you may need
+or to bring up coprocessors, stuff like that,
+which may also, in some scenarios,
+be interesting for the features you need
+for secure boot here.
+That is all there.
+What is maybe not recognized by anyone
+or by some people is that there is also
+fairly advanced UAV support by now.
+The only issue is it's, as I said,
+not recognized.
+it's likely not broadly used yet.
+So what do you do if you want to use U-Boot for your AFI
+and for booting secure AFI?
+So one of the first, well, anecdote to say basically,
+we were shipping an embedded board
+which was booting from U-Boot
+and was doing the classic distro boot,
+so fit image booting.
+And we're using default config of the vendor for that.
+And after a while, when we looked into what's possible
+with UAV, I said, oh, it's default on.
+Let's just flip in our image, the bootloading process
+with Grub, Grub UAV, and it just booted.
+So we were accidentally basically shipping already
+UAV enabled system in the field without knowing it.
+It's an open platform, it's nothing that you close down
+and configure to the minimum.
+So it was working as supposed.
+And, yeah, at least non-secure booting was already working.
+Now, if you look at what is needed for booting securely,
+well, you need to continue your chain of trust.
+Again, remember the early stage,
+the piece basically from the ROM loader to your U-boot
+or whatever comes before U-boot or in the middle of U-boot,
+that is usually remaining vendor-specific.
+But this is what you get usually pre-integrated by your vendor
+and you can just build upon.
+Now, when you're talking further, what UBoot wants to load or should load via the UEFI mechanism and should validate, you need some train of trust for that.
+So, the easiest way to do that is to pre-compile the public keys into the UBoot binary.
+So, you have a static train of trust.
+You could do the same with fit images, obviously, and this is now done with UEFI.
+That's one way.
+The other way, it's also interesting, but still under development and has dependency, is doing this via the UEFI variables.
+and having the IFI variables in the secure storage.
+Then you can actually also update the keys in the field
+without completely replacing your firmware binary.
+So it's one of the first steps you have to do.
+Go one way or the other.
+So then look into hardening.
+Well, this is a general recommendation.
+It doesn't only apply to your IFI-based secure boot
+and many of the patterns are generic.
+But anyway, look into that.
+I didn't find anything like this described in that form so far.
+There were some indications what to do in general,
+but this actually is something that we've compiled over the past years
+for actually practical doing it.
+So one of the obvious things is you have to make your boot chain
+no longer interactive, lock down any kind of interaction with the bootloader,
+because this usually opens up the door for doing something else
+than non-secure and security booting.
+you have to or you should limit your boot to the UEFI part.
+I mean, if you're just keeping on the legacy boot,
+that usually means that you don't boot securely anymore
+unless you've done special metal on that path as well.
+But, well, if you decide to go one way, log out the others,
+so limit your boot procedure to UEFI.
+Another general security recommendation is
+turn off features you don't need.
+That specifically is interesting regarding file systems.
+So if the user can, or the attacker can replace
+some of the storage, which is one of the physical
+attack vectors, and place some nice file system on it,
+and you would have an implementation,
+but it's probably not that commonly used
+and may have some bugs, yep.
+You just open up the door.
+Obviously also network is something that you want
+to turn off if you don't use network booting
+on that stage.
+Another important thing to remember, well, either do a read-only environment, because
+the environment keeps all the variables that could also be used for booting, and booting
+in a different way, so either make it read-only, or if you have some variables that should
+be writable still for whatever reason, there are mechanisms now in uBoot, not that handily
+to describe but there are some reference i can point to you and to make only those variables
+writable and nothing else so there has been some work we've done in the past years to enable that
+scenario and yeah as i said this is just a brief list on that if you want to look into some examples
+we compiled the generic ones but not completely secure ones in the isa cfp core layer and there's
+also practical examples for a ti-based processor this is from this id 2050 device of us so have
+a look there if you are interested in some examples so next step obviously is then to
+sign and lock the firmware artifacts that is again the vendor specific mechanism
+don't forget to start the watchdog as i said um that is in the end then taken over by linux once
+it's running so that starting point should be in u-boot and not later otherwise you may have some
+black hole there yeah and another very important indication on that obviously test don't trust the
+whole thing and as i said this is still fresh i'm not saying it's instable but it can happen
+and it happened unfortunately there was some bug that we found during the testing recently
+it's fixed by now so if you take the latest u-boot version you have it fixed
+But it's always good to have at least these basic mechanisms
+also checked by your system test intensively
+regarding if there are security holes remaining on that level.
+So next step.
+After U-boot, basically, there is the UEFI payload starting.
+And the UEFI payload for us is our A-B switching bootloader,
+if you would got um which is quite easily or was quite easily enableable for for arm and
+arm 64 builds so that's available checkpoint um however what is now the challenging part
+is or what turned to be a bit more challenging part was the unified kernel image so so far in
+x86 we used the pattern um that systemd was introducing um the little kernel little loader
+stub which then forms together with the kernel and with init id and the command line string
+and on arm also a device tree blob that unified kernel image and that whole thing is being pulled
+together with object copy um it's a pe binary so it's a windows binary an elf binary and an
+yoifi binary in the end and the object copy tools you currently get from common
+toolchain releases you get via your distributions they are not ready for that so you can work around
+obviously by taking the latest boot chain or latest tool chain if you're on yokto what an issue if
+you're on distribution based build system that can be an issue um there's hope as i said it's fixed
+but the current situation was a little bit of problematic first from a from a handling perspective
+what turned out to be more problematic to our scenarios was this single device tree story so
+ideally the device tree comes in the system ready model from the firmware and it's perfectly fine
+describing all bits you want to have on your device practically well there is a life cycle of
+that piece of the firmware piece of the kernel from when you're having your device a longer
+time in the field you may start with a bsp kernel you may later on end up with a mainline kernel
+ideally you may start with unofficial device rebinding you may up in the end starting or
+using official binding so there is a certain thing that you have to plan for at least if you want to
+do a long-term updatability of your system. In other words, this kind of bundling option of the
+kernel and the device tree, which is unfashionable, but it's unavoidable practically still for a
+foreseeable future. Now, if you have one device tree for one device, no problem,
+checkpoint, you can use this pattern. However, if you have an image which is supposed to have only
+minor variant of devices covered with one image, you suddenly have a problem. There's only one
+device tree and you want to address them all so we need support for multiple of
+those device trees some kind of matching mechanism that's what we did well we
+first of all solved for us the unified kernel image generator problem and by
+doing a Python based approach pulling this Python these sections together for
+the PE binary and then we simply implemented a mechanism to choose from
+the option of a list of device trees which were embedded in this embedded
+this unified kernel image, choose the one which matches what the firmware was providing before.
+Pretty simple thing.
+Eventually, we will also continue to system debut.
+That's basically the needed step for that.
+The precondition for that, to have this kind of device tree replacement,
+is that the firmware allows you to forward transport certain dynamic information
+that the firmware implants into the device tree
+via a fix-up protocol.
+So there's a fix-up UIFE protocol being defined
+and implemented in U-Boot.
+U-Boot is working just fine.
+SystemdBoot supports it.
+UIFE BootGuard supports it.
+I think that was currently the situation.
+EDK2, unfortunately, does not support it yet.
+It's ongoing work to get this into the EVBR specification.
+So it's an open issue on that topic.
+So eventually maybe it becomes standard
+and we become also available for other firmware providers.
+So with that, we basically leave the UEFI domain
+and I would also hand over at this stage.
+Yeah, thanks Jan.
+So now what do we have actually?
+We do have cross-architecture commodity in the UEFI domain,
+which means you do deploy the very same components across architectures,
+maybe with a bit of minor configuration, for example,
+enabling watchdogs or not. Next is the US domain here on the right side and I
+want to focus on on three things here. First is how does a unified kernel
+image first find and then mount its rootFS. The second is how to integrate
+integrity protection to this process and the third one is obviously as the title
+the dog says firmware update so starting with firmware update um in modern times updatability
+is probably the most important product feature and commonly what we see is an ab scheme which means
+you do have two copies of your root file system and one is actually selected for being the current
+boot path so this is the currently running system while running you update the spare copy and when
+you're done you're just test booting into this if this has worked and the image has booted up
+perfectly fine then this becomes your default image and this select switch is over if not you
+get a rollback and again you add firmware 1 which was the initial one and can continue or report
+the failure or whatever to your backend in terms of an ota update um this of course needs support
+from the bootloader as Jan just said which is available for if you boot guard as well as for
+wood and for other bootloaders as well but it needs a very deep integration in terms of arming
+the hardware watchdog which you need for having the rollback in case you for example deployed an
+x86 kernel on an arm system won't boot so you rely on the watchdog you need the ap switching
+and most probably other features as well this whole stuff in terms of using SW
+update here for example is the flow how it works is pre-integrated into SIP core
+so you can just clone it don't play with it it's a pre-integration asset and what
+you can also do with this mechanism is once you have it available means you
+have a general way of deploying artifacts whatever this means to a
+device so it must not always only be firmware in terms of for root file
+systems you can also use this mechanism to update packages or contain images or
+what else as you have one channel down to your device for this so now having
+done an update how does this unified kernel image find its actual root file
+system the assumption here is that a kernel and its root file system is one
+package that belongs together so meaning you have deployed a kernel and it belongs to exactly one
+of the two a or b root for systems of course there is a kernel option you can simply specify
+root is dev partition whatever but this doesn't unfortunately work in the a b update case
+because you cannot know without asking the device in the field what its current boot path is
+so it has to be a B agnostic and in case of secure boot you also have the
+problem that you don't want to feed untrusted information into the boot
+chain which means you cannot rely on some configuration lying around somewhere
+so essentially there are a few options left you can use the file system UIDs
+so in the internet romfs while booting you scan the disk and search for the
+file system UID that matches your kernel because it's engraved embodied in the
+ID and then boot it. Fine, may work but not all file systems support this and so
+it's out of the game for a general solution. Next one is you can use
+partition UIDs. Works the same way but it's also not always available and you
+have the the problem that you have to write the partition table on each
+update which you should avoid which is not that good. So in the end we came to
+the idea that we add a custom tag image UID to the root file system's ETCOS release and
+then in the image ID iterate over all file systems, mount them, look into the ETCOS release,
+look if it matches the image UID engraved in the unified kernel image.
+If yes, we have found our root file system and we can continue booting.
+So as the UUID is engraved also in the unified kernel image means it's signed.
+So both find a match and the UUID is protected by secure boot in the unified kernel image.
+Now you have booted a root file system and this root file system is not protected against
+modification.
+So it happens to satisfy our mechanism of finding the UUID in EDCOS release, but you
+are free to tinker with it and as long as you keep this mechanism intact you can boot anything
+so what you want to have here is some kind of root file system integrity protection
+and for this you need authenticity enforcement and most probably a read-only root file system
+as we've heard from jan you can integrate the emeriti here which is kind of a layering approach
+you can use device member for layering block devices and the severity gives you the integrity
+protection in terms of mercury means if you modify the lower bits here the changes trickle
+up to the root hash and then you get a different root hash so what you do is you prepare your
+for system you calculate the root hash and then this root hash you actually embody into the end
+ID, which then gets put into the unified kernel image.
+And while booting, you again scan the disks and you scan the metadata of the file system
+of the Deem Verity block device and find a match between the root hash embodied in the
+unified kernel image and the root hash in Deem Verity's metadata.
+Well, congratulations, you found it.
+And the bonus is that you don't have to actually try to mount each file system you find along
+the way because you can read it out from the metadata so as you've seen there are
+many things here involved that you have to align proper in order to make this
+work so in essence it's not that big of a rocket science but you have to bring
+those pieces in a line and doing this upstream is kind of a codified
+description of the big shared picture it's shared knowledge you bring upstream so to not make this
+tribal knowledge bring it out to the open and as it happens to touch many of the core concepts or
+working groups of the civil infrastructure platform it's a natural fit to bring this stuff
+up upstream first to the SIP project which we have done and you can find it in the ISA SIP core layer
+this is an implementation more or less done with the help of the ISA metabill
+system but the idea scripts context configurations whatever can just be
+copied over to any other metabill system yokto whatever I said multiple times so
+we do have a reference integration which is ISA sub-core that you can find here
+there are pre-integrations of those concepts presented along the line it's
+It's not fully integrated because, for example, SecuBoot is on the technical side, the realization
+on the box.
+On the process side, you have to do key management, whatever.
+Those things are obviously not to be found there.
+But the box side, the technical side is there.
+You can just take it and hook it up into your company's process and be done with it, hopefully.
+There is a demo available on QEMO, obviously, for all architectures and one physical target.
+And on top of this, in terms of eat your own dog food, we prepared a layer, Meta IoT 2050
+for the Zymatic IoT 2050 boxes.
+And this is essentially the device-specific difference between the ISA-SubCore and this
+one to get this box up and running.
+So there you can see what it takes to bring a new box or what the difference is, how much
+work it would be to base on ISA-SIP core for a final product.
+So in sum, this whole stuff, combining Secure Boot and firmware update over the years and
+rocket science, but it's maybe too much for Casual Friday if you don't want to ruin your
+weekend, so take your time to implement it.
+Most of the puzzle pieces are open source, so they are available.
+You just have to find them, qualify them and bring them in line.
+And this is what we have done in terms of the civil infrastructure platform to give
+you blueprints, documentations or even pre-integrations.
+So documentation in terms of code, which you can use and just run.
+And the more important part here is the testing and long-term maintenance.
+So it's not just a one-shot that is out there to be copied or to take inspiration from.
+But instead, it's meant to be a long-term thing that's tested and measured there.
+So with this, join us at the mailing list and let's make this stuff even more a commodity
+than it is nowadays.
+Thanks.
+Now we have time for questions, I guess.
+Yep.
+Yeah.
+Slide 13.
+Yep.
+this one here so what we did here is we
+embedded this custom tech into the TCO3
+right and this UID is generated so it's
+some random UID and while booting you
+iterate over all file systems mount them
+look into this when you have found it
+you have found your matching rule for system of your kernel as you are now and this is essentially
+a shortcut of this mechanism so the root hash is actually kind of a uuid and with this you don't
+need to mount a dm verity block device or prepare it open it and mount the file system and look into
+etc us release instead you can take the root hash as this uuid and do the shortcut
+you can also use this mechanism with the severity but then you have to open the
+block device or the root hashes need to mesh when they don't you cannot open it
+so you go to the next one this is also possible so it's kind of a shortcut
+optimization. How long does it take to just mount every partition? You can call a premature
+optimization. It doesn't take long. Yeah. How do you update your bootloader? The bootloader is just an
+EFI binary sitting on the ESP and of course you can update it. So using SW update, replacing it
+with the file, a new bootloader, a new AP bootguard.
+But that's a sensible operation to do, obviously.
+If you crash the bootloader, well then, you're out of luck.
+No, there's no AP in the bootloader in this case,
+not in the general concept here.
+You need to have one core bootloader,
+which you don't touch.
+On top of this, you can chain boot, for example,
+EFI boot girls, two if you want to have two. But updating this call, this single point,
+is then still the problem. So you don't solve it by putting two there. You always have one single
+point of failure. Except for the case that you have support in the EFI bios, wherever, to have
+two different ESPs or something. But this is not the general case. So yeah, there are solutions,
+but not the general one, not the one you buy from the typical ender.
+And you mentioned one thing about not updating the GPT habits.
+Yeah, this one here.
+So if you write to a partition a new update package,
+which is a partition image,
+you may write a new UID to this.
+And in order to recognize this, for example, in the GPT,
+you may modify the GPT, depends on the implementation.
+This is bad. And except for, apart from this, it's not always available. If you don't have a GPT formatted block device, then it's out of the game anyway.
+I mean, there's a version of GPT that you have to, so it's AB.
+Sorry?
+You have two of them. I mean, it's pretty AB.
+Yeah, but if you ruin your partition table, then you again have a problem.
+You have two. You have two and it's...
+Right. You have two if it works, it's good. If not, it crashes. Better don't touch it.
+And with this mechanism here, you don't have to touch it.
+Again, so what we didn't tell is that EFI BootGuard also has two partitions where it holds this configuration.
+And the idea is that you don't touch, under all circumstances, you're currently known to work a boot path.
+So, you always write to the spare other partition, right?
+And following this idea, you don't want to write GPTs or something, so you simply don't
+want to touch single point of failures here.
+That's the idea.
+Yeah, could be.
+So we also thought about having the configuration EFI variables like SystemDeboot does.
+opted for not doing this because we do not know how reliable the lacking storage for the IFI variables
+are so we said okay better do it on disk if the disk has failed then it's broken anyway
+don't rely on other things you cannot influence so it's kind of doing it really hard
+I have another question about a quite constructed example.
+So you did an update where you just changed the device here.
+The root hash is the same.
+How would you do that update?
+Because after you install the new image, you have the same root hash in both images.
+Yeah, if you do have the same root hashes in both images,
+then both images are available.
+So you can use both.
+So that's, I said it here, that a kernel plus root for a system is one update package.
+That depends on the wiring of your update procedure if this works.
+So for example, if you have kernel A and root for a system A, you have kernel B and root for a system B.
+And you now update kernel B and this one probes the disks and finds this root for a system.
+Although it should use this one.
+Then you have X.
+them this can be a problem too that depends on how we wire up the update system but in terms of
+integrity protection it doesn't matter because both root hashes are equal so both partitions
+are eligible for being used you said you had problems with the unified kernel
+it's not supporting more than one device tree.
+Couldn't you use the fix or the image for the Unifo kernels?
+Then you are leaving again the UEFI domain.
+Then you're back in the classic boot chain of UEFI.
+Yes, you can do that, and it has this mechanism,
+and it has these options, but that's not the goal.
+As I said, we want to be on the UEFI side just the same,
+and that's what we're achieving now.
+Maybe even think beyond that arm.
+You could think of RISC-V and things like this.
+So that's basically the idea behind it,
+having that standardized.
+I mean, it comes with a cost, obviously.
+You don't do this sub-multi-second boot time optimization this path.
+There has to have a complexity in it.
+But that's also in our domain.
+It's not the primary driver.
+We are more interested in having that path more commodity
+and more robust and more unified than having it more optimized.
+So different problems to solve, different sweet spot where you optimize.
+And this is basically the generalization optimization.
+Kostovic.
+essentially this mechanism works for example rock as well just have to
+implement it we happen to choose SW update to implement it as the blueprint
+and zip but you can use anything else for the purpose so this is quite
+agnostic so you have this one here and the communication to the bootloader so
+arming the watchdog a B switching this stuff so the update agent communicating
+with the bootloader this has to be done this is perfectly fine integrate into SW
+update if you have this in other or even proprietary update agents that works as
+well so there is nothing that binds you to SW update if you want to have the
+pre-integrated route in terms of the zip call then you get a stably update but
+you can of course swap it then you have to re-implement the features but it's
+nothing that locks you into this
+device please come into the unified kernel image this is kind of the new
+bits on that piece. So the unified kernel image has a header stub which is a UEFI binary which
+loads, finds out what artifacts are in this binary blob, the kernel init ID, and then a number of
+device trees. And then it matches from that number of device trees the fitting one and boots that up
+the classic way. So this is outside of the UEFI domain already. But as the whole thing, the unified
+kernel image is a UEFI binary, we benefit from the firmware validating that whole binary as being
+integral or not. That's the story behind it. So I think we have a short question, the last one.
+Yeah, so the suggestion is to put everything into the kernel.
+There are mechanisms for that.
+Maybe we can evolve on that.
+I'm not sure how then the kernel command line is addressed.
+So I'm not saying that this is the only way to go forward.
+But it's one way that we practically choose right now.
+And I'm happy to remove pieces from our chain, obviously, in the future.
+Also regarding the firmware.
+So if our bootloader eventually becomes superseded, fine, drop it, do it simpler.
+So this one here, the AB switching logics, can as well be implemented in the UEFI firmware as well, if it has support for it, meaning extending the specification.
+The watchdog enablement is currently done with the hardware watchdog.
+UEFI does have this software watchdog, which is essentially a timer.
+If you would bring this to the specification, every system would have it, and we are happy to ditch UEFI boot guard on this one.
+You can now do the same, very same thing in terms of writing DXEs, so UEFI drivers that do the job,
+but those tend to be specific to the UEFI implementation you get for a board.
+So you better offload this to some special thing, which we currently do with UEFI BootGuard,
+but eventually we'd love to get rid of this.
+It's just for the transition.
+But for this, you obviously have the need and do need this.
+Not yet, internally, but it's not yet published.
+So the D-encrypt part will come, definitely,
+but currently not yet.
+The problem is not so much on the technical side,
+the problem is on the process side.
+As I said, how do you hook up your whole signature
+management key management whatever into this process so doing it on the technical side is
+soft but having the integration and doing this as a blueprint or pre-integration
+is the hard part so it's not a question of is it possible but instead how do you
+prepare it for being upstreamed in a way that's reusable for others in terms of not
+imposing our solutions to the whole world, so to say.
+Okay, I think we are out of time. So thank you for your attention. We are around still.

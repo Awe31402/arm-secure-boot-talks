@@ -1,0 +1,485 @@
+                   Arm Solutions at Lightspeed
+
+
+
+
+Secure Boot all the way to
+ userspace and upstream
+ Mikko Rapeli <mikko.rapeli@linaro.org>
+  Yocto Project Virtual Summit 2024.12
+Abstract
+Introduces Linaro Trusted Substrate (TS) Arm SystemReady/UEFI ﬁrmware and Trusted Reference Stack (TRS)
+kernel, initramfs, and rootfs prototype designed for devices with UEFI Secure Boot and TPM backed secure
+writable storage.
+
+
+Provides an overview of upstreaming status, problems, and solutions.
+
+
+
+
+                                                                                                           2
+Description
+● Linaro has implemented an Arm SystemReady IR (embedded) ﬁrmware for multiple devices in the Trusted Substrate
+  (TS) project
+● This ﬁrmware has been used with Trusted Reference Stack (TRS) kernel, initramfs, and rootfs, which extends UEFI
+  secure boot all the way to userspace. These components create a Secure Boot chain of trust where:
+  ○ HW veriﬁes UEFI ﬁrmware,
+  ○ UEFI ﬁrmware veriﬁes kernel and initramfs as Uniﬁed Kernel Image (UKI) binary,
+  ○ uki binary embeds dm-verity hash to detect and verify the rootfs,
+  ○ TPM device is used to measure UEFI ﬁrmware and all boot-related SW components,
+  ○ TPM device is used with systemd to create an encrypted writable ﬁlesystem tied to the secure and measured system
+     on ﬁrst boot.
+● This talk describes the TS and TRS architectures and status of upstreaming the solutions to oe-core/poky, meta-arm,
+  meta-security/meta-tpm, meta-secure-core, etc.
+
+
+
+
+                                                                                                                    3
+ARM SystemReady
+● A compliance program that ensures OS interoperability on Arm-based hardware.
+● A ﬁrmware standard for ARM based devices that is built on the UEFI ﬁrmware standard.
+● Multiple proﬁles for embedded devices, etc.
+  ○ Server-class HW requires ACPI support, while embedded devices don't (impacts TPM discovery; details later).
+● Enables installing and running multiple operating systems on a supported device without any software modiﬁcations.
+● Good for many kinds of products
+● A good starting point for devices that need more optimization, such as boot time and security.
+
+
+  https://www.arm.com/architecture/system-architectures/systemready-compliance-program
+
+
+
+
+                                                                                                                       4
+UEFI (Uniﬁed Extensible Firmware Interface)
+● A standard for device ﬁrmware implementations.
+● Provides an interface for users and device manufacturers to run scripts, interact with ﬁrmware, and load and run
+  binaries (e.g., load operating system binaries and run/boot into them).
+● Includes support for secure boot, TPM devices, and standard methods such as importing vendor keys for secure boot.
+● Common                 Open               Source               implementations:           U-Boot,             edk2
+
+
+  https://en.wikipedia.org/wiki/UEFI
+
+
+
+
+                                                                                                                       5
+Secure boot
+● Way for the owner/maintainer of the device to make sure only SW created and signed by the owner/maintainer will run
+  on the device.
+● Any modiﬁcations to the target SW need to be detected, and running modiﬁed SW must fail.
+● Usually implemented by signing the SW with secure boot keys, which are then veriﬁed by HW.
+● Secure boot keys are usually not device-speciﬁc but generic to a range of devices, e.g., a product or product family.
+● Often multiple levels of signing and keys are involved to create a chain of trust from HW to applications.
+
+
+https://en.wikipedia.org/wiki/UEFI#Secure_Boot
+
+
+https://en.wikipedia.org/wiki/UEFI#Secure_Boot_criticism
+
+
+
+
+                                                                                                                          6
+Trusted Platform Module (TPM)
+● A HW module capable of securely calculating checksums and combining them (XOR), so-called PCR values, and storing
+  them persistently.
+● Operating System cannot modify data in TPM, only amend (XOR), but it can use it to verify state and unlock access to,
+  e.g., encrypted data.
+● Common use cases:
+  ○ Encrypting partitions or data based on boot time measurements,
+  ○ Blocking access to partitions or data or network service if boot state is not cryptographically correct
+● TPM device and data are device-speciﬁc, not generic across device types built by a manufacturer.
+● Can     be    implemented     also    in   ﬁrmware     via   OP-TEE     fTPM     Trusted    Application     (fTPM   TA).
+
+
+  https://en.wikipedia.org/wiki/Trusted_Platform_Module
+
+
+
+
+                                                                                                                             7
+Measured Boot
+● Using a TPM device to calculate checksum of each boot stage before execution and to add (XOR) them up to provide a
+  digital signature for boot status at each stage, which must match exactly to unlock access to secure device-speciﬁc
+  data,                        e.g.,                       a                                                 partition.
+
+
+  https://en.wikipedia.org/wiki/Trusted_Execution_Technology#Measurements
+
+
+
+
+                                                                                                                        8
+Linaro Trusted Substrate (TS)
+https://gitlab.com/Linaro/trustedsubstrate/meta-ts.git https://linaro.atlassian.net/wiki/spaces/TS/overview
+● ARM SystemReady IR-compatible UEFI ﬁrmware is available for multiple devices:
+  ○ qemu armv7 (swtpm)
+  ○ qemu armv8/arm64/aarch64 (swtpm)
+  ○ AMD Kria KV260 (no TPM support)
+  ○ AMD zcu102 (no TPM)
+  ○ rockpi4b (fTPM via OP-TEE ftpm TA in ﬁrmware)
+  ○ synquacer (fTPM via OP-TEE ftpm TA in ﬁrmware)
+  ○ RPI4 (no TPM)
+  ○ NXP imx8mp
+  ○ Qualcomm RB1/2/3/5 robotics boards
+  ○ AVA Developer Platform
+● Work done in Linaro LEDGE (Edge computing) group
+● Several devices ARM SystemReady certiﬁed
+
+
+
+
+                                                                                                              9
+TS components
+● U-Boot, using latest from poky master branch
+● Trusted-Firmware A (TF-A) from meta-arm master branch
+● OP-TEE for ﬁrmware-side fTPM support and more from meta-arm master branch
+
+
+
+
+                                                                              10
+TS additional features
+● Authenticated capsule updates for ﬁrmware
+● Alternative U-Boot TCP/IP stack with lwIP and TLS support with MbedTLS
+● U-Boot and UEFI HTTP/HTTPS support to download/boot distro images, or run UEFI binaries
+● ARM Trusted Services as an alternative to TPM, e.g., parsec support
+● UEFI Secure Boot. It is a veriﬁcation mechanism for ensuring that code launched by UEFI ﬁrmware is trusted
+
+
+
+
+                                                                                                               11
+TS caveats
+● Does not bind ﬁrmware to HW-speciﬁc keys
+  ○ HW does not verify the ﬁrmware
+  ○ Not implemented because speciﬁc to each device and vendor
+  ○ Thus runs on 'open HW' only and leaves the HW open
+● Hard codes private keys from public git repo to enable testing
+● Real products need to use secret vendor keys in build environment
+● Or add a "HW preparation" step to production that uses either SoC and/or ﬁrmware-speciﬁc or UEFI-standard way for copying
+  vendor keys to target HW and conﬁgures HW target to only accept those keys
+● Time support is problematic; TLS requires every device to be roughly up to date with time and date to verify certiﬁcate
+  expiration
+● U-Boot and UEFI consoles are enabled by default due to testing in Linaro LAVA, which can be used to break Secure Boot.
+  Product conﬁgurations need to disable these.
+
+
+
+
+                                                                                                                              12
+TS implementation
+https://gitlab.com/Linaro/trustedsubstrate/meta-ts.git
+● yocto machine conﬁguration for each supported board
+● machine features for:
+  ○ secure-boot, signing with static key in build env, public keys embedded into ﬁrmware binary
+  ○ tpm2, TPM measured boot support
+  ○ optee, support for OP-TEE based trusted execution environment
+  ○ capsule-update, ﬁrmware capsule update features
+  ○ auth-capsule-update, authenticated e.g. signed capsule update support
+● machine features enable conﬁgurations and conﬁg snippets on top of upstream defconﬁg, e.g. U-Boot
+● patches in upstream reviews if not already merged
+● additionally, some HW/ﬁrmware-speciﬁc memory conﬁguration patches
+● build output: ﬁrmware binary for device-speciﬁc ﬂashing step and a .wic image with an empty ESP partition for the UEFI
+   ﬁrmware
+● testing relies on access to U-Boot debug console to change PCR values so that, e.g., access to TPM-encrypted rootfs fails
+● test automation with Linaro LAVA
+                                                                                                                              13
+TS upstreaming status 1
+● No upstream meta layer found for all devices supported: rockpi4b, synquacer, AMD devices, RPI4 etc
+● TS implementation relies almost completely on upstream U-Boot, TF-A, etc
+● SoC vendor BSP layers and deliveries implement a lot more features, support a broader range of boards/devices etc, but also
+  frequently fork U-Boot, TF-A, etc versions so that poky and meta-arm defaults don't work
+● On the other hand, SoC vendor BSP layers should enable ﬁxing the ﬁrst boot step for HW to authenticate ﬁrmware before
+  execution
+● meta-arm is only suitable for qemu machines with Secure Boot, capsule updates, and HTTP support changes
+  ○ Since October 2024, qemuarm64-secureboot in meta-arm compiles TS with Secure Boot in UEFI ﬁrmware. At build time, it
+     signs kernel and systemd-boot (not grub). Tested in qemu so that Secure Boot is enabled. Javier Tia from Linaro has
+     upstreamed the modiﬁcations. Secure Boot keys are created during build time.
+  ○ How to build and test with qemu:
+  $ git clone https://git.yoctoproject.org/meta-arm
+  $ cd meta-arm
+  $ kas build ci/qemuarm64-secureboot.ym:ci/ueﬁ-secureboot.yml:ci/testimage.yml
+
+                                                                                                                                14
+TS upstreaming status 2
+●    Most conﬁguration in meta-arm/ci/ueﬁ-secureboot.yml:                              ●   This enables signing for kernel and systemd-boot. Not grub because it is problematic for TPM
+header:                                                                                    usage. grub also enables editing boot entries, which is basically a secureboot hole since kernel
+ version: 14                                                                               command line can deﬁne which kernel to load, which partitions to mount, and which init binaries
+ includes:                                                                                 to load, etc.
+    - ci/meta-openembedded.yml
+    - ci/meta-secure-core.yml                                                          ●   Only systemd init is tested since it works better with Secure Boot and TPM use cases since support
+local_conf_header:                                                                         for encrypted partitions and boot time PCR measurements is already there, and those           would
+ ueﬁ_secureboot: |                                                                         need to be manually implemented with sysvinit and/or scripts there.
+    SBSIGN_KEYS_DIR = "${TOPDIR}/sbkeys"
+    BB_ENV_PASSTHROUGH_ADDITIONS = "SBSIGN_KEYS_DIR"                                   ●   TODO: TPM measured boot support!? To meta-security/meta-tpm?
+    # Detected by passing kernel parameter
+    QB_KERNEL_ROOT = ""
+    # kernel is in the image, should not be loaded separately
+    QB_DEFAULT_KERNEL = "none"
+    WKS_FILE = "eﬁ-disk.wks.in"
+    KERNEL_IMAGETYPE = "Image"
+    MACHINE_FEATURES:append = " eﬁ ueﬁ-secureboot ueﬁ-http-boot ueﬁ-capsule-updates"
+    EFI_PROVIDER                                  =                       "systemd-boot"
+    # Use systemd as the init system
+    INIT_MANAGER = "systemd"
+    DISTRO_FEATURES:append = " systemd"
+    DISTRO_FEATURES_NATIVE:append = " systemd"
+    IMAGE_INSTALL:append = " systemd systemd-boot util-linux coreutils"
+    TEST_SUITES:append = " ueﬁ_secureboot"                                                                                                                                              15
+Trusted Reference Stack (TRS)
+https://gitlab.com/Linaro/trusted-reference-stack/trs.git
+● Operating System (OS) counterpart for secure boot ﬁrmware. Kernel and grub signed using keys from Trusted Substrate (TS)
+   ﬁrmware. Original implementation with shell scripts in initrd to convert ext4 ﬁlesystem to a TPM encrypted one if secure boot
+   signing was enabled. Originally used grub as a boot menu tool and supported also Xen dom0 boot mode. Secure Boot did not
+   cover initrd or main rootfs. After ﬁrst boot, measured boot with TPM encrypts whole rootfs but still leaves initrd unencrypted and
+   unsigned ESP partition.
+● Re-implementation with Systemd to ﬁx all secure boot-related gaps. Systemd standard Uniﬁed Kernel Image combines kernel,
+   initrd, kernel command line, and /etc/os-release metadata to a single UEFI Secure Boot binary that is signed. Rootfs is changed
+   from ext4 to dm-verity /usr partition, and at build time generates rootfs hash that is embedded into kernel command line in UKI
+   binary, which binds Secure Boot all the way to rootfs.
+● The initrd is changed from custom shell scripts to systemd, which enables using systemd-repart to create a read-write TPM
+   backed encrypted rootfs partition on ﬁrst boot. This is much faster than re-encrypting an ext4 rootfs.
+
+
+
+
+                                                                                                                                     16
+UEFI Secure Boot chain of trust
+     1)                     2)                     2)                                      3)
+HW -> firmware (UEFI) -> UEFI systemd-boot -> UEFI UKI (kernel, cmdline, initrd) -> dm-verity /usr partition
+
+
+1) missing from TS ﬁrmware, as it's not signed with vendor HW speciﬁc keys and uses open HW only
+2)     UEFI     ﬁrmware     conﬁgured      with    custom   keys   which    are    used    to    load    only   signed     binaries:
+     - systemd-boot
+     - UKI (linux kernel, command line, initrd, metadata)
+3) dm-verity hash is embedded at build time into the kernel command line inside UKI signed binary
+
+
+Note that 1), 2), and 3) are generic for large batch of devices, possibly the whole product range, and thus can't be used to create
+device speciﬁc encrypted and protected storage.
+
+
+
+
+                                                                                                                                   17
+TPM PCR Measured boot
+0) TPM device secret private key, unique to each device
+      1)                2)                            3)                                        4)
+HW -> firmware (UEFI) -> UEFI binary systemd-boot -> UEFI binary UKI (kernel, initrd etc) -> kernel UEFI stub
+5)                           n)
+-> systemd based initrd ... -> TPM backed secrets used to encrypt read-write rootfs
+
+
+All PCR steps from 0) to n) are needed in the same order without any modiﬁcations to unlock access to TPM backed read-write encrypted
+rootfs, e.g., all PCR measurements are tied to the unique TPM keys inside each device, step 0). Data partition can only be unlocked with the
+same TPM device and with the exact same PCR measurements. Policy conﬁguration can be changed to make updates more ﬂexible, e.g., tie the
+encryption key to only TPM device key and UEFI vendor signing key, which allows updates to ﬁrmware, UKI and rootfs without need to change
+ﬁle                                      system                                        encryption                                       key:
+https://www.freedesktop.org/software/systemd/man/devel/systemd-repart.html
+https://www.freedesktop.org/software/systemd/man/devel/systemd-cryptenroll.html#TPM2%20PCRs%20and%20policies
+
+
+
+
+                                                                                                                                           18
+TPM PCR Measured Boot Notes
+Note: This does create an issue with SW updates when UKI binary and dm-verity /usr partitions change, but the TPM encryption keys for rootfs
+should not: use correct/suitable PCR policy
+The issue is common with x86_64 UEFI ﬁrmware, so the expectation is that systemd-boot, kernel, systemd etc, do the right things and use
+correct PCRs to seal rootfs encryption keys with.
+
+
+Note 2: A/B SW updates are tricky or simpliﬁed. A single UKI binds to a single dm-verity partition. Updating dm-verity partition requires
+updates to signed UKI binary because of kernel command line changes.
+Thus each UKI must have a matching dm-verity rootfs partition. UKI can be updated without a new dm-verity rootfs but a new dm-verity rootfs
+requires a new UKI. systemd-boot lists a boot menu of all detected UKI binaries and sorts them out using the /etc/os-release version, etc. details.
+
+
+
+
+                                                                                                                                                 19
+TRS implementation: UKI
+●   Uniﬁed Kernel Image via uki.bbclass in poky, since October 2024, https://git.yoctoproject.org/poky/tree/meta/classes-recipe/uki.bbclass
+●   Sample usage with qemuarm64-secureboot machine from meta-arm, using core-image-base as rootfs and core-image-minimal-initramfs initramfs:
+    SBSIGN_KEYS_DIR = "${TOPDIR}/sbkeys"
+    BB_ENV_PASSTHROUGH_ADDITIONS = "SBSIGN_KEYS_DIR"
+    # Detected by passing kernel parameter
+    QB_KERNEL_ROOT = ""
+    # kernel is in the image, should not be loaded separately
+    QB_DEFAULT_KERNEL = "none"
+    WKS_FILE = "eﬁ-disk.wks.in"
+    KERNEL_IMAGETYPE = "Image"
+    MACHINE_FEATURES:append = " eﬁ ueﬁ-secureboot ueﬁ-http-boot ueﬁ-capsule-updates"
+    EFI_PROVIDER = "systemd-boot"
+    # Use systemd as the init system
+    INIT_MANAGER = "systemd"
+    IMAGE_INSTALL:append = " systemd systemd-boot util-linux coreutils"
+    TEST_SUITES:append = " ueﬁ_secureboot uki"
+    IMAGE_CLASSES:append:pn-core-image-base = " uki"
+    INITRAMFS_IMAGE = "core-image-minimal-initramfs"
+    IMAGE_CLASSES:append:pn-core-image-base = " sbsign"
+    UKI_SB_KEY = "${SBSIGN_KEY}"
+    UKI_SB_CERT = "${SBSIGN_CERT}"
+    QB_KERNEL_ROOT = ""
+    IMAGE_BOOT_FILES:remove = "Image"                                                                                                           20
+TRS implementation: systemd and initrd
+● Based on TRS side POC, initrd needs systemd, dm-verity support and bindings, and TPM conﬁguration; see
+   https://gitlab.com/Linaro/trustedsubstrate/meta-ledge-secure/-/blob/systemd_uki/meta-ledge-secure/recipes-ledge/images/ledge-initramfs-systemd.bb?ref_type=heads
+
+
+● Contains systemd-repart conﬁguration ﬁle that creates a TPM-backed rootfs and copies /usr/etc and some other directories there so that boot works correctly:
+   https://gitlab.com/Linaro/trustedsubstrate/meta-ledge-secure/-/blob/systemd_uki/meta-ledge-secure/recipes-core/systemd/systemd-repart-conf.bb?ref_type=heads
+
+
+● Note that systemd v256 switched from "ConditionSecurity=tpm2" to "ConditionSecurity=measured-uki" in various services. systemd "measured-uki" feature could only
+   work natively on the device itself when using ukify.py script to create the UKI executable with TPM measurements. Cross-compile environments may not have TPM so
+   compile time measurements can't be done, and thus security condition of a lot of services needs to be downgraded to existence of a TPM device,
+   "ConditionSecurity=tpm2"
+   https://systemd.io/TPM2_PCR_MEASUREMENTS/
+   https://www.freedesktop.org/software/systemd/man/latest/systemd-measure.html
+
+
+   TODO: It could be possible to use an SW based TPM device on a build machine when building UKIs to create the signed PCR policies, but swtpm requires possibly a full
+   QEMU machine.
+   https://gitlab.com/Linaro/trustedsubstrate/meta-ledge-secure/-/blob/systemd_uki/meta-ledge-secure/recipes-core/systemd/systemd_%25.bbappend?ref_type=heads
+
+
+
+
+                                                                                                                                                                      21
+TRS implementation: dm-verity /usr
+● dm-verity /usr partition support, not submitted to meta-security yet
+● due to complications with wic image generation, the dm-verity image partition needs its own recipe in addition to wic image recipe, with various
+   hacks in both recipes to keep runqemu etc working:
+● https://gitlab.com/Linaro/trusted-reference-stack/trs/-/blob/systemd_uki/meta-trs/recipes-core/images/trs-image.bb?ref_type=heads
+● https://gitlab.com/Linaro/trusted-reference-stack/trs/-/blob/systemd_uki/meta-trs/recipes-core/images/trs-verity.bb?ref_type=heads
+● trs-verity.bb creates a dm-verity /usr partition with a generated .wks ﬁle, which can be included in trs-image.bb recipe
+● trs-verity.bb also creates the UKI binary and embeds the dm-verity image root hash into the kernel command line
+● trs-image.bb creates a .wic that embeds trs-verity .wks ﬁle and includes a UEFI ESP partition with Secure Boot signed systemd-boot and uki
+   binaries
+● plan is to upstream sample build conﬁguration and self-test and oeqa runtime tests based on meta-arm qemuarm64-secureboot so that Secure
+   Boot from UEFI ﬁrmware to operating system is available in qemu
+
+
+
+
+                                                                                                                                                22
+Firmware TPM, tee-supplicant, RPMB
+● TS devices rockpi4b and Synquacer only had ﬁrmware TPM via OP-TEE FTPM TA, and supporting them requires tee-supplicant to run in
+  initrd. This became problematic since tee-supplicant needs to start before systemd init, and stopping tee-supplicant breaks the TPM
+  based rootfs encryption. tee-supplicant startup was needed to enumerate the fTPM TA device, which also needs Replay Protected
+  Memory Block (RPMB) access via tee-supplicant in userspace. These were ﬁxed by kernel side RPMB support developed by Jens
+  Wiklander from Linaro, merged in kernel 6.12:
+   ○   https://www.linaro.org/blog/linaro-enables-op-tee-rpmb-access-directly-from-the-linux-kernel/
+   ○   https://lwn.net/Articles/975405/
+   ○   kernel support for RPMB removes the need to run tee-supplicant in initrd
+   ○   some small changes are still needed to meta-arm side optee-client to ﬁx minor issues with tee-supplicant udev rule and systemd
+       service ﬁle, but these changes are already in upstream OP-TEE
+
+
+
+
+                                                                                                                                        23
+How to detect a TPM device?
+● simple question, but answer is problematic
+● detection needs to happen in kernel or initrd before main rootfs is mounted
+● current logic in systemd to detect TPM device:
+    ○ https://github.com/systemd/systemd/blob/main/src/shared/eﬁ-api.c#L484
+    ○ kernel driver for TPM device compiled into kernel or loaded before systemd runs which shows bios/ﬁrmware TPM measurements in
+      /sys/kernel/security/tpm0/binary_bios_measurements for userspace,
+    ○ or ﬁrmware provides ACPI table entry for TPM device, /sys/ﬁrmware/acpi/tables/TPM2 exists
+    ○ this breaks if TPM support is compiled as modules and module not loaded before systemd init runs
+    ○ this breaks if device does not have ACPI support, e.g., ARM SystemReady IR which requires UEFI and devicetree support but not ACPI
+    ○ this breaks easily with ﬁrmware TPM which depends on tee-supplicant in userspace which must be running before kernel driver is loaded which
+      needs to happen before systemd init runs
+
+● When does systemd in initrd need to wait for TPM device to appear, and queue in the start of tpm.target (new in v256)?
+    ○   if UEFI ﬁrmware did support a TPM device, then both TPM error and event logs are optionally provided from ﬁrmware to kernel UEFI stub
+    ○   kernel UEFI stub could expose the existence of TPM error or event logs to userspace via sysfs
+    ○   systemd could check this sysfs ﬁle, just like ACPI table entry, and queue tpm.target if it’s found
+    ○   allows udev to run and possibly load TPM related drivers
+    ○   allows extra userspace service to be started by systemd init, e.g. tee-supplicant for ﬁrmware TPM driver
+
+●   draft patches:
+    ○ kernel https://lore.kernel.org/all/20240422112711.362779-1-mikko.rapeli@linaro.org/
+    ○ systemd https://github.com/systemd/systemd/pull/32400                                                                                     24
+Partition auto detection
+● How to detect partitions on multiple devices without hardcoding device-speciﬁc paths into kernel command line?
+● systemd supports partition autodetection standard
+  ○ https://www.freedesktop.org/software/systemd/man/latest/systemd-gpt-auto-generator.html
+  ○ https://uapi-group.org/speciﬁcations/specs/discoverable_partitions_speciﬁcation/
+  ○ https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html
+● wic image and target ﬁle systems can use known GUID values
+● systemd-repart uses the standard GUID values when it creates partitions
+● also dm-verity partition is detected based on the verity hash, and location can be anywhere
+● mount of partitions works automatically as long as drivers for backing block device are loaded to the kernel in initrd
+● udev can load needed kernel modules; systemd will wait for partitions to appear
+● makes UKI with systemd-based initrd generic across devices
+
+
+
+
+                                                                                                                           25
+Fun with testing
+● upstream maintainers, rightly, ask how to test things, like uki.bbclass
+  ○ https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/uki.py
+  ○ https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/wic.py#n1354
+  ○ https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/runtime/cases/uki.py
+● answer is complex when host architecture has an impact, x86_64 vs arm64, and when both qemu and low level UEFI ﬁrmware are needed
+● to make things harder, failed to enable secure boot on x86_64 de-facto UEFI ﬁrmware, OVMF which is based on edk2
+● then on aarch64/arm64 build host, some issue breaks boot with qemu and U-Boot based ﬁrmware
+● but testing works without KVM, ﬁnally, after way too many iterations
+
+
+● then failing yocto oeqa runtime test had a nice side effect of causing an empty ext4 rootfs
+● after a lot of investigation, a root cause was found to be bb.fatal() in testimage.bbclass which exited without cleanup and caused an extra image
+   build with stale rootfs data which was an empty directory if rm_work feature was also enabled
+   ○ ﬁx was to change from bb.fatal() to bb.error() https://git.yoctoproject.org/poky/commit/?id=4b3b37156cdf70230bc74c647784da8514c284cf
+
+● meta-security side testing shows that a lot of tests are failing in current master branch, so we need to ﬁx those before adding new ones…
+
+
+● frequently completely unknown issues become blockers, and developers tend to end up in various rabbit holes trying to ﬁnd the correct issue to
+   ﬁx and to ﬁnd a way back out to the original problem or new feature
+                                                                                                                                                  26
+Unsolved problem: keys and secrets
+● How to handle keys and secrets at build time with yocto and bitbake?
+● Not all build environments can be trusted with keys so only a restricted access to them should be provided
+● HSM? But requires real HW. Soft HSM APIs could be used for development
+● A completely separate signing step from the build? But how to embed e.g. public keys to build binaries?
+● Change in keys should trigger rebuild? Only works via SRC_URI then.
+● Keys provided via env variables may not trigger rebuilds correctly, possibility for odd sstate related corruptions with really
+  weird runtime behavior
+● Existing examples:
+  ○ meta-secure-core UEFI keys and tools
+  ○ meta-arm secure boot keys
+  ○ poky ﬁt image
+● Related problem, how to handle on purpose non-reproducible builds,
+  e.g. generated random keys embedded into binaries?
+
+
+
+                                                                                                                                   27
+The dream lives on…
+Hopefully in 2025 there will be a working example of secure boot all the way to userspace and TPM backed secure storage in
+an upstream maintained Yocto layer….
+
+
+
+
+                                                                                                                         28
+                                         Visit linaro.org
+
+
+
+             Thank you, questions?
+Mikko Rapeli <mikko.rapeli@linaro.org>
+mcfrisk on #yocto
+

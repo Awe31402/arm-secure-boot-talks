@@ -1,0 +1,1406 @@
+WEBVTT
+
+00:00.000 --> 00:05.340
+The talk right now that you're in is reflections on trusting trust zone by Dan Rosenberg. Sorry,
+
+00:05.340 --> 00:13.340
+Rosenberg. Thank you. All right. So as you said, I'm Dan. And today we're going to be talking
+
+00:13.340 --> 00:18.760
+about attacking trust zone. So hopefully if you're in this room you've heard of trust zone
+
+00:18.760 --> 00:24.200
+before or have some idea of what it is. But just in case, trust zone is a system wide approach
+
+00:24.200 --> 00:29.300
+to security implemented on ARM devices which enjoy a sort of majority market share, especially
+
+00:29.300 --> 00:35.300
+among mobile devices. And Trustzone allows these devices to implement a fairly wide range
+
+00:35.300 --> 00:42.300
+of security related tasks. It accomplishes this by segregating all software and hardware on the
+
+00:42.300 --> 00:47.180
+device into what are referred to as the normal world and the secure world. So in the normal
+
+00:47.180 --> 00:52.720
+world you have all of the components of your traditional operating system including your
+
+00:52.720 --> 00:57.100
+standard applications, system services, and the operating system kernel. Now today we're
+
+00:57.100 --> 01:00.940
+going to be talking exclusively about an implementation on Android. So this will include the
+
+01:00.940 --> 01:06.720
+Linux kernel for example. Then in contrast on the other side we have the secure world. Now
+
+01:06.720 --> 01:11.300
+there are a number of different design models for implementing a secure world. But the most
+
+01:11.300 --> 01:17.220
+popular in practice is having a secure operating system kernel or a trust zone kernel under which
+
+01:17.220 --> 01:23.060
+a number of potentially independent trusted applications or trustlets may run. And these can
+
+01:23.060 --> 01:28.260
+run concurrently and are frequently written by third parties to implement various modularized
+
+01:28.260 --> 01:34.400
+pieces of security technology. Now, access between the normal world and the secure world is
+
+01:34.400 --> 01:40.360
+mediated by a monitor component. And the secure world has complete access to all of the hardware
+
+01:40.360 --> 01:45.860
+and software on the device. But the normal world does not. It can only communicate with the
+
+01:45.860 --> 01:51.400
+secure world via carefully defined channels. So the secure world is capable of designating
+
+01:51.400 --> 01:56.900
+certain regions of memory for example as secure only and the normal world even with higher
+
+01:56.900 --> 02:02.740
+privileges like kernel privileges cannot access those secure memory segments. So it's acting
+
+02:02.740 --> 02:10.740
+much like a hypervisor in this case. In my experience the most common usage of trust zone is for
+
+02:10.740 --> 02:17.780
+DRM, digital rights management, where the basic use case is protected media content can be sent
+
+02:17.780 --> 02:23.980
+to a user's device and then decoded exclusively in the secure world. So even if the user has
+
+02:23.980 --> 02:30.480
+full control over their own operating system, all of this decoding takes place in a protected
+
+02:30.480 --> 02:36.160
+environment that the user does not have access to to prevent piracy. Additionally, trust zone
+
+02:36.160 --> 02:41.320
+is used frequently for other secure key storage applications such as for DM verify which is the
+
+02:41.320 --> 02:46.240
+Linux kernel's full disk encryption technology. It may also be used for storing sensitive
+
+02:46.240 --> 02:52.240
+information related to mobile payments and for creating protected hardware components such as
+
+02:52.240 --> 02:57.520
+a secure keypad that only communicates with the secure world such that if the operating system
+
+02:57.520 --> 03:03.520
+is compromised perhaps elements of pin entry may remain secure. Additionally, many vendors
+
+03:06.820 --> 03:12.700
+choose to implement secure boot in such a way that it relies on software programmable fuses such
+
+03:12.700 --> 03:18.540
+is Qualcomm's QFuse technology. And because TrustZone has the ability to read and write these
+
+03:18.540 --> 03:23.460
+software programmable fuses, frequently TrustZone plays some sort of role either directly or
+
+03:23.460 --> 03:29.040
+indirectly in actually managing secure boot itself on mobile devices. And then finally a
+
+03:29.040 --> 03:34.120
+number of device manufacturers, most notably Samsung, have implemented their own security
+
+03:34.120 --> 03:39.240
+solutions that rely on TrustZone. As part of their Knox security suite, Samsung has
+
+03:39.240 --> 03:44.580
+implemented TEMA which is the trust zone based integrity measurement architecture. Among other
+
+03:44.580 --> 03:50.940
+things, this subsystem runs in the secure world and periodically scans the device kernel in
+
+03:50.940 --> 03:55.900
+memory to verify that no tampering has taken place. And if it detects any sort of compromise or
+
+03:55.900 --> 04:00.160
+suspicious activity, it will raise some sort of security exception or potentially reboot the
+
+04:00.160 --> 04:07.120
+phone. Prior to today, there's actually been very little public research on attacking trust
+
+04:07.120 --> 04:13.120
+zone. Thomas Roth gave a talk in 2013 I believe at CanSec West called next generation mobile
+
+04:14.200 --> 04:20.000
+rootkits in which he described using trust zone as a platform for surreptitiously spying on a
+
+04:20.000 --> 04:25.580
+user and noted that it's a particularly good choice for this kind of activity because even if a
+
+04:25.580 --> 04:30.700
+user has the ability to control the kernel, the kernel does not have the ability to look into
+
+04:30.700 --> 04:36.580
+trust zone to see if any sort of malicious activity is going on. And while he described the
+
+04:36.580 --> 04:42.040
+existence of specific vulnerabilities in trust zone as a potential vector to install such a
+
+04:42.040 --> 04:46.460
+root kit, to my knowledge he didn't talk about specific vulnerabilities, much less exploitation
+
+04:46.460 --> 04:52.040
+of them, which is what I'm going to be mostly focusing on today. Next, also in 2013, I
+
+04:52.040 --> 04:57.040
+published a post on the Azimuth security blog called unlocking the Motorola boot loader in
+
+04:57.040 --> 05:01.820
+which I described a Motorola specific trust zone vulnerability that allowed me to defeat
+
+05:01.820 --> 05:08.900
+secure boot on these devices. Next, a number of exploits published by the sort of Android
+
+05:08.900 --> 05:14.160
+routing and modding community, like XDA developers and the like, specifically for HTC
+
+05:14.160 --> 05:20.160
+phones, have used trust zone related attacks in the past, but these exploits have all been not
+
+05:22.060 --> 05:27.240
+only undocumented but obfuscated and not publicly analyzed, so very little public insight has
+
+05:27.240 --> 05:33.240
+been gleaned by this research. And then most recently, perhaps a month or two ago at
+
+05:33.240 --> 05:37.860
+recon, Nathan Keltner and Charles Holmes gave a talk called here be dragons where they
+
+05:37.860 --> 05:44.620
+described vulnerabilities specific to HTC's trust and implementation. And I should thank these
+
+05:44.620 --> 05:50.860
+guys for communicating with me while they were doing this research and sharing their findings.
+
+05:50.860 --> 05:54.660
+So looking back at the previous couple slides, we can begin to paint a picture of why this may
+
+05:54.660 --> 05:59.900
+be an interesting research target. Firstly, it's clearly a high value target to a number
+
+05:59.900 --> 06:05.160
+of different parties. You have content providers who rely on trust zone to prevent piracy of
+
+06:05.160 --> 06:11.500
+their media. You have OEMs like Samsung who implement security services to protect their
+
+06:11.500 --> 06:16.820
+users and gain advantage especially in enterprise markets. And then we have users who rely on
+
+06:16.820 --> 06:22.320
+the same security features to protect themselves and as is the case with groups like XDA
+
+06:22.320 --> 06:28.160
+developers and other ROM and rooting enthusiasts frequently want to defeat trust zone to defeat
+
+06:28.160 --> 06:33.440
+things like secure boot to install their own software on their phones. This coupled with the
+
+06:33.440 --> 06:36.740
+fact that there's been very little public research and as a result very little public
+
+06:36.740 --> 06:41.360
+scrutiny to support the, you know, sort of lofty claims of security that marketing
+
+06:41.360 --> 06:47.240
+literature has put forward makes this a compelling target. So for this research in
+
+06:47.240 --> 06:52.120
+particular, I chose to focus on Qualcomm's implementation of a trust zone kernel, which is
+
+06:52.120 --> 06:56.700
+called the Qualcomm Secure Execution Environment, or QSEE. And the reason behind this was
+
+06:56.700 --> 07:02.120
+fairly simple. Qualcomm enjoys a sort of majority market share, especially among mid to
+
+07:02.120 --> 07:08.440
+high end Android phones, especially in North America and Europe. Basically, if you have
+
+07:08.440 --> 07:15.320
+heard of a flagship model by Samsung, LG, Motorola, HTC, and it's for sale in Europe or North
+
+07:15.320 --> 07:19.860
+America, chances are it's running a Qualcomm chipset and as a result is using Qualcomm's
+
+07:19.860 --> 07:25.860
+trust zone kernel. So it's by far the most popular trust zone kernel in the market today.
+
+07:25.860 --> 07:31.860
+For actually performing this research, the tool chain requirements are fairly minimal.
+
+07:31.860 --> 07:37.620
+Obtaining trust zone images is incredibly straightforward. If you just spend the time
+
+07:37.620 --> 07:43.200
+Google searching, you can find huge archives of firmware images for dozens and dozens of
+
+07:43.200 --> 07:49.000
+Android devices. And frequently these are just simple archive formats like tar balls or zips.
+
+07:49.000 --> 07:54.820
+And you can pull out the trust zone images directly from those full firmware file formats.
+
+07:54.820 --> 07:59.580
+Additionally if you have root access on a live device you can use a Linux utility like DD to
+
+07:59.580 --> 08:05.320
+simply pull the trust zone image directly from disk. And once you have a trust zone image in
+
+08:05.320 --> 08:10.620
+hand analysis is really just as straightforward as pulling up your favorite disassembler in my
+
+08:10.620 --> 08:17.320
+case IDAPRO and going to work reverse engineering. Now earlier trust zone images actually rely on
+
+08:17.320 --> 08:23.580
+a proprietary Qualcomm header format which is a 40 byte header that dictates where in memory
+
+08:23.580 --> 08:29.080
+certain sections of trust zone are loaded which is fairly easy to sort of guess the meaning of
+
+08:29.080 --> 08:32.740
+and I think some people have gone out of their way to provide third party documentation on
+
+08:32.740 --> 08:38.000
+that. But nowadays the more recent trust zone kernels are actually ELF binaries so you can
+
+08:38.000 --> 08:43.000
+load them up in IDA pro and it will handle loading things in memory for you and then you can go to
+
+08:43.000 --> 08:50.000
+work. Now I find it's a useful exercise whenever beginning any sort of vulnerability research
+
+08:50.660 --> 08:55.660
+endeavor to enumerate the attack surface that's present on the target. In this case by far the
+
+08:55.660 --> 08:59.660
+most lucrative piece of attack surface was a software exception mechanism called the secure
+
+08:59.660 --> 09:05.660
+monitor call or SMC. So SMC is an ARM instruction which is a privileged instruction meaning it can
+
+09:05.660 --> 09:11.280
+only be executed by the kernel. That is somewhat analogous to a system call. So much like a
+
+09:11.280 --> 09:16.700
+normal application will issue a system call to request the operating system kernel provide
+
+09:16.700 --> 09:23.160
+some sort of service for it, the operating system kernel can issue an SMC request to request
+
+09:23.160 --> 09:28.160
+that trust zone do something on its behalf. Additionally, trust zone may be tasked with
+
+09:28.160 --> 09:32.360
+handling various hardware exceptions such as interrupts and external aborts. But this is a
+
+09:32.360 --> 09:36.440
+much more narrowly defined interface so I suspect it's less likely to have vulnerabilities.
+
+09:36.440 --> 09:42.060
+Qualcomm's implementation doesn't rely on this so much but other trust's own implementations
+
+09:42.060 --> 09:47.660
+most notably mobile core rely fairly extensively on shared memory segments to pass information
+
+09:47.660 --> 09:52.740
+back and forth between the secure and non-secure worlds. So that's a potentially interesting
+
+09:52.740 --> 09:58.440
+target on those implementations. Next, it's possibly interesting to note that the contents
+
+09:58.440 --> 10:04.940
+of the disk, EMC flash on the devices, is a potential attack factor to attack the secure
+
+10:04.940 --> 10:09.600
+world. When you consider the fact that in many cases TrustZone will actually read the contents
+
+10:09.600 --> 10:14.480
+of disk and do some amount of parsing, for example, to verify the contents of disk for secure
+
+10:14.480 --> 10:19.820
+boot, any vulnerabilities in that reading from disk and parsing could potentially be exploited
+
+10:19.820 --> 10:25.940
+by pathological disk contents to exploit these vulnerabilities. And then finally, there may
+
+10:25.940 --> 10:30.820
+actually be vulnerabilities in the individual trustlets, these trusted applications that are
+
+10:30.820 --> 10:36.020
+frequently authored by third parties. And I did spend some time looking at a number of these and
+
+10:36.020 --> 10:42.020
+found that there was a high amount of sort of low hanging fruit, somewhat trivial and easy to
+
+10:42.020 --> 10:46.740
+exploit vulnerabilities in these trustlets. Probably because the vendors that are authoring
+
+10:46.740 --> 10:50.820
+them likely don't have the same kind of security engineering culture as an organization like
+
+10:50.820 --> 10:56.820
+Qualcomm might. But unfortunately, or fortunately, these trustlets are isolated from one another on
+
+10:59.660 --> 11:04.160
+later trust zone kernels. So even if you're able to compromise an individual trustlet with a
+
+11:04.160 --> 11:08.700
+vulnerability in it, you don't necessarily gain access to other trustlets, much less the trust
+
+11:08.700 --> 11:13.700
+zone kernel. So it's a somewhat more limited attack. Having enumerated this attack surface, I
+
+11:13.700 --> 11:19.860
+having enumerated this attack surface I wanted to be clear about what my sort of assumptions
+
+11:19.860 --> 11:23.940
+were about the capabilities an attacker would need to possess to perform an attack on trust
+
+11:23.940 --> 11:30.320
+zone. So for today's research I wanted to assume that we had arbitrary code execution on the
+
+11:30.320 --> 11:34.820
+device already. And this is really just for practical reasons because there's essentially
+
+11:34.820 --> 11:39.620
+no remote attack surface for most real trust zone implementations. It's very difficult to
+
+11:39.620 --> 11:45.120
+imagine a sane use case where the trust zone kernel on a phone needs to receive data directly
+
+11:45.120 --> 11:51.320
+remotely. That having been said we also want to assume that the attacker has kernel privileges
+
+11:51.320 --> 11:56.420
+on the device. Whether that be because the attacker is the owner of the phone who actually
+
+11:56.420 --> 12:02.420
+physically owns it or an attacker that has gained access to a device and escalated privileges
+
+12:02.420 --> 12:07.740
+via a kernel exploit which is a somewhat well understood process. The reason for this
+
+12:07.740 --> 12:12.040
+assumption is that we really want the ability to issue these SMC instructions because this
+
+12:12.040 --> 12:17.500
+provides by far the broadest attack surface. And if we don't have kernel privileges there's
+
+12:17.500 --> 12:22.200
+practically no ability to interact with trust zone at all. You can sort of imagine a scenario
+
+12:22.200 --> 12:28.240
+where some sort of unprivileged application may be able to request that a privileged application
+
+12:28.240 --> 12:33.360
+make a call to trust zone on its behalf that exploits a vulnerability in trust zone. But as
+
+12:33.360 --> 12:39.120
+you can probably guess this is seeming less and less likely to happen in real life. The last
+
+12:39.120 --> 12:44.980
+thing that's important to note is that in this threat model crashes and denial of service
+
+12:44.980 --> 12:50.240
+bugs in trust zone are not considered security relevant to us. Because we're assuming that we
+
+12:50.240 --> 12:55.200
+already have the ability to run code as the kernel, we already have the ability to not
+
+12:55.200 --> 13:01.200
+only reboot the device but also probably do irreparable harm to it. So having the kernel
+
+13:01.200 --> 13:06.580
+trigger something that causes trust zone to crash doesn't actually result in gaining any sort of
+
+13:06.580 --> 13:12.660
+privileges that we didn't already have. Next we're going to be moving on to the actual
+
+13:12.660 --> 13:19.240
+implementation details of QSE itself specifically. So QSE as a trust zone kernel is closed
+
+13:19.240 --> 13:24.360
+source. So all of the information presented here on QSE has been reverse engineered in IDA
+
+13:24.360 --> 13:32.360
+Pro. However, the kernel side of things that actually communicates with TrustZone is open
+
+13:32.360 --> 13:40.240
+source as part of the forum GitHub tree that's available online. So actually looking at these
+
+13:40.240 --> 13:45.600
+kernel drivers and how they talk to TrustZone gave some insight on some of the ways of
+
+13:45.600 --> 13:53.820
+communication. So the interface that Qualcomm provides as a kernel driver is called SCM which
+
+13:53.820 --> 13:57.860
+is the secure channel manager which I found very confusing considering the fact that it
+
+13:57.860 --> 14:04.860
+actually uses the SMC instruction as the way of communication. And the way it issues these
+
+14:04.860 --> 14:09.820
+requests is via two calling conventions. There is a call by register convention and a
+
+14:09.820 --> 14:15.740
+convention that relies on using a request and response structure. So the call by register
+
+14:15.740 --> 14:22.120
+convention is fairly straightforward. In this convention the kernel loads the R0 register
+
+14:22.120 --> 14:26.700
+with this ORD value that contains the SMC command number, which you can think of as a system
+
+14:26.700 --> 14:30.620
+call number. It's just sort of the ID of the command that the kernel is requesting of trust
+
+14:30.620 --> 14:35.960
+zone. Various flags and then the number of arguments that it should expect. And then the
+
+14:35.960 --> 14:41.960
+individual arguments to the SMC request go in subsequent ARM registers R1, R2 and so on.
+
+14:44.000 --> 14:51.000
+Much more interesting is the second convention which relies on these command structures. So in
+
+14:51.000 --> 14:55.500
+in this convention the R0 register is loaded with the physical address corresponding to a
+
+14:55.500 --> 15:00.920
+command buffer and then the SMC instruction is issued. Now these command buffers feature a
+
+15:00.920 --> 15:06.920
+request header, a request buffer containing essentially arbitrary input data, a response
+
+15:06.920 --> 15:12.760
+header, and then a response buffer containing arbitrary output data. The request header is
+
+15:12.760 --> 15:17.380
+described by this SCM command structure in the kernel tree that's available as open
+
+15:17.380 --> 15:23.580
+source. And it features a length field which describes the length of the entire command buffer.
+
+15:23.580 --> 15:28.920
+A buffer offset field which is the offset of the input data from the beginning of the command.
+
+15:28.920 --> 15:32.620
+The response header offset which is the offset of the response header from the beginning of the
+
+15:32.620 --> 15:39.000
+command. The ID which is this ORD value that encapsulates the SMC request number flags and so
+
+15:39.000 --> 15:44.380
+on. And then the actual input data. And this is expected to be populated by the kernel before it
+
+15:44.380 --> 15:51.380
+issues the SMC request to TrustZone. Then when TrustZone has finished processing the request
+
+15:53.380 --> 15:59.040
+it is expected to populate the SCM response structure which contains a length field, a buffer
+
+15:59.040 --> 16:02.880
+offset field which is the offset from the beginning of the response header to the output
+
+16:02.880 --> 16:09.880
+data and then this is complete flag which is just set to 1. Now because this request structure
+
+16:09.880 --> 16:16.880
+now because this request structure is populated entirely by the kernel and in our threat model
+
+16:16.880 --> 16:21.460
+from the perspective of trust zone we're considering the kernel as untrusted as a potential
+
+16:21.460 --> 16:28.080
+attacker then trust zone needs to perform some sanity checking or validation of this request
+
+16:28.080 --> 16:32.580
+structure to ensure that the kernel is not trying to trick trust zone into doing something
+
+16:32.580 --> 16:38.880
+malicious into perhaps writing into secure memory and corrupting something. Now in particular
+
+16:38.880 --> 16:44.720
+there are five sanity checks that they perform to make sure that the request structure is
+
+16:44.720 --> 16:49.920
+sane. The first of these is that the length of the command buffer is greater than or equal to
+
+16:49.920 --> 16:55.540
+16 which is the size of the request header. Next they confirm that the buffer offset which is
+
+16:55.540 --> 17:00.000
+the offset from the beginning of the command buffer to the input buffer resides somewhere
+
+17:00.000 --> 17:05.920
+inside the command buffer. All of these make sense so far. Next they check that the buffer
+
+17:05.920 --> 17:10.620
+offset is greater than or equal to 16, which is the size of the request header. To guarantee
+
+17:10.620 --> 17:16.260
+that the input data doesn't overlap with the request header. Next, they confirm that the
+
+17:16.260 --> 17:21.000
+response header offset is less than or equal to the command length minus 12, where 12 is the
+
+17:21.000 --> 17:25.880
+size of the response header. So this is a check to actually guarantee that the response header
+
+17:25.880 --> 17:32.000
+fits inside the command buffer. And then finally, perhaps most importantly, there is an
+
+17:32.000 --> 17:37.620
+invocation of a function that I called QSEE is non-secure memory. There's no simple support
+
+17:37.620 --> 17:43.120
+available in trust zones so all of these functions I just named appropriately for convenience
+
+17:43.120 --> 17:49.080
+sake. And what this function is designed to do is guarantee that the entire command buffer
+
+17:49.080 --> 17:54.040
+being provided by the kernel resides in non-secure memory. And when you think about it, this
+
+17:54.040 --> 17:59.880
+makes sense. This is an important security assumption. Because if the kernel were to, for
+
+17:59.880 --> 18:05.580
+example provide an address residing in secure memory and then issue an SMC instruction,
+
+18:05.580 --> 18:10.460
+it's possible that TrustZone would then go ahead and perform operations, either read from or
+
+18:10.460 --> 18:15.460
+write to that memory in secure memory and potentially allow for a compromise. The way
+
+18:19.260 --> 18:25.300
+these secure memory checking functions work, they're actually a series of functions that are
+
+18:25.300 --> 18:30.720
+designed to check if a range of memory is considered protected. And the way they implement this is
+
+18:30.720 --> 18:35.340
+entirely in software using a hard coded list of regions with various flags that indicate
+
+18:35.340 --> 18:43.340
+various memory attributes. So when this top level secure range checking function is called, QSE
+
+18:43.340 --> 18:48.180
+iterates over this list of regions and checks that the specified region doesn't overlap with
+
+18:48.180 --> 18:53.340
+anything that's considered protected and returns a value appropriately. And this is somewhat
+
+18:53.340 --> 18:57.640
+analogous to the Linux kernel's use of the access okay macro for those of you who are
+
+18:57.640 --> 19:02.420
+familiar with Linux programming. Where the question that's being asked is, is this memory
+
+19:02.420 --> 19:07.580
+safe for trust zone to operate on? Or is the kernel potentially trying to trick trust zone
+
+19:07.580 --> 19:14.720
+into doing something malicious? Now, this is pseudocode that I put together that roughly
+
+19:14.720 --> 19:20.300
+approximates what goes on when QSE performs these checks. You have this top level function,
+
+19:20.300 --> 19:25.800
+QSEE is non-secure memory that takes arguments of an address, meaning the start of the region
+
+19:25.800 --> 19:30.000
+that's going to be checked and a size field indicating how big the region that they want to
+
+19:30.000 --> 19:37.000
+check is. Next, they call down to a secondary function that I called QSEE range not in region
+
+19:37.000 --> 19:41.460
+where they provide the address of this linked list of protected regions that resides in secure
+
+19:41.460 --> 19:47.720
+memory and then they provide the address again and then they attempt to calculate the end of
+
+19:47.720 --> 19:53.420
+the region that they want to check by adding the address plus the size of the region. Now
+
+19:53.420 --> 19:58.420
+interestingly in this function this secondary function actually checks that if the end of the
+
+20:02.480 --> 20:06.420
+region that's going to be checked is less than the start of the region that's going to be
+
+20:06.420 --> 20:11.140
+checked they assume that the caller has made some kind of an error and they reverse the
+
+20:11.140 --> 20:15.980
+arguments for you. And this immediately jumped out at me as something that's potentially a
+
+20:15.980 --> 20:22.860
+a very bad idea. So some of you probably have already spotted the bug having looked at that
+
+20:22.860 --> 20:30.400
+code. Just in case, quick review of the concept of an integer overflow. So on ARM devices or
+
+20:30.400 --> 20:35.220
+other 32-bit devices in general, integers are represented as 32-bit numbers which is the
+
+20:35.220 --> 20:41.900
+maximum size of a single standard register. So integers have a maximum range of zero to
+
+20:41.900 --> 20:47.800
+hex F F F F F F F F which is 2 to the 32 minus 1. So for what
+
+20:47.800 --> 20:51.580
+during arithmetic operations if this maximum value of an integer
+
+20:51.580 --> 20:55.640
+is exceeded then the resulting value will wrap back around to
+
+20:55.640 --> 21:00.220
+zero. So in this case if you add the largest integer possible
+
+21:00.220 --> 21:06.360
+with one you get zero. So applying this idea to the
+
+21:06.360 --> 21:08.620
+invocation of the secure memory checking that's used to
+
+21:08.620 --> 21:16.620
+validate this SCM command structure, they invoke this is not secure memory with an attack
+
+21:16.620 --> 21:21.660
+a kernel provided or attacker provided in our case address of a command and the length of that
+
+21:21.660 --> 21:27.660
+command. Now what happens if the address of the command plus its supposed length both of which
+
+21:27.660 --> 21:33.660
+are attacker provided values is greater than the maximum representation of a 32 bit integer?
+
+21:33.660 --> 21:40.700
+in this case the answer is fairly clear. So this secondary function will be called with the start
+
+21:40.700 --> 21:48.080
+of the command buffer and then this address plus size field will actually be will wrap around and
+
+21:48.080 --> 21:53.320
+result in an address that is lower than the starting address. And then in the secondary
+
+21:53.320 --> 22:00.040
+function end will be less than start and it will reverse these arguments. So this allows us to
+
+22:00.040 --> 22:06.920
+create a pathological command buffer that does evil things. So in this example, say that this
+
+22:06.920 --> 22:13.920
+region here is the actual QSEE image which is secure memory. It's considered protected. Now we can
+
+22:13.920 --> 22:19.920
+place our command start perhaps over here and then provide an extremely large command length such
+
+22:21.920 --> 22:27.700
+that the sum of the address of the command and command length wraps all the way around and ends
+
+22:27.700 --> 22:33.940
+up here. Then in the range checking function these arguments will be reversed so that the
+
+22:33.940 --> 22:39.940
+range that is checked to guarantee that it is in non secure memory is this region here rather
+
+22:39.940 --> 22:44.580
+than the region starting at command and extending all the way to the end of memory which is what
+
+22:44.580 --> 22:50.580
+it intended to do. As a result we can actually set a response buffer offset to be anywhere in
+
+22:50.580 --> 22:57.580
+offset to be anywhere in this region of memory. Including on top of the QSCE image itself.
+
+23:01.080 --> 23:05.540
+So looking through these five sanity checks once more it's clear that with this pathological
+
+23:05.540 --> 23:10.420
+command buffer all of these conditions are satisfied. The command length is significantly
+
+23:10.420 --> 23:14.880
+greater than 16. The buffer offset is less than the command length. The buffer offset is
+
+23:14.880 --> 23:19.640
+significantly greater than 16. The response header offset is our sort of arbitrary offset
+
+23:19.640 --> 23:22.840
+to point into the secure memory is less than our command length
+
+23:22.840 --> 23:26.380
+which is really massive. And then because of this integer
+
+23:26.380 --> 23:30.060
+overflow and the subsequent reversal of these start and end
+
+23:30.060 --> 23:33.860
+values for range checking, this check that is designed to
+
+23:33.860 --> 23:38.520
+guarantee that this range is not secure returns true even though
+
+23:38.520 --> 23:43.200
+it clearly should be returning false. Now the result of this
+
+23:43.200 --> 23:47.700
+bug is that we can craft an SMC request that exploits this
+
+23:47.700 --> 23:52.500
+integer overflow and causes QSEE to write a response header to
+
+23:52.500 --> 23:56.900
+arbitrary secure memory. And this is clearly a serious
+
+23:56.900 --> 23:59.740
+vulnerability that can result in compromise. And the goal from
+
+23:59.740 --> 24:02.980
+this point forward is to achieve arbitrary secure code
+
+24:02.980 --> 24:08.320
+execution on these devices. The first thing to look at is
+
+24:08.320 --> 24:10.820
+clearly what gets written to a response header. What kind of
+
+24:10.820 --> 24:14.820
+data can we cause QSEE to write to arbitrary secure memory. And
+
+24:14.820 --> 24:19.820
+turns out that the response header is hard coded in all cases. It
+
+24:19.820 --> 24:23.620
+writes the length as 12 which is just the size of the response
+
+24:23.620 --> 24:28.060
+header. The buffer offset is 12 and then this is complete is set
+
+24:28.060 --> 24:31.060
+to one. So the final result is that we can write these three
+
+24:31.060 --> 24:38.480
+words 12, 12, 1 to arbitrary secure memory. Exploiting this is
+
+24:38.480 --> 24:42.020
+somewhat of a challenge but a few things make it easier. The
+
+24:42.020 --> 24:45.660
+first of these is the memory layout of QSE is almost entirely
+
+24:45.660 --> 24:49.520
+known to the attacker. Because the trust zone image sits on
+
+24:49.520 --> 24:52.360
+disk and we're assuming we're running as the kernel, we can
+
+24:52.360 --> 24:55.760
+read that image from disk and because it is loaded at a known
+
+24:55.760 --> 25:00.380
+constant physical address in memory, we essentially know
+
+25:00.380 --> 25:03.400
+every, we know the entire layout of the trust zone image in
+
+25:03.400 --> 25:06.340
+memory even though we can't explicitly read the secure
+
+25:06.340 --> 25:10.340
+memory where it resides. Next, it's helpful that most of RAM
+
+25:10.340 --> 25:13.640
+is actually non-secure memory so we have a somewhat large sort of
+
+25:13.640 --> 25:16.480
+scratch pad to work with when we're trying to do things in
+
+25:16.480 --> 25:20.420
+memory. Now the sort of classic approach that you would take if
+
+25:20.420 --> 25:24.280
+you were approaching this like a traditional kernel exploit maybe
+
+25:24.280 --> 25:27.100
+to find some sort of function pointer that lives in secure
+
+25:27.100 --> 25:31.060
+memory and then use our write primitive to overwrite some of
+
+25:31.060 --> 25:34.740
+the bytes of that function pointer so that it now points to
+
+25:34.740 --> 25:37.540
+an address residing in non-secure memory. Then we
+
+25:37.540 --> 25:40.920
+could put a payload at that non secure address and cause that
+
+25:40.920 --> 25:44.280
+function pointer to be invoked by trust zone and then the result
+
+25:44.280 --> 25:46.880
+would be trust zone running our non secure payload and that would
+
+25:46.880 --> 25:52.780
+be victory. Unfortunately, this doesn't actually appear to work.
+
+25:52.780 --> 25:56.500
+So I suspect that QSEE actually has some sort of mechanism in
+
+25:56.500 --> 25:59.200
+place that prevents trust zone from executing code from non
+
+25:59.200 --> 26:02.700
+secure pages. Sort of analogously to how user land
+
+26:02.700 --> 26:08.700
+applications have NX or DEP or more recently the Linux kernel
+
+26:08.700 --> 26:15.640
+on ARM or X86 have PXN and SMEP respectively. And I suspect it
+
+26:15.640 --> 26:18.540
+may have to do with the XPU which is memory management
+
+26:18.540 --> 26:21.880
+component that handles marking regions as secure. But this is
+
+26:21.880 --> 26:25.720
+an undocumented black hole. It's very difficult to understand
+
+26:25.720 --> 26:28.620
+what's going on here and I don't have the capabilities to look
+
+26:28.620 --> 26:30.660
+at the hardware close enough to actually understand what's
+
+26:30.660 --> 26:34.260
+going on. So this is the part of the talk where I coyly ask if
+
+26:34.260 --> 26:37.000
+there are any Qualcomm or ARM employees in the audience who
+
+26:37.000 --> 26:40.700
+want to answer this question as to whether this is the case but
+
+26:40.700 --> 26:42.740
+I'll let them off the hook because I assume they can't
+
+26:42.740 --> 26:48.880
+say. So we need to take another approach to actually
+
+26:48.880 --> 26:51.080
+gaining arbitrary code execution because it's clear
+
+26:51.080 --> 26:53.480
+that at least from experimentation it's not
+
+26:53.480 --> 26:55.980
+going to work. We're not going to be able to cause trust zone
+
+26:55.980 --> 26:59.160
+to execute non secure code. We need to find a way to cause
+
+26:59.160 --> 27:02.660
+trust zone to execute secure code in a way that allows us to
+
+27:02.660 --> 27:08.660
+win. Now the fact that this is a 12-byte memory write with
+
+27:08.660 --> 27:12.040
+where we don't control the contents makes exploitation
+
+27:12.040 --> 27:15.440
+somewhat difficult. So the first thing that's a little bit
+
+27:15.440 --> 27:18.380
+tricky is that because it's a 12-byte write, if we want to
+
+27:18.380 --> 27:21.620
+overwrite one word in memory, then we're necessarily
+
+27:21.620 --> 27:25.320
+clobbering two adjacent words to that which could potentially
+
+27:25.320 --> 27:29.860
+lead to instability depending on what the target is. And then
+
+27:29.860 --> 27:33.460
+additionally, probably more importantly, we have very minimal
+
+27:33.460 --> 27:36.500
+options in terms of what we can do because we have this very
+
+27:36.500 --> 27:40.140
+limited vocabulary of what we can cause to be written in secure
+
+27:40.140 --> 27:45.340
+memory. We only have zeros, a 12, and a 1. That's fairly
+
+27:45.340 --> 27:50.280
+limited. So the challenge here is actually coming up with a way
+
+27:50.280 --> 27:53.820
+of using this first exploit primitive to build a more
+
+27:53.820 --> 28:00.820
+flexible one that allows us to achieve our goals. Now, revisiting these secure memory
+
+28:02.820 --> 28:08.820
+protection functions, so we recall that QSE checks the status of memory regions by iterating
+
+28:10.900 --> 28:17.820
+over this linked list which has hard coded regions and each of these regions is encapsulated
+
+28:17.820 --> 28:23.820
+by a structure that is similar to this. This is just what I reverse engineered. Each region
+
+28:23.820 --> 28:27.820
+structure has an ID which is just an incremental identifier.
+
+28:27.820 --> 28:30.660
+Flags that indicate the actual protection attributes of that
+
+28:30.660 --> 28:36.500
+region and then the start and end of these regions. So what I
+
+28:36.500 --> 28:40.100
+came up with was that we can actually use our 12 byte right
+
+28:40.100 --> 28:44.340
+to overwrite the flags start and end addresses of the region
+
+28:44.340 --> 28:48.720
+entry corresponding to the QSEE image. So the result of this
+
+28:48.720 --> 28:53.820
+is anytime QSEE goes to check the safety of a pointer provided
+
+28:53.820 --> 28:57.460
+the kernel to guarantee that it's safe for it to assume that it's
+
+28:57.460 --> 28:59.860
+non-secure and that it can read from it and write to it without
+
+28:59.860 --> 29:04.500
+consequence. If that pointer resides in the address space
+
+29:04.500 --> 29:08.000
+reserved for the QSE image it's going to say it's fine. It's
+
+29:08.000 --> 29:13.400
+safe. And at this point this gives us the ability to write to
+
+29:13.400 --> 29:17.580
+arbitrary secure memory with any value that QSE writes as output
+
+29:17.580 --> 29:22.480
+at any point. Here we can basically choose a new write
+
+29:22.480 --> 29:26.020
+primitive. We've expanded our vocabulary for what we're able to
+
+29:26.020 --> 29:29.520
+write to secure memory. So at this point I enumerated all of the
+
+29:29.520 --> 29:33.320
+SMC handlers, eliminated those that don't write any output at
+
+29:33.320 --> 29:37.900
+any point. And now we've got a list of things that we can write
+
+29:37.900 --> 29:41.100
+to arbitrary secure memory. And we can, depending on how we
+
+29:41.100 --> 29:44.100
+design the rest of the exploit, just pick the one that suits the
+
+29:44.100 --> 29:48.180
+task at hand. And now the only missing piece here is actually
+
+29:48.180 --> 29:51.380
+finding a way to win. You know, we have a more flexible write
+
+29:51.380 --> 29:57.780
+primitive but how do we actually get code execution? Well,
+
+29:57.780 --> 30:02.520
+revisiting how QSE actually handles SMC instructions. So
+
+30:02.520 --> 30:06.620
+when an SMC instruction is issued, QSE will parse the
+
+30:06.620 --> 30:11.240
+command structure and it will iterate over a table with these
+
+30:11.240 --> 30:15.280
+variable length entries where each entry corresponds to an
+
+30:15.280 --> 30:20.180
+SMC handler, sort of like a system call handler, where each
+
+30:20.180 --> 30:24.180
+entry contains an SMC number which is just the identifier of
+
+30:24.180 --> 30:28.980
+the SMC request. A pointer to a string describing the handler
+
+30:28.980 --> 30:31.620
+which was incredibly useful when trying to figure out what each
+
+30:31.620 --> 30:36.120
+of these handlers actually did. Various flags. And then a
+
+30:36.120 --> 30:39.540
+function pointer to the actual function that gets invoked by
+
+30:39.540 --> 30:44.580
+QSE when this SMC request matching this ID is issued. A
+
+30:44.580 --> 30:48.140
+number of arguments field and then a variable length array
+
+30:48.140 --> 30:51.180
+whose length depends on this number of arguments field because
+
+30:51.180 --> 30:56.840
+this variable length array is actually contains one entry for
+
+30:56.840 --> 30:59.460
+each argument and each entry corresponds to the length of
+
+30:59.460 --> 31:06.460
+each argument. So I ended up using the ability to write
+
+31:08.600 --> 31:14.100
+essentially arbitrary data to arbitrary QSE memory to create
+
+31:14.100 --> 31:18.240
+what I call an SMC table extension attack. So I actually use
+
+31:18.240 --> 31:22.500
+arbitrary secure memory to modify the number of arguments field
+
+31:22.500 --> 31:28.180
+in one of the SMC tables. Table entries rather. Now what I did
+
+31:28.180 --> 31:32.660
+was I actually expanded the size of one of these SMC entries so
+
+31:32.660 --> 31:37.460
+that it's particularly massive and that when QSE is iterating
+
+31:37.460 --> 31:42.160
+through this table and tries to find the location of the next
+
+31:42.160 --> 31:47.240
+SMC entry it will actually jump way into non secure attacker
+
+31:47.240 --> 31:52.000
+controlled memory. At which point we can put a fake entry
+
+31:52.000 --> 31:56.840
+there and at this point we control an SMC handler. We can
+
+31:56.840 --> 32:01.780
+make up an SMC ID, point the function pointer anywhere we want
+
+32:01.780 --> 32:08.020
+in secure memory and craft any sort of arbitrary arguments and
+
+32:08.020 --> 32:12.200
+basically call any function in trust zone at whim with any
+
+32:12.200 --> 32:15.600
+arguments we want which in my opinion is a fairly elegant way
+
+32:15.600 --> 32:21.460
+to gain total control of trust zone. At this point we have
+
+32:21.460 --> 32:26.880
+arbitrary trust zone code execution and we have one. One
+
+32:26.880 --> 32:29.240
+of the fun things you can do is actually find the mem copy
+
+32:29.240 --> 32:32.940
+implementation in the trust zone kernel and actually just
+
+32:32.940 --> 32:36.340
+invoke that to copy all of secure memory to a non secure
+
+32:36.340 --> 32:42.040
+buffer. So this would allow you to steal any DRM or secure key
+
+32:42.040 --> 32:45.480
+storage related stuff. Any sensitive data stored in secure
+
+32:45.480 --> 32:49.160
+memory now becomes available to the attacker. You could disable
+
+32:49.160 --> 32:51.780
+TEMA. You could disable any piece of security related
+
+32:51.780 --> 32:55.020
+functionality and trust zone. You have full control. And then
+
+32:55.020 --> 32:59.160
+perhaps the flashiest thing you can do is invoke OEM specific
+
+32:59.160 --> 33:01.600
+functionality to do things like permanently unlock a boot
+
+33:01.600 --> 33:06.340
+loader of a device. So that's what I'm going to do right now.
+
+33:06.340 --> 33:12.340
+So I have on stage a Verizon branded Moto X. So the way that
+
+33:12.340 --> 33:18.340
+Motorola implements secure boot is by featuring a manufacturer
+
+33:18.340 --> 33:24.340
+sponsored mechanism to unlock the boot loader which would allow
+
+33:24.340 --> 33:27.340
+users to install custom operating systems and so forth.
+
+33:27.340 --> 33:32.340
+And the way they do that is the user actually sends Motorola a
+
+33:32.340 --> 33:36.820
+request token that they got from their device. If that token
+
+33:36.820 --> 33:40.480
+matches a device on an approved carrier, then Motorola will send
+
+33:40.480 --> 33:43.460
+a token in response that the user can then issue to the
+
+33:43.460 --> 33:46.160
+boot loader and the boot loader will make a request of trust
+
+33:46.160 --> 33:52.060
+zone to unlock permanently by blowing a QFuse. Now, for
+
+33:52.060 --> 33:57.060
+Verizon and AT&T, they just won't give you a response token
+
+33:57.060 --> 33:59.900
+back, so there's no way to unlock your boot loader, except
+
+33:59.900 --> 34:04.580
+if you have a single vulnerability you can actually do it yourself by just invoking the
+
+34:04.580 --> 34:10.580
+functionality that they would do if you gave them the response token. So here I've got
+
+34:10.580 --> 34:16.580
+we've got a Verizon Moto X running Android 4.4. As you can see it is not unlocked and the
+
+34:16.580 --> 34:22.580
+running Android 4.4. As you can see it is not unlocked. And the
+
+34:24.820 --> 34:30.820
+warranty is still present. So I need to continue booting. This
+
+34:30.820 --> 34:35.700
+will take just a moment. So this is an incredibly risky demo
+
+34:35.700 --> 34:38.960
+because first of all it's live which is always a bad idea but
+
+34:38.960 --> 34:43.140
+additionally you can only do this once to a phone because
+
+34:43.140 --> 34:48.140
+you're permanently blowing a fuse. So I obviously have never tested it on this phone. So who knows
+
+34:48.140 --> 34:52.800
+what's going to happen. I think it's the second riskiest thing I did in this talk. The first
+
+34:52.800 --> 34:59.800
+was using open office to make my slides. Okay. So just using ADB, we have a shell. I'm going
+
+35:01.900 --> 35:07.900
+to use an implementation of the recent Linux vulnerability to escalate privileges to root.
+
+35:07.900 --> 35:14.900
+and then I'm going to cross my fingers and hope that this works. Well, it didn't break.
+
+35:14.900 --> 35:20.900
+Well, it didn't break. And we're going to pull up the
+
+35:20.900 --> 35:24.900
+Well, it didn't break. And we're going to pull up the
+
+35:37.040 --> 35:39.660
+boot order variables again and we can see that the device is now
+
+35:39.660 --> 35:49.660
+unlocked. So at this point you can actually use fast boot
+
+35:49.660 --> 35:53.500
+use fast boot which is built into the boot loader to flash any
+
+35:53.500 --> 35:57.000
+software you would like on this phone. So as far as I know this
+
+35:57.000 --> 36:00.580
+is the only or one of the only Verizon Moto X's in the world
+
+36:00.580 --> 36:06.040
+that's unlocked. So a few lessons can be learned from this
+
+36:06.040 --> 36:09.340
+research. One of the most practical ones is that analysis
+
+36:09.340 --> 36:13.820
+and exploitation of trust zone was made much easier due to the
+
+36:13.820 --> 36:16.680
+fact that there's no sort of protection or encryption of the
+
+36:16.680 --> 36:22.760
+trust zone image itself. You can compare this to iOS where trust zone is stored encrypted on disk
+
+36:22.760 --> 36:30.760
+and as a result without either a leak of firmware from Apple or exploiting trust zone itself
+
+36:30.760 --> 36:35.260
+which is basically impossible if you've never had a trust zone image to analyze in the first
+
+36:35.260 --> 36:40.380
+place. You need an iBoot vulnerability to actually gain access to a decrypted trust zone
+
+36:40.380 --> 36:48.380
+image to analyze in the first place. Next, parsing of complex data structures, in this case these
+
+36:48.380 --> 36:54.380
+command buffers seem like a fairly obvious point of failure. So as a vulnerability researcher
+
+36:54.380 --> 37:00.380
+places like this are really good targets for scrutiny. The next thing is as a researcher
+
+37:00.380 --> 37:06.380
+it's important to learn to develop a spider sense and learn how to trust your gut. If it looks
+
+37:06.380 --> 37:12.260
+sketchy it very likely is. In this case the minute I saw in the assembly code this reversal of
+
+37:12.260 --> 37:16.920
+arguments in the case of an erroneous call that seemed to yell out at me as something that was
+
+37:16.920 --> 37:21.260
+potentially bad even though I didn't know immediately what that would be and it turned
+
+37:21.260 --> 37:28.260
+out to be a very critical vulnerability. Next just looking at for example boot order design
+
+37:28.260 --> 37:33.140
+single points of failure are a bad idea. When you look at Samsung's implementation of secure
+
+37:33.140 --> 37:35.880
+boot, for example, there's no single point of failure, there's
+
+37:35.880 --> 37:39.440
+no off switch that allows you to exploit something and unlock
+
+37:39.440 --> 37:43.220
+the boot loader. In contrast to Motorola, which made a design
+
+37:43.220 --> 37:45.680
+decision that makes it easier for them because now they don't
+
+37:45.680 --> 37:48.820
+have to ship different software or hardware for different
+
+37:48.820 --> 37:53.160
+carriers, but they also included a mechanism by which any single
+
+37:53.160 --> 37:56.400
+trust zone vulnerability will result in a permanent unlock of
+
+37:56.400 --> 37:59.700
+Motorola boot loader. Which is great if you're like me and you
+
+37:59.700 --> 38:03.040
+like installing stuff on your phone but not so good for Motorola's
+
+38:03.040 --> 38:09.040
+customers. Next, I think the basic idea and design of trust zone
+
+38:09.040 --> 38:15.580
+is excellent. Having hardware enforced security boundaries and
+
+38:15.580 --> 38:19.380
+a minimal core operating system component that is considered
+
+38:19.380 --> 38:25.500
+trusted is a great idea. But unfortunately what I think we've
+
+38:25.500 --> 38:29.500
+been seeing here is that so many vendors are so jazzed about
+
+38:29.500 --> 38:34.000
+trust zone that there has been so much feature bloat that the
+
+38:34.000 --> 38:37.580
+attack surface in trust zone itself has widened substantially
+
+38:37.580 --> 38:40.080
+and that sort of eliminates one of the big advantages of having
+
+38:40.080 --> 38:43.680
+a system like trust zone which is designed to be small. And then
+
+38:43.680 --> 38:46.560
+finally I think everyone in here already knew this but the best
+
+38:46.560 --> 38:49.020
+marketing team in the world will not change the fact that
+
+38:49.020 --> 38:51.620
+software is written by humans and humans occasionally make
+
+38:51.620 --> 38:54.860
+mistakes. So despite the fact that something may be billed as
+
+38:54.860 --> 38:59.360
+100% secure. And no joke I have actually seen that in media
+
+38:59.360 --> 39:03.200
+reports about trust zone. That does not mean that it's not
+
+39:03.200 --> 39:05.440
+worthy of attention and scrutiny and there aren't bugs
+
+39:05.440 --> 39:11.440
+there. That's it. So I had a contact slide. But that's all
+
+39:11.440 --> 39:14.940
+right. That's the end of my talk. Thank you.
+
+39:24.860 --> 39:54.840
+Thank you.
+

@@ -1,0 +1,132 @@
+start	end	text
+0	12000	Hello, my name is Maciej Pianowski, and the topic of my presentation is Overview of Secure
+12000	15000	Boot State in the ARM-based SOCs.
+15000	17000	Let's start with the agenda.
+17000	21000	At first, I'd like to introduce myself and my company.
+21000	26000	Then, I will explain what do we mean by Secure Boot in the context of this presentation.
+26000	32000	Next, we will discuss the typical Secure Boot implementation and workflows.
+32000	37000	After that, we will present the results of the Secure Boot availability research on different platforms.
+37000	42000	At the end, we should have a few more minutes for questions.
+42000	47000	My name is Maciej Pianowski. I am Wooded Firmware Team Leader at 3MDEP.
+47000	50000	I am with 3MDEP for 5 years already.
+50000	56000	I'm interested in Embedded Linux with systems mostly Octo and system security.
+56000	62000	If you would like to contact me, you can use email or find me on social media listed there.
+62000	66000	I'd like to share a few words about 3MDEB first.
+66000	69000	3MDEB is Embedded Systems Consulting Company.
+69000	71000	We are based in Gdansk, Poland.
+71000	78000	One of our main goals is to promote and improve the offensive solutions on the firmware and system level.
+78000	85000	Our team is mostly specialized with the UFI, Core Boot, Linux, Yocto and so on.
+85000	89000	Many of our solutions are from the platform security area.
+89000	95000	Let's explain first what do we mean by secure boot in the context of this presentation.
+95000	98000	We are focusing on the ARM devices only.
+98000	104000	The secure boot is a term used by vendors for a specific boot run feature.
+104000	111400	Potentially, the term verified boot would fit more here, as the main goal of this feature is to verify the firmware before executing it.
+112200	114440	The signature of the loudest firmware is verified.
+115520	122680	During the process, the private key is used to sign the firmware, while the public key is used to verify the signature.
+123520	127080	In that scenario, we are assuming that the bootroom is trusted.
+127080	136080	Although some of you may disagree with that, given that, in all cases, the boot room is a proprietary piece of code which we cannot control.
+136080	142080	The meaning of secure boot may be different in case of different architectures or in different contexts.
+142080	147080	Now, we will present the typical implementation of the secure boot.
+147080	153080	The most common way of storing the public key is to write it into the SOC in a persistent manner.
+153080	160080	manner. Usually the F-fuse, so the electrical fuse, or other form of one-time programmable
+160080	167080	registers are used for that pull post. The public key persistently written into the SOC
+167080	174080	will be the root of trust of the verification chain. The first component is verified by
+174080	180080	the boot row using the public key fused in the SOC, while the following components could
+180080	187080	with different keys. In this case, we will be focusing only on the first step, so only
+187080	195080	on the verification of the first binary. The typical workflow can look as follows.
+195080	201080	At first, we need to generate the keeper, so a private and public portion of a given key.
+201080	208080	In a secure location, the private key can be used to sign the binary. The public part
+208080	215280	key is then fused into the SOC. Once we confirm that the verification works correctly we can lock
+215280	221280	the platform so only the signed firmware can be allowed to be executed. Locking the platform is
+221280	229760	usually also done via blowing a particular fuse. Let's also briefly discuss what does it mean to
+229760	235200	sign the firmware binary. Usually the binary data is extended with some form of header.
+235200	242200	The header format is specific to the given Secure Boot implementation and it can be different in case of any vendor.
+242200	249200	The common part is that the digital signature of the binary data is one of the main components of the header.
+249200	256200	Now we will discuss the state of the Secure Boot feature in some of the ARM SoCs.
+256200	260200	We will start with the IMX family from NXP.
+260200	265500	In this case, the Secure Boot feature is called HAB, so the High Assurance Boot.
+266220	274360	It can work with up to 5 different keys, and it supports multiple types of keys, both RSA and EC keys.
+275960	280920	An interesting feature is that the HAB can be used to verify more than one binary.
+281880	289480	For example, we can use HAP API in uBoot to verify the kernel image directly using the HAP
+289480	296840	feature and public key fused inside the SOC. So a single key could be used to verify all of the
+296840	304600	components in the boot chain. The application nodes describing the HAP usage are freely available.
+305320	312040	The most useful ones would be the AN3581 and AN12263.
+312840	317320	There are also lots of guides online describing how the HAB can be used in practice.
+318360	325000	The SOC reference manual can also be obtained but it requires a free registration on the NXP site.
+326120	330040	The code signing tool is also available after a free registration.
+330040	336040	It can also be used with HSM devices, which is described in another application now.
+336040	343040	At that point, it is important to remember that the vulnerabilities in bootrope may also happen.
+343040	347040	One of them was found in the HID a few years ago.
+347040	352040	So when using it, make sure that your device is using the patch to bootrope.
+352040	359040	Next, we are moving to another SOC family from NXP, the Layerscape.
+359040	369040	In that case, the Secure Boot is one of the features of the CoreIQ Trust Architecture, which is implemented in most of the LayerSquared devices.
+369040	373040	In terms of feature set, it is similar to the HAP.
+373040	379040	The documentation status is also similar. The application notes are fully available.
+379040	392080	There is also an excellent documentation of the LSDK, which is SDK for layer-square devices, which describes how to use the Secure Boot feature in the chapter 6.1, which is named Secure Boot.
+393680	398280	To get the reference manual and the signing tool, the registration is also required.
+400300	408640	Now we will talk about the Marvel Armada SoCs. The details about the Secure Boot feature in this case are not publicly available.
+409040	415040	The SOC Reference Manual and Secure Boot application node require an MDA to get them.
+415040	421040	Despite the lack of documentation, you can find some useful information in the Marvel GitHub repositories.
+421040	431040	Specifically, the trusted boot text file within the U-Boot repository provides almost step-by-step guide how the Secure Boot can be set up.
+431040	440040	We can learn that the Secure Boot process is similar for Armada 38X and Armada 7K or Armada 8K families.
+440040	447040	The fusing command is present both in uBoot shell and in EDK2UFI.
+447040	456040	And the signing tool can be found in the ATF malware repository at the tool's do-image location.
+456040	463100	The ST has entered the Linux market a while ago with the STM32MP1 SoC.
+463100	465480	It also provides a secure boot feature.
+465480	471460	Unlike others, in this case only the EC keys are supported, not RSA.
+471460	476360	The high quality documentation on the secure boot feature and how it can be used is available
+476360	477360	online.
+477360	490360	The key generation and key signing tools are part of the STM32Cube Programmer Toolkit, which can be downloaded after a free registration.
+490360	501360	Another interesting example is the Xilinx. The secure boot ingot case supports the RSA 2048 with keys.
+501360	506820	It is perhaps one of the most open vendors when it comes to the documentation of the
+506820	512660	reference manual and Secure Boot documentation can be downloaded even without registration.
+512660	517860	The application node describes the Secure Boot process presentation in great detail.
+517860	524480	You could also learn more about the Secure Boot from the technical overview in the technical
+524480	533180	reference manual which is in the chapter 32 device secure boot the next one is
+533180	541700	Nvidia with its integral SOC family the secure boot in that case uses the 2038
+541700	548180	bit RSA keys as well the online Jetpack SDK documentation provides all of the
+548180	554360	details you would need to implement the secure boot or the devices the keys are
+554360	560280	simply generated using openssl command line the fusing and signing tools are part of the jetpack
+560280	566680	sdk the odm fuse script is used to program the fuses while the flashing script has options for
+566680	577160	binary signing as well in case of the microchip we have analyzed the sa ma5 socs the secure boot
+577160	582600	feature is also there but the publicly available documentation is missing some details of it
+582600	588600	There is some more documentation which requires an NDA with microchip to obtain one.
+588600	597600	There is also a secure variant of Samba tools which is used for code signing at FU's programming.
+597600	604600	Its usage is described but the tool itself requires the NDA as well to receive it.
+604600	609600	We cannot say much about the Secure Boot in the TI Citara SOCs.
+609600	615280	the public documents only mention that the secure boot feature is there but provide not that much
+615280	622240	details the high level secure boot overview is truly high level that can be treated more as a
+622240	629120	marketing material rather than a technical documentation in order to receive more details
+629120	631840	contact with the representatives is necessary
+631840	640540	Qualcomm also provides only the high-level documentation in terms of the Secure Boot
+640540	649720	feature. But we can learn some interesting stuff from third-party write-ups such as the
+649720	656260	Timesys block or the LineageOS block. For example, we can learn that the signing tool
+656260	660260	is called intersec tool and it requires the MDA to receive one.
+664340	670580	ROGchip is one of the most popular Chinese SOC vendors. There is not much documentation out there.
+671300	676900	The technical reference manual mentions that the secure boot and f-use features are there,
+677460	683300	but it is not clear how it could be used. Some more documents can be found online,
+683300	689380	like the rockchip secure boot specification we can definitely learn from there that some windows
+689380	698180	tools calls secure boot tool exists and it is used for signing firmer binaries so in terms of rock
+699060	703380	most likely there is some kind of secure boot but it is not clear how to use it
+705300	713060	we also couldn't find any success stories about that feature contact with vendor would be required
+713060	722340	in that case. Another one of the popular Chinese SOC vendors is the old winner. There are some signs
+722340	728740	that some form of secure boot feature is there, but possibly no one knows how to use one. Some
+728740	734420	details can be found online, for example in the Albion forum. Specifically one of the most advanced
+734420	738020	user stories can also be found there, but it got stuck at some point.
+738020	745020	The results of research are presented in the following slide.
+745020	753020	We can see that out of 11 analyzed cases, the secure boot could be used without any form of NDA in six of them.
+753020	765020	An interesting case is the marvel, where the documentation requires NDA, but the information and tools from the GitHub repositories should be enough to implement a secure boot flow in your device,
+765020	770020	maybe without fully understanding all of the details.
+770020	778020	Also, most vendors require at least free registration to get access to some of the documents and tools.
+778020	785020	Some comments to the table from previous slide, which we have already covered.
+785020	788020	And finally, we have reached to the summary.
+788020	795020	After this research, we can say that the general implementation of Secure Boot is similar across vendors.
+795020	799020	The main idea is to verify the image before execution.
+799020	808020	The public key is usually stored in the FUs registers and a specific FUs needs to be set to lock the device.
+808020	816020	Most commonly the RSA 2038 key type is used as the signing key.
+816020	824020	In some cases only the EC keys are supported and in some cases multiple key types are supported.
+825020	833020	In all cases the SHA-256 is used as a hash function for our digital signature.
+833020	842020	Usually also the firmware decryption feature is present, but it was not in the scope of our presentation to discuss one.
+844020	851020	Feel free to contact us if you believe we can help you in any way. We are always open to cooperate and discuss.
+851020	854020	And now question time.
+855020	857020	You

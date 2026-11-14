@@ -1,0 +1,218 @@
+start	end	text
+1000	11000	Hello everyone. My name is Michael and I will tell you how to use secure boot on
+11000	18120	on the ROC chip RK3588.
+18120	20600	And I have technical difficulties.
+35000	40980	For secure boot on RK3588, you have to generate a key.
+40980	48020	sign your image burn the hash of the key to your hardware and that's it secure boot is enabled
+48740	49940	thank you for your attention
+56260	63860	i see that i have some time left so maybe we look a bit closer and i will tell you about how secure
+63860	70800	Secure Boot works on RK3588, how to actually assign the firmware image, how to enable Secure
+70800	77320	Boot, and finish with some recommendations and further resources for reading into it.
+77320	79380	That's me.
+79380	84700	Secure Boot or Verify Boot is a set of verification processes designed to ensure the integrity
+84700	88420	and legitimacy of the firmware running on a device.
+88420	92200	I stole that definition from the Rockchip Secure Boot Developer
+92200	93860	Guide.
+93860	98560	So for Secure Boot, we have some image.
+98560	103780	In this case, I have a Rockchip image with a key in it,
+103780	107180	a signature on that, and a bootloader inside.
+109780	114560	The SOC during boot, it runs in boot ROM.
+114560	119320	For Secure Boot, it reads the hash, we mentioned it before,
+119320	121080	from Secure OTP.
+121080	123220	That's eFusers that you burn once,
+123220	126560	and then you can't change them anymore.
+126560	131560	On RK3588, these are only accessible from the Secure
+131560	133620	World or EL3.
+133620	137900	Details don't matter, but that will be important later on.
+137900	142320	It compares the hash in the OTP area
+142320	147960	with a hash over the public key that's contained in the image.
+147960	154080	Use that public key to verify the signature of the image.
+154080	158440	Use a hash in the header to verify the bootloader
+158440	161560	and execute the actual bootloader.
+161560	163440	We can't do anything about this.
+163440	167880	So everything we have here is in the boot ROM provided
+167880	169100	by Robchip.
+169100	172080	And we don't have a chance to change it.
+172080	173380	We have to trust the boot ROM.
+173380	176280	We have to trust the OTP that it's really
+176280	181920	writable only once and that it's not changeable during boot.
+181920	187380	What we can change is how we get the key, the signature,
+187380	192720	and the hash into the OTP area.
+192720	197760	So in the factory or on your build server,
+197760	200480	you have a key pair.
+200480	203380	And from there, you take the public key
+203380	206400	and put it into the image and use the private key
+206400	207920	to sign the image.
+207920	210560	The thing that has to be secret in this case
+210560	214340	is the private key you see in purple on the slides.
+214340	218940	And you have to somehow get the hash of the public key
+218940	220820	into your device.
+220820	223340	That's also something that you have
+223340	224800	to do in a secure environment.
+224800	227040	So it has to happen in your factory.
+227040	230920	you have to have full control over this step.
+230920	233460	Otherwise, someone may change and write
+233460	235140	some different hash into your device,
+235140	236920	and secure boot is broken.
+240540	245500	So first, let's look into how image signing works.
+245500	249240	Of course, ROGchip provides a downstream solution for that.
+249240	253880	It uses MKImage to generate the firmware image.
+253880	257880	And then you get the RK sign tool, which
+257880	263340	generates the key pair and allows you to assign an image.
+263340	267940	This approach is supported by Rockchip, of course.
+267940	271860	But this RK sign tool is binary only.
+271860	275560	So we don't know what's going on in there.
+275560	277200	We may trust it.
+277200	279400	We are not sure.
+279400	283840	The RK-Sign tool is also a bit clumsy to use.
+283840	288280	So you run it several times, and in the background
+288280	290960	it generates a configuration file.
+290960	294420	So that's not something that's easy to integrate
+294420	297380	into your build tools or your build chain.
+297380	301880	And I'm personally not sure if the RK-Sign tool supports
+301880	302740	HSM support.
+302740	305200	So I saw a few hints, but I never
+305200	310060	was able to actually work with some HSM.
+310060	315940	So that's the question.
+315940	321220	With Bearbox, we use OpenSSL to generate the key pair.
+321220	324340	I think we can kind of trust OpenSSL
+324340	328240	to actually provide proper keys.
+328240	333860	And Bearbox provides an open source tool, RKImage,
+333860	335680	which generates the image.
+335680	338240	And in the same step, it also signs the image.
+338240	341360	So once you build a bare box with a configuration
+341360	345560	for secure boot, you will get your final image already
+345560	347320	signed.
+347320	350200	The advantage here is all the tools are open source.
+350200	353180	So you can look at the source code, modify it if necessary,
+353180	354880	and build it yourself.
+354880	360740	The RK image tool supports PKCS11 for talking
+360740	364240	to any HSM that provides this interface
+364240	365700	for retrieving your private key.
+365700	370280	So you can use that to get better security
+370280	373040	on your private keys and move it out
+373040	375200	of a built infrastructure.
+375200	380360	The disadvantages, it's not supported by ROC chip.
+380360	383400	If that's a disadvantage or an advantage, I don't know.
+383400	384980	You have to decide.
+384980	389380	And it may lack features that are provided by ROC chip.
+389380	393400	I'm not sure if there is anything missing from RK Image.
+393400	397960	I implemented what I needed and ignored all the other features.
+397960	403940	You may need more or something that's provided by Roger.
+403940	409280	For the board lockdown, the downstream solution,
+409280	412460	I told you OTP access is only possible
+412460	415140	from the secure world or EL3.
+415140	425100	So in UBOT, UBOT needs to write the hash in the early boot.
+425100	428500	It receives the key from the device tree.
+428500	433000	So you put your public key into the device tree.
+433000	438480	And during boot, UBOT calculates the hash on this public key,
+438480	443240	and it writes the hash into the OTP area.
+443240	447260	Problem with that is you require a separate image that
+447260	451380	carries the public key in the device tree
+451380	453860	for your device bootstrapping.
+453860	456480	That's something you can do, but in this case,
+456480	459360	you have a separate image in your factory
+459360	462100	that you have to manage.
+462100	470300	And because the OTP is not accessible from the normal world
+470300	474560	or other exception levels.
+474560	477840	You can't check if your board has secure boot enabled
+477840	481220	or which hash is written into the OTP area.
+481220	484640	So you have no information if secure boot is actually on.
+489620	495380	In bare box, the lockdown works slightly different.
+495380	498980	You calculate the hash on your build machine.
+498980	503540	So the public key hash is something that can be public,
+503540	506300	so you can carry it around.
+506300	508640	You have to ensure the integrity of this hash,
+508640	512000	but that's a different issue.
+512000	515580	And on the device in Bearbox, you
+515580	520140	have a separate command that you can run, give it this hash,
+520140	522420	and it will enable a secure boot.
+522420	527220	So you can use, at runtime, a command
+527220	532180	to enable secure boot on your devices.
+532180	538740	And since the OTP area is not accessible from the normal world,
+538740	541620	it has to go through Opti.
+541620	546360	And Opti will actually write the hash to OTP.
+546360	548620	So there are two parts in that.
+548620	552940	one in bare box for talking to Opti as a user interface
+552940	557460	and an Opti PTA to actually enable a secure boot
+557460	558000	on the device.
+560740	566720	This approach needs scripts during your manufacturing.
+566720	568960	So at one step in your manufacturing,
+568960	573900	you run your system, check secure boot is not enabled,
+573900	578100	then run the command with your hash, enable secure boot,
+578100	581260	And after that, only Secure Boot will be enabled.
+581260	585600	You have the advantage to be able to exactly determine
+585600	588220	when this will happen during your manufacturing.
+588220	591200	So you can do stuff before, enable Secure Boot,
+591200	593340	and do stuff afterwards.
+593340	597480	That's your responsibility here.
+597480	601240	And the second part is you need OPTI support
+601240	603540	with the RK Secure PTA.
+603540	606820	You need an upstream OPTI for that.
+606820	609620	So it won't work with the OPTI provided by ROC chip.
+613240	616620	So to come back to the first slide,
+616620	620140	you use OpenSSL to generate the key pair.
+620140	622600	It's an RSA key.
+622600	625780	You configure your bare box build
+625780	628000	to assign the image with this key,
+628000	632860	and you enable the RKA secure command to talk to OPTI.
+632860	634940	You build your image.
+634940	639640	You use this RKOTP script to calculate your key hash.
+639640	642920	You can pass your key there, or you can also
+642920	646080	pass an image there, and it will extract the public key
+646080	648600	and give you the hash for that.
+648600	652940	And you boot barebox and run the RK secure command,
+652940	657000	and secure boot will be enabled.
+659680	661960	Some recommendations.
+661960	665980	Store your private signing keys on HSM.
+665980	670240	Hardware secure module, no question about that.
+670240	673900	If you enable secure boot, check your public root key hash
+673900	676000	before you program it into your device.
+676000	679360	You will have a brick otherwise.
+679360	681480	And because of that, you want to test
+681480	683180	on expandable hardware first.
+683180	686500	So if you only have one device on your desk,
+686500	690960	I wouldn't try to enable secure boot there.
+690960	693900	And after you enable Secure Boot,
+693900	697980	you would want to test if unsigned images or images
+697980	701460	that are signed with a different key are rejected,
+701460	703920	to be really sure that Secure Boot is enabled.
+706920	712220	A few further resources, the GitHub repository
+712220	713620	by DualTag.
+713620	716480	I don't know how to pronounce that.
+716480	718680	They did a lot of reverse engineering,
+718680	722740	So everything I know about Secure Boot on RK3588,
+722740	724860	I know from that repository.
+724860	728960	And I worked on building it into the upstream projects
+728960	733040	to make it useful or usable.
+733040	737580	Another resource is the Rockchip Developer Guide.
+737580	741240	It will partly document what's happening
+741240	743800	in the early Secure Boot.
+743800	746400	And it will also talk about how Rockchip recommends
+746400	750640	to sign Linux or sign the root FS
+750640	752940	and have the secure boot continuing
+752940	755160	after your bootloader loaded.
+755160	758280	I didn't cover that because that's something you,
+758280	760860	once you have a trusted bootloader running,
+760860	765460	you can decide how to continue further in your boot chain
+765460	769500	and ensure secure boot there.
+769500	772020	Documentation of barebox documents,
+772020	773700	the process how to enable secure boot.
+773700	775980	So what I told you in this talk, you
+775980	779700	can find in the documentation as well in smaller steps
+779700	782340	and what to enable and how to enable it.
+782340	788540	And you can find the RK secure PTA in upstream OptiOS
+788540	789880	in this repository.
+789880	793040	So in the latest Opti releases, you already
+793040	802140	have the PTA that's necessary for secure boot, of course.
+802140	805880	So now, actually, thank you.
+805880	810740	If you have any questions, meet me later in the evening
+810740	814000	because we won't have time for questions here.
+814000	816020	If you have questions about my design decisions,
+816020	818360	I'm very welcome to hear about that.
+818360	821220	If you want to implement that in U-Board, also talk to me.
+821220	824140	I have an implementation for Bearbox, but not in U-Board.
+824140	827180	If you want to implement that in U-Board, come to me.
+827180	829720	And see you today in the evening.
+829720	830720	Thank you.
+835880	865860	Thank you.

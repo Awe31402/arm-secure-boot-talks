@@ -1,0 +1,524 @@
+1
+00:00:00,000 --> 00:00:12,000
+Hello, my name is Maciej Pianowski, and the topic of my presentation is Overview of Secure
+
+2
+00:00:12,000 --> 00:00:15,000
+Boot State in the ARM-based SOCs.
+
+3
+00:00:15,000 --> 00:00:17,000
+Let's start with the agenda.
+
+4
+00:00:17,000 --> 00:00:21,000
+At first, I'd like to introduce myself and my company.
+
+5
+00:00:21,000 --> 00:00:26,000
+Then, I will explain what do we mean by Secure Boot in the context of this presentation.
+
+6
+00:00:26,000 --> 00:00:32,000
+Next, we will discuss the typical Secure Boot implementation and workflows.
+
+7
+00:00:32,000 --> 00:00:37,000
+After that, we will present the results of the Secure Boot availability research on different platforms.
+
+8
+00:00:37,000 --> 00:00:42,000
+At the end, we should have a few more minutes for questions.
+
+9
+00:00:42,000 --> 00:00:47,000
+My name is Maciej Pianowski. I am Wooded Firmware Team Leader at 3MDEP.
+
+10
+00:00:47,000 --> 00:00:50,000
+I am with 3MDEP for 5 years already.
+
+11
+00:00:50,000 --> 00:00:56,000
+I'm interested in Embedded Linux with systems mostly Octo and system security.
+
+12
+00:00:56,000 --> 00:01:02,000
+If you would like to contact me, you can use email or find me on social media listed there.
+
+13
+00:01:02,000 --> 00:01:06,000
+I'd like to share a few words about 3MDEB first.
+
+14
+00:01:06,000 --> 00:01:09,000
+3MDEB is Embedded Systems Consulting Company.
+
+15
+00:01:09,000 --> 00:01:11,000
+We are based in Gdansk, Poland.
+
+16
+00:01:11,000 --> 00:01:18,000
+One of our main goals is to promote and improve the offensive solutions on the firmware and system level.
+
+17
+00:01:18,000 --> 00:01:25,000
+Our team is mostly specialized with the UFI, Core Boot, Linux, Yocto and so on.
+
+18
+00:01:25,000 --> 00:01:29,000
+Many of our solutions are from the platform security area.
+
+19
+00:01:29,000 --> 00:01:35,000
+Let's explain first what do we mean by secure boot in the context of this presentation.
+
+20
+00:01:35,000 --> 00:01:38,000
+We are focusing on the ARM devices only.
+
+21
+00:01:38,000 --> 00:01:44,000
+The secure boot is a term used by vendors for a specific boot run feature.
+
+22
+00:01:44,000 --> 00:01:51,400
+Potentially, the term verified boot would fit more here, as the main goal of this feature is to verify the firmware before executing it.
+
+23
+00:01:52,200 --> 00:01:54,440
+The signature of the loudest firmware is verified.
+
+24
+00:01:55,520 --> 00:02:02,680
+During the process, the private key is used to sign the firmware, while the public key is used to verify the signature.
+
+25
+00:02:03,520 --> 00:02:07,080
+In that scenario, we are assuming that the bootroom is trusted.
+
+26
+00:02:07,080 --> 00:02:16,080
+Although some of you may disagree with that, given that, in all cases, the boot room is a proprietary piece of code which we cannot control.
+
+27
+00:02:16,080 --> 00:02:22,080
+The meaning of secure boot may be different in case of different architectures or in different contexts.
+
+28
+00:02:22,080 --> 00:02:27,080
+Now, we will present the typical implementation of the secure boot.
+
+29
+00:02:27,080 --> 00:02:33,080
+The most common way of storing the public key is to write it into the SOC in a persistent manner.
+
+30
+00:02:33,080 --> 00:02:40,080
+manner. Usually the F-fuse, so the electrical fuse, or other form of one-time programmable
+
+31
+00:02:40,080 --> 00:02:47,080
+registers are used for that pull post. The public key persistently written into the SOC
+
+32
+00:02:47,080 --> 00:02:54,080
+will be the root of trust of the verification chain. The first component is verified by
+
+33
+00:02:54,080 --> 00:03:00,080
+the boot row using the public key fused in the SOC, while the following components could
+
+34
+00:03:00,080 --> 00:03:07,080
+with different keys. In this case, we will be focusing only on the first step, so only
+
+35
+00:03:07,080 --> 00:03:15,080
+on the verification of the first binary. The typical workflow can look as follows.
+
+36
+00:03:15,080 --> 00:03:21,080
+At first, we need to generate the keeper, so a private and public portion of a given key.
+
+37
+00:03:21,080 --> 00:03:28,080
+In a secure location, the private key can be used to sign the binary. The public part
+
+38
+00:03:28,080 --> 00:03:35,280
+key is then fused into the SOC. Once we confirm that the verification works correctly we can lock
+
+39
+00:03:35,280 --> 00:03:41,280
+the platform so only the signed firmware can be allowed to be executed. Locking the platform is
+
+40
+00:03:41,280 --> 00:03:49,760
+usually also done via blowing a particular fuse. Let's also briefly discuss what does it mean to
+
+41
+00:03:49,760 --> 00:03:55,200
+sign the firmware binary. Usually the binary data is extended with some form of header.
+
+42
+00:03:55,200 --> 00:04:02,200
+The header format is specific to the given Secure Boot implementation and it can be different in case of any vendor.
+
+43
+00:04:02,200 --> 00:04:09,200
+The common part is that the digital signature of the binary data is one of the main components of the header.
+
+44
+00:04:09,200 --> 00:04:16,200
+Now we will discuss the state of the Secure Boot feature in some of the ARM SoCs.
+
+45
+00:04:16,200 --> 00:04:20,200
+We will start with the IMX family from NXP.
+
+46
+00:04:20,200 --> 00:04:25,500
+In this case, the Secure Boot feature is called HAB, so the High Assurance Boot.
+
+47
+00:04:26,220 --> 00:04:34,360
+It can work with up to 5 different keys, and it supports multiple types of keys, both RSA and EC keys.
+
+48
+00:04:35,960 --> 00:04:40,920
+An interesting feature is that the HAB can be used to verify more than one binary.
+
+49
+00:04:41,880 --> 00:04:49,480
+For example, we can use HAP API in uBoot to verify the kernel image directly using the HAP
+
+50
+00:04:49,480 --> 00:04:56,840
+feature and public key fused inside the SOC. So a single key could be used to verify all of the
+
+51
+00:04:56,840 --> 00:05:04,600
+components in the boot chain. The application nodes describing the HAP usage are freely available.
+
+52
+00:05:05,320 --> 00:05:12,040
+The most useful ones would be the AN3581 and AN12263.
+
+53
+00:05:12,840 --> 00:05:17,320
+There are also lots of guides online describing how the HAB can be used in practice.
+
+54
+00:05:18,360 --> 00:05:25,000
+The SOC reference manual can also be obtained but it requires a free registration on the NXP site.
+
+55
+00:05:26,120 --> 00:05:30,040
+The code signing tool is also available after a free registration.
+
+56
+00:05:30,040 --> 00:05:36,040
+It can also be used with HSM devices, which is described in another application now.
+
+57
+00:05:36,040 --> 00:05:43,040
+At that point, it is important to remember that the vulnerabilities in bootrope may also happen.
+
+58
+00:05:43,040 --> 00:05:47,040
+One of them was found in the HID a few years ago.
+
+59
+00:05:47,040 --> 00:05:52,040
+So when using it, make sure that your device is using the patch to bootrope.
+
+60
+00:05:52,040 --> 00:05:59,040
+Next, we are moving to another SOC family from NXP, the Layerscape.
+
+61
+00:05:59,040 --> 00:06:09,040
+In that case, the Secure Boot is one of the features of the CoreIQ Trust Architecture, which is implemented in most of the LayerSquared devices.
+
+62
+00:06:09,040 --> 00:06:13,040
+In terms of feature set, it is similar to the HAP.
+
+63
+00:06:13,040 --> 00:06:19,040
+The documentation status is also similar. The application notes are fully available.
+
+64
+00:06:19,040 --> 00:06:32,080
+There is also an excellent documentation of the LSDK, which is SDK for layer-square devices, which describes how to use the Secure Boot feature in the chapter 6.1, which is named Secure Boot.
+
+65
+00:06:33,680 --> 00:06:38,280
+To get the reference manual and the signing tool, the registration is also required.
+
+66
+00:06:40,300 --> 00:06:48,640
+Now we will talk about the Marvel Armada SoCs. The details about the Secure Boot feature in this case are not publicly available.
+
+67
+00:06:49,040 --> 00:06:55,040
+The SOC Reference Manual and Secure Boot application node require an MDA to get them.
+
+68
+00:06:55,040 --> 00:07:01,040
+Despite the lack of documentation, you can find some useful information in the Marvel GitHub repositories.
+
+69
+00:07:01,040 --> 00:07:11,040
+Specifically, the trusted boot text file within the U-Boot repository provides almost step-by-step guide how the Secure Boot can be set up.
+
+70
+00:07:11,040 --> 00:07:20,040
+We can learn that the Secure Boot process is similar for Armada 38X and Armada 7K or Armada 8K families.
+
+71
+00:07:20,040 --> 00:07:27,040
+The fusing command is present both in uBoot shell and in EDK2UFI.
+
+72
+00:07:27,040 --> 00:07:36,040
+And the signing tool can be found in the ATF malware repository at the tool's do-image location.
+
+73
+00:07:36,040 --> 00:07:43,100
+The ST has entered the Linux market a while ago with the STM32MP1 SoC.
+
+74
+00:07:43,100 --> 00:07:45,480
+It also provides a secure boot feature.
+
+75
+00:07:45,480 --> 00:07:51,460
+Unlike others, in this case only the EC keys are supported, not RSA.
+
+76
+00:07:51,460 --> 00:07:56,360
+The high quality documentation on the secure boot feature and how it can be used is available
+
+77
+00:07:56,360 --> 00:07:57,360
+online.
+
+78
+00:07:57,360 --> 00:08:10,360
+The key generation and key signing tools are part of the STM32Cube Programmer Toolkit, which can be downloaded after a free registration.
+
+79
+00:08:10,360 --> 00:08:21,360
+Another interesting example is the Xilinx. The secure boot ingot case supports the RSA 2048 with keys.
+
+80
+00:08:21,360 --> 00:08:26,820
+It is perhaps one of the most open vendors when it comes to the documentation of the
+
+81
+00:08:26,820 --> 00:08:32,660
+reference manual and Secure Boot documentation can be downloaded even without registration.
+
+82
+00:08:32,660 --> 00:08:37,860
+The application node describes the Secure Boot process presentation in great detail.
+
+83
+00:08:37,860 --> 00:08:44,480
+You could also learn more about the Secure Boot from the technical overview in the technical
+
+84
+00:08:44,480 --> 00:08:53,180
+reference manual which is in the chapter 32 device secure boot the next one is
+
+85
+00:08:53,180 --> 00:09:01,700
+Nvidia with its integral SOC family the secure boot in that case uses the 2038
+
+86
+00:09:01,700 --> 00:09:08,180
+bit RSA keys as well the online Jetpack SDK documentation provides all of the
+
+87
+00:09:08,180 --> 00:09:14,360
+details you would need to implement the secure boot or the devices the keys are
+
+88
+00:09:14,360 --> 00:09:20,280
+simply generated using openssl command line the fusing and signing tools are part of the jetpack
+
+89
+00:09:20,280 --> 00:09:26,680
+sdk the odm fuse script is used to program the fuses while the flashing script has options for
+
+90
+00:09:26,680 --> 00:09:37,160
+binary signing as well in case of the microchip we have analyzed the sa ma5 socs the secure boot
+
+91
+00:09:37,160 --> 00:09:42,600
+feature is also there but the publicly available documentation is missing some details of it
+
+92
+00:09:42,600 --> 00:09:48,600
+There is some more documentation which requires an NDA with microchip to obtain one.
+
+93
+00:09:48,600 --> 00:09:57,600
+There is also a secure variant of Samba tools which is used for code signing at FU's programming.
+
+94
+00:09:57,600 --> 00:10:04,600
+Its usage is described but the tool itself requires the NDA as well to receive it.
+
+95
+00:10:04,600 --> 00:10:09,600
+We cannot say much about the Secure Boot in the TI Citara SOCs.
+
+96
+00:10:09,600 --> 00:10:15,280
+the public documents only mention that the secure boot feature is there but provide not that much
+
+97
+00:10:15,280 --> 00:10:22,240
+details the high level secure boot overview is truly high level that can be treated more as a
+
+98
+00:10:22,240 --> 00:10:29,120
+marketing material rather than a technical documentation in order to receive more details
+
+99
+00:10:29,120 --> 00:10:31,840
+contact with the representatives is necessary
+
+100
+00:10:31,840 --> 00:10:40,540
+Qualcomm also provides only the high-level documentation in terms of the Secure Boot
+
+101
+00:10:40,540 --> 00:10:49,720
+feature. But we can learn some interesting stuff from third-party write-ups such as the
+
+102
+00:10:49,720 --> 00:10:56,260
+Timesys block or the LineageOS block. For example, we can learn that the signing tool
+
+103
+00:10:56,260 --> 00:11:00,260
+is called intersec tool and it requires the MDA to receive one.
+
+104
+00:11:04,340 --> 00:11:10,580
+ROGchip is one of the most popular Chinese SOC vendors. There is not much documentation out there.
+
+105
+00:11:11,300 --> 00:11:16,900
+The technical reference manual mentions that the secure boot and f-use features are there,
+
+106
+00:11:17,460 --> 00:11:23,300
+but it is not clear how it could be used. Some more documents can be found online,
+
+107
+00:11:23,300 --> 00:11:29,380
+like the rockchip secure boot specification we can definitely learn from there that some windows
+
+108
+00:11:29,380 --> 00:11:38,180
+tools calls secure boot tool exists and it is used for signing firmer binaries so in terms of rock
+
+109
+00:11:39,060 --> 00:11:43,380
+most likely there is some kind of secure boot but it is not clear how to use it
+
+110
+00:11:45,300 --> 00:11:53,060
+we also couldn't find any success stories about that feature contact with vendor would be required
+
+111
+00:11:53,060 --> 00:12:02,340
+in that case. Another one of the popular Chinese SOC vendors is the old winner. There are some signs
+
+112
+00:12:02,340 --> 00:12:08,740
+that some form of secure boot feature is there, but possibly no one knows how to use one. Some
+
+113
+00:12:08,740 --> 00:12:14,420
+details can be found online, for example in the Albion forum. Specifically one of the most advanced
+
+114
+00:12:14,420 --> 00:12:18,020
+user stories can also be found there, but it got stuck at some point.
+
+115
+00:12:18,020 --> 00:12:25,020
+The results of research are presented in the following slide.
+
+116
+00:12:25,020 --> 00:12:33,020
+We can see that out of 11 analyzed cases, the secure boot could be used without any form of NDA in six of them.
+
+117
+00:12:33,020 --> 00:12:45,020
+An interesting case is the marvel, where the documentation requires NDA, but the information and tools from the GitHub repositories should be enough to implement a secure boot flow in your device,
+
+118
+00:12:45,020 --> 00:12:50,020
+maybe without fully understanding all of the details.
+
+119
+00:12:50,020 --> 00:12:58,020
+Also, most vendors require at least free registration to get access to some of the documents and tools.
+
+120
+00:12:58,020 --> 00:13:05,020
+Some comments to the table from previous slide, which we have already covered.
+
+121
+00:13:05,020 --> 00:13:08,020
+And finally, we have reached to the summary.
+
+122
+00:13:08,020 --> 00:13:15,020
+After this research, we can say that the general implementation of Secure Boot is similar across vendors.
+
+123
+00:13:15,020 --> 00:13:19,020
+The main idea is to verify the image before execution.
+
+124
+00:13:19,020 --> 00:13:28,020
+The public key is usually stored in the FUs registers and a specific FUs needs to be set to lock the device.
+
+125
+00:13:28,020 --> 00:13:36,020
+Most commonly the RSA 2038 key type is used as the signing key.
+
+126
+00:13:36,020 --> 00:13:44,020
+In some cases only the EC keys are supported and in some cases multiple key types are supported.
+
+127
+00:13:45,020 --> 00:13:53,020
+In all cases the SHA-256 is used as a hash function for our digital signature.
+
+128
+00:13:53,020 --> 00:14:02,020
+Usually also the firmware decryption feature is present, but it was not in the scope of our presentation to discuss one.
+
+129
+00:14:04,020 --> 00:14:11,020
+Feel free to contact us if you believe we can help you in any way. We are always open to cooperate and discuss.
+
+130
+00:14:11,020 --> 00:14:14,020
+And now question time.
+
+131
+00:14:15,020 --> 00:14:17,020
+You
+

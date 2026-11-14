@@ -1,0 +1,458 @@
+Okay, let's get started. Welcome to my talk, Practical Application of Verified Boot. My name is Ruben Selvinsky, and the first slide is also about me. This is mostly useful if you want to contact me later or look me up on GitHub. I work for Pangotronics. We do Embedded Linux Consulting. I started out doing testing for Embedded Linux Systems and then moved on to Opti and Security. So that was my area of expertise for some years, and I'm also doing a lot of stuff in this area still.
+I do system integration. Everybody at Pangotronics pretty much does system integration.
+And I'm also interested in Linux Media.
+So I work with GStreamer pipelines.
+The very first thing you have to remember about verify boot is Boromir says one does not simply implement verified boot.
+Everybody thinks it's so easy.
+You just go to a contractor and say, we want verified boot.
+We require it for the Cyber Resilience Act, for example.
+That's what's happening to us a lot at the moment.
+But it's not that simple and I will explain why it isn't simple, unfortunately.
+I would like it to be simple.
+First off, why am I talking about verified boot?
+It's because x86 already has a coin on the secure boot term.
+So in x86 systems, so on your laptop or on most of the laptops,
+excepting the Mac systems, of course, or the modern ARM systems,
+secure boot is the implementation which is used to verify that you are only
+booting the kernel you have signed beforehand and for arm systems which we
+have a lot in the embedded space there's always another vendor implementation so
+everybody does their own implementation as an example from NXP it's called high
+assurance boot for the older SOCs the newer IMX 9x systems use advanced high
+assurance boot which is just a further development of the system they had
+before. Rockchip has an NDA requirement. There is not even a name, or at least I couldn't find it.
+If you know the name, please tell me later. I'm interested. And TI also calls it Secure Boot,
+but it has completely nothing to do with the x86 implementation. And that's why I'm saying
+verify boot when I include all the different vendor implementations and the things you have
+to look out for. How does x86 Secure Boot work? So you have some kind of ROM implementation for
+intel it's contained in the boot guard description which verifies the components which are booted so
+in this case your uefi is verified and then is then able to in turn in turn verify the kernel
+and the file system or your kernel will verify the file system and for amd it's the guard me
+extensions so the rom code verifies the uefi and then the uefi verifies the further components and
+and we get a secure boot chain.
+It works with its own certificate authority.
+So, the tool for Linux systems to implement this is SPCTL,
+and then you can deploy your own certificates into your UEFI.
+So, they are saved within the EEPROM, I guess.
+The license problems and the complexity of implementing the secure boot solutions stay the same,
+but at least it's unified across both x86 or across all x86 platforms so it has that going
+for it and that is quite nice and you will also have to set up some kind of uefi password because
+if there is no password for the uefi somebody can just remove the installed certificate and
+then the bios will boot whatever you want this has to be taken into account for this implementation
+For ARM, it's pretty much the same.
+You also have a ROM code.
+You have some kind of vendor ROM implementation.
+Depends on your vendor.
+Maybe you have to sign an NDA, and then you can look at it.
+You have some bootloader.
+It doesn't have to be only U-Boot.
+It can also include an ARM-trusted firmware.
+It can be barebox.
+It can be some kind of Linux boot system.
+But the ROM code will need to verify the bootloader.
+And then pretty much the standard nowadays, at least for U-Boot and barebox,
+is to use so-called fit images to verify a kernel and the device tree, for example,
+or another initramfs. Fit stands for flattened image tree, which is a deviation of the
+flattened device tree naming. Almost all of the vendor implementation will require you to burn
+some fuses inside the processor which is a process that can only be done once so
+a fuse is a little one-time programmable or one-time burnable thing where you can
+burn the fuse and then it turns to a one but you can never turn that fuse back
+into a zero and for NXP they use that to burn a hash over your certificate
+authority certificates so at the very beginning you create a certificate
+authority with your root certificate at the top then you create a hash over the
+certificates and you burn it into the SOC and then your processor will be able
+to verify your secure boot flow this is a one-time operation it's very important
+you will totally brick a board if you burn the wrong fuse and you won't be
+able to burn or to use other software to recover the board if you also burn the
+additional lock fuse that is required on nxp socks it also means there's no new
+deployment of certificate possible as is with x86 as long as you have the UEFI
+BIOS password you could in theory go out into the field and then replace the
+certificates on the devices in the field it's going to be very expensive but it's
+possible at least I'm going to share a bit of an anecdote with you once upon a
+time i had a project from 2019 to 2021 we had an arm embedded imx6 ul nxp platform it used high
+assurance boot we also implemented the usage of opti to save authentication information for the
+cloud so there was going to be a cloud backend which required authenticated information from the
+device we also employed up armor to have another layer of security where we could control what the
+user space application can access in the end we used rock for updates the whole system the
+complete system was always built inside of your toe which ensured that you always got images that
+were bootable on a device and for storage of the backend keys so for storage of the keys that were
+used to sign the secure or sign the artifacts so where the secure boot keys are stored we use the
+to NitroKey HSM. How does the complete chain look like, you might ask? It looks like this.
+So at the very beginning, we have a ROM code that verifies the bootloader, which in turn already
+contains the Opti. So the verified bootloader then loads Opti, and Opti will then return back
+into the bootloader. We have different colors here, since Opti will be running inside of the
+trust zone, which is marked in the green color. The blue color signifies the so-called normal
+world in trust zone lingua the bootloader then goes on to verify the fit image which contains
+the device tree the init ramfs and the kernel and the kernel in turn internally uses the dm
+verity file system to verify the file system where all our binary information is contained
+and that's the chain we also implemented inside the project which worked well and then 2022 came
+around and the customer team no longer existed the team members left the company over time due
+to external pressure or project pressure and eventually the whole company side was sold off
+to another company so they said we no longer leave this branch of the company we're just going to sell
+it um the octo was pretty much left in the state when we last touched it in 2021 and questions to
+the customer whether we want to do further development or still or do some yokto updates
+or update the system in general or provide some documentation on how systems are booted and so on
+and so on was unanswered nobody was taking our course because the project lead for the project
+was missing he was sold off with the with the site so nobody answered there and then what happened
+in end of 2023 is a totally new team appeared and they were like verified boot hsm pkcs11 what what
+is this all about we don't understand can you explain i will start by explaining pkcs11 pkcs11
+is a standard programming interface for hardware security modules those come in different form
+factors i will show on the next slide and is usually used to generate a key on the device
+so generate a private public asymmetric key pair where the private key is generated on the device
+never exportable so it stays on this device and the idea behind is that
+behind that is that the device with the very important keys which is able to
+assign the software was taken out of the computer where it was used to sign the
+software and then stored inside the safe and the nice thing about PKCS11 is
+that we got a lot of support for different authentication methods it's
+it's this slide. So for Chromium, NGINX, SSH, VPSupplicant, a lot of software that's already
+out there already supports using PKCS11 as the authentication information or to access
+the backend keys. And also there's the usage possible in conjunction with OpenSSL and GNU
+TLS for the new open SSL 3 version there's the new open SSL provider
+interface which is much nicer than the old and now deprecated engine interface
+where instead of having the private key in a file you can specify a PKCS 11 URI
+which points to the device and then to the specific key that should be used so
+this makes it a lot easier for newer deployments which haven't gotten the
+profit of using new interfaces yet. We back then still used the old engine
+interface. Regarding PKCS11 HSM form factors, we have three examples here. So
+we have a PTIE add-in card that's supposed to be used inside of a secure
+server and then you can generate the key on the card and then there's some
+management software where you can do smart card authentication from remote.
+There's also the very easy USB option. Here we have a YubiKey, there's also a
+nitro key hsm which you can then unplug and store in a safe and then you have to have some kind of
+procedure where somebody knows how to access the safe and then get the device out of the safe build
+the software and sign the software and then deliver it and there's also rack mounted hardware
+so for bigger projects which contain millions of devices it might be more suitable to have
+rack mounted hardware inside of a secure data center and then have the capability to send
+artifacts over the network to the device which then signs it and sends it back to you and this
+is all possible using the pkcs11 api and then we turned around and it was end of 2023 and everything
+inside of the project totally changed so they set up a new team because they realized at some point
+they have to do a software update of the software they released back in 2021 because vulnerabilities
+are everywhere, as we all know. The USB HSM was to be replaced with the cloud
+HSM, which is already tricky because you have devices out there which rely on the
+keys that are on the hardware HSM, where they are not exportable. So how do you
+export the keys? It's just not possible and we tried to tell them that, but it
+was really really hard for them to understand why that was the case. They
+also had the Software Bill of Material requirement, which necessitated a Yocto
+update and by the way excuse me but do you know how all this works so how the individual parts
+work together could you explain that again to us and so we did to a new team and the conclusion
+of this whole odyssey with the vendor was project knowledge for verified boot projects is very very
+essential so for if you give me a normal linux device which like an embedded linux device which
+doesn't have a verified boot chain I can kind of figure out what's going on I can start the device
+then I can access the bootloader maybe I can say init equals bin bash and then I will get a root
+shell and everything is going to be fine I can get that system open but for systems that are
+specifically built to be closed it's really really hard because sometimes not even bring up works
+you don't know what kind of device do I have in my hands is it a production device signed with
+the release keys is it a development device with development keys which keys do i have to use how
+do i even update the system is there some kind of update demon surely there is maybe you find out
+it's wrong maybe you have access to the system console which is already great but some of the
+devices were so locked down even for development purposes to test the release configuration that
+you couldn't access the device and nobody wrote down that this device is pretty much burned and
+and can't be used any longer.
+Your bootloader is locked, so no reconfiguration.
+Innet equals bin bash isn't an option,
+and you can't even change the kernel
+that is going to be booted on the device.
+You may get lock output, sure, for diagnostic information
+so that somebody later can recover the device,
+but you don't have any access to reconfigure anything.
+So the absolute bare minimum you have to do
+is you have to do some kind of handover workshop.
+at least some kind of workshop where you write down
+what can be done and which devices can be used.
+If you don't do that, what are you going to do?
+You can't access your devices any longer.
+And that's a very, very bad situation to be in.
+And even better is if you can somehow arrange
+to have a handover period where questions can be answered
+by the old team.
+So before people are leaving with the project knowledge
+of your verified boot systems, you have to ensure
+that there's some kind of handover period
+where people can be taught
+how to access these devices.
+And oftentimes, our customers think it's easy.
+The contractor does it, right?
+We just say we want secure boot,
+and then we say, okay, we can implement that,
+but it's not how it's going to work out in the end,
+because we can't do it alone.
+We can implement the procedures to sign the bootloader,
+to verify the fit image, to create the signed images,
+to verify the file system but your technical decisions concerning the project have to be done
+by you as the device vendor and we can't make these decisions because oftentimes we don't even
+have the broad overview of how the product is going to be used oftentimes people have platform
+ideas instead of building a specific device for a specific purpose so in the end inside of the
+company there are four five six ten stakeholders who want to use the device
+for different purposes and then we don't have any idea how the device is going to
+be used and if we are we as a contractor are no longer involved every every
+project at some point down the line switches to some kind of support stage
+where we are no longer deeply involved sometimes decisions have to be made by
+the vendor or somebody building the device and you have also have to be to
+remember that the key management for the secure boot keys can't be done by us
+the devices or the software is going to be signed in your infrastructure the
+devices will need to be fused inside of your infrastructure and we can't arrange
+that we oftentimes don't even have an overview of how these devices are
+provisioned for deployment on the devices there are often two choices so we do one
+for development publish purposes and open reconfigurable bootloader which can
+boot anything because for development we sometimes want to change parameters we
+want to test something then it's required so either you create a
+development bootloader that is going to be signed with release keys which has
+the advantage that every time you get a device from the field back which is somehow broken you
+can just use your development bootloader and boot it up on the device it's really easy for support
+cases but the disadvantage is if anybody gains access to this bootloader all your devices out
+there are potentially vulnerable because now everybody can access or release devices and the
+other choice you can you have is you can use the development bootloader with special development
+keys it has a great advantage that your bootloader will be billable in CI if you
+have development keys which can be leaked because there are only like 10 20
+development devices out there and they are never going to reach the field and
+nobody is going to use them out there it doesn't matter right and the
+disadvantage is that you now have special development devices as I said
+before you have to mark these devices as being used with development keys so
+So every developer in the later development cycle, if he wants to use new software, he
+has to use the development keys.
+This is not a release device.
+It doesn't use the release keys.
+And you have to take care that this is done.
+And what also can happen if you put too much stuff into the CI is this sign all the things.
+In one of our projects, they set up the CI pipeline for their release devices as well.
+And then somebody checked in development bootloader with development options, which was totally
+open.
+And the CI just went, okay, that's a valid configuration.
+I can build that.
+And then they had an artifact.
+So a bootloader signed with release keys, which was open and which was now out on the
+internet because it was cloud infrastructure that built this.
+And they had to go to greater length to delete the artifacts back again.
+So you have to take this into account as well.
+CI is involved you have to be really really careful when you are using the release keys
+and then there's the additional question of device provisioning so we have Anakin here which says
+we use verified boot now but we do have a trustworthy manufacturer do we do yeah yeah
+please so for another project they decided to outsource their production facilities to another
+country and then decided oh we don't necessarily trust that factory even
+though it's our own but then you have to set up some kind of procedure so you
+can still manufacture your product board but you won't be able to provision your
+device there right because somebody could replace the keys which are used
+there and emulate your software so you're constantly or the potential for
+harmful deployment on your devices there if you don't have a trustworthy
+manufacturing facility and you have to take this into account so now you are
+done with development verify boot is done everything works you have tested
+that it works it's ready for release so now you have to think about the
+provisioning of the device as in the previous example so steps before
+deploying the software and the device you have to somehow set up the
+enablement of verified boot so inside of your production or inside of the
+production environment, yes, you have to fuse your release keys into the device. You may want to test
+that the release keys work correctly. You may want to do additional initialization as well in this
+key, if you are already there. So, for Opti, you often want to exchange a key with the RPMB partition
+of the EMMC. Or maybe you also want to set up the pseudo-SLC mode for your EMMC so it lives a bit
+longer then you have to provision a device private key so if you want to
+use your device for cloud authentication you either have to load the private key
+onto the device or better you have to generate the key on the device so the
+key can never leave the device again and all that has to be done in a trusted
+environment otherwise you're up to your luck pretty much another question which
+also comes up all the time is how many keys do we generate do we generate one
+key for all devices this pertains to how you authenticate to your cloud API as
+well as how you install updates on the device so is there a global update key
+maybe there's an update key for each revision of the device or maybe even for
+each production run or for each individual device these are choices
+which make it harder to deploy on a device or easier and make it more secure
+or less secure in case of compromise of private key material and you also have
+to ensure that you document your decision in this case so you have to
+document it for anybody else who may have to touch the device in the future
+for software updates as an example because oftentimes regarding
+documentation what happens is something akin to this so we get a this is pretty
+much what happens all the time we say we need to we need some time to write documentation the
+customer says oh it's going to be fine we'll have documentation time later and then this is the
+situation we end up in things you need to document as a starting point how are your release keys
+created and provisioned on the device how was that done maybe if somebody else wants to create
+another device which also uses verified boot if you have instructions for your
+HSM how to create the how to create these keys it's already easier much
+easier how do you distinguish development devices from release devices
+do you have big red stickers or do you have a system online do you have QR
+codes on the device I have there there are many many possible choices but you
+should have thought about that and documented how it works how do I handle
+devices that are returned from the field depending on which choice you made in
+the initial bootloader signing you may be able to just run a development boot
+order on the device then it's easy or you may have to do the field return
+procedure for this specific implementation of secure boot and also
+test and verify these instructions periodically they may be out of date
+because they were created in a workshop two years ago and are no longer very
+it valid for current software. You have to ensure that they are still working if everybody or anybody
+wants to change the device later on. There's also some licensing problems. So GPLv3 contains the
+TiVo clause and the idea behind that is that when you deploy GPLv3 software on the device,
+you also have to ship out information to run modified versions of this GPLv3 software on the
+device, which in the worst case means that you have to ship out your private key material for
+secure boot, because otherwise nobody can change the software on the device. And that's not something
+you want. The solution for this is either you use no GBL v3 software, which is from my point of view
+still bad, because it becomes, it's harder and harder to avoid GBL v3 software. We are trying
+very hard and for the project in 2019 it was still possible but nowadays I'm not
+entirely sure and the other option you do have is you implement an unlock mode
+inside of your bootloader so some kind of mechanism where the customer can
+decide okay I don't want to use this device with your infrastructure any
+longer and then the device just deletes all key material or makes it inaccessible
+which comes out to the same point and then unlocks the device and they can run
+their own GPLv3 software. That's totally valid. I think in one of the examples in an automotive
+presentation, they said you can totally break your core and not use it any longer, but at least you
+can run your own software on it. And this is valid. There's also the question of how to handle
+devices returned from the field. This is unique per verified boot implementation. If you have
+information on this pertaining to other socks than nxp let me know i'm very interested on how that
+works for nxp devices you have to sign the bootloader and it has to include the unique id of
+the soc so if you have a device returned from the field you definitely want to know the unique id of
+the processor that was soldered onto the device and then the device can burn another fuse which
+totally disables the secure boot process and then you can again boot any boot loader out there so
+you can create another boot loader and then boot that this is a complex process and may need some
+automation for support cases right because device support way may not necessarily be able to run
+the whole yokto system to sign the boot loader so you may have may want to have a simple portal for
+that where they can type in the soc and then your internal inventory already marks as no longer
+usable there's also yokto integration we upstream in the last few years so for example there's this
+signing bb class which is made which was made by my colleague jan lube which implements the usage
+of PKCS11 inside of Yocto recipes. So inside of the recipes you just say which PKCS11 URIs to use,
+and then the HSM axis happens in the background during the build of the recipe, which makes it
+really easy to integrate even complex HSMs into a Yocto build. It's really nice. This is upstream
+in MetaOE since Mickeldor, which means it's also contained in the latest LTS release, ScarfGap.
+it's a good reason to update to the latest lts and usage examples are like the whole chain up to
+the kernel where the kernel then verifies the file system so bootloader signing can be done
+update signing can be automated to action access and hsm and fit image signing as well there's
+also an integration example on github it's linked in the slides you can download
+How this works is that you pretty much say I would like to use the following HSM here
+it's identified by the serial number and then you have an additional argument you have to
+construct in this escaped manner and you can also provide a pin and you can point to the
+respective implementation of the PKCS11C API and then inside of your configuration you can set up
+which objects are going to be used so in this case we have four SRK keys which are the super
+root keys used for nxp verified boot we then additionally have the command sequence file
+and image keys and then we have a key for fit image signing and for update signing down here
+so this is all that's that's needed to be done to switch the keys from development keys which
+may be contained inside your bsp so you don't have to access an external hsm to switch over
+to a real hsm implementation which is maybe connected via usb to your device
+so in conclusion what we want for a variable boot process is documentation documentation and more
+documentation we want to know which decisions were made during the initial
+project creation we want to know which devices are still usable and how they
+are going to be used how a device can be flashed how the build system can be
+instructed to build a complete image for the device everything that's documented
+makes it easier for anybody else who has no information on the project to get out
+how to build devices how to build software for the device you want to have
+hand over process express especially when the contractor leaves or a new team member needs
+onboarding which is essential in our fast living software world at least that's what i've seen from
+customers oftentimes people are only there for two to three years so a handover process for verified
+boot projects is pretty much pretty much essential and be also very really really careful about
+provisioning and remember or document how to manage field return devices. And with that,
+I'm pretty much done and I would like to hear your questions.
+So the question was whether the NXP signing or HSM access pertains to signing data for the device,
+so signing bootloaders, if I got that correctly, or using PKCS11 on the device.
+Did I get that correctly?
+So in the end, both.
+The signing BB class for Yocto uses the external HSM connected to your developer machine
+to sign artifacts for the device.
+But then inside of the device, if you employ Opti, there's for Opti a PKCS-11TA.
+So on the device itself, you can also use PKCS-11 to authenticate to a cloud interface.
+So both.
+So the Opti speaks with the internet and gets the system?
+The Opti doesn't speak with the internet, but the Opti is able to generate key material
+and then is able to sign requests from Linux user space.
+So if you want to do, for example, client certificate authentication, there is the PKCS11 or OpenSSL PKCS11 provider interface.
+And then your software can instruct OpenSSL not to use a private key which is stored in the Linux root file system, but to use a private key that is stored inside of Opti.
+And then software or data that needs to be signed is handed over to Opti.
+Opti does the signing without Linux being able to inspect what happens.
+and then the signed data is handed back.
+Yes.
+Yeah, thanks for a great talk.
+I would like to highlight one pitfall that I find often on variable boot setup
+is that people forget about downgrade attacks.
+For example, when your bootloader has a security vulnerability
+and you have to rebate the bootloader,
+but you have to make sure that nobody can reinstall the buggy bootloader.
+Yes.
+So, not really the question, but the notice from the audience was that downgraded techs in this case are still possible.
+So, there's no downgrade protection for the bootloader.
+Somebody could install an old vulnerable bootloader on the device, which is correct.
+And in the current scheme, there's no mitigation for that.
+I have ideas for mitigation, but they are not implemented at the moment.
+Yes, that's correct.
+There's a question up there.
+I have a question regarding the GPL version 3 problem.
+Yes.
+I thought it would be necessary to offer a possibility to deploy the modified version 3 software on the device.
+You do not need to guarantee a warranty for the device anymore.
+Yes.
+But it should keep its functionality.
+So, the question is, for the GPLv3 problem, the deployment of modified software needs to be done, but that the device should keep its functionality. I am not a lawyer, and I'm afraid that I can't answer this question definitely.
+So, from my understanding, that's not what's required by the GPL.
+So, functionality doesn't need to be retained.
+Your software just has to be able to run on the device.
+But still, this is no legal advice.
+You said that for NXP, you can disable the HAD again for few different devices.
+Why is this not a security issue?
+So, the question was, why is the disablement of HAB for field return devices not a security vulnerability?
+Because you need to have the private key material.
+So, you need to be the one that initially deployed software on the device.
+And you also need the SoC Unic ID.
+So, there's no global unlock bootloader for every device out there.
+The bootloader, which is able to return your device from the deployed state into the return state where HAB is disabled, needs to be specifically created for the device.
+So that's pretty much how this works for NXP.
+If you do like that and disable the bootloader, can you come back to an enable it again?
+No. At least for the NXP HAB.
+So the question was, can you return back to the production state?
+And the answer is no.
+So, during the disablement of HAB, you have to burn a fuse, which says this is now a field return device, and burning the fuse means you can never go back.
+Does PKCS11 have anything to support revocation?
+The question was whether PKCS11 has anything that supports revocation, and as far as I know, no, it doesn't.
+This is due to PKCS11 being often used with client certificate authentication, and then you have a CA setup where you can have certificate revocation lists, of course, and then the revocation can be done that way, but PKCS11 doesn't implement revocation.
+How do you protect the integration of PKI for all RCA?
+So the question was how the key material to assign the devices
+I mean, the configuration of your PKCS subsystem.
+So, the question is how the PKCS11 subsystem is protected.
+Is the question pertaining to using PKCS11 on the device or during the build process?
+During the build of the system.
+During the build of the release.
+During the build of the release.
+During the build of the release, it depends on which kind of HSM you choose.
+If you use a USB HSM and it needs to be connected, then you can use a developer or you can use
+a laptop or a computer which doesn't have any internet connection, for example, if you
+want to be really safe, and then only copy over the source artifacts required to build
+your complete software.
+That's one of the possibilities.
+The question pertains to how do you verify that the configuration in the release device
+isn't different from the development device.
+it's it's most of the customer is main demand uh but if you configuration is public for all
+developers i mean the team and pass today you move some to some e so how do you provide how
+do you hide this integration from uh well not so how do you separate the security in this case
+Because CI is going to be accessed by everyone in the development team.
+I guess the question was, how do I protect my keys from a certain, or from some people in the development team,
+which may not be allowed if the signing is done by a CI?
+I would say don't do the signing by the CI.
+I would totally recommend against that, which is a pretty good mitigation.
+So, that's one of the possibilities, which may not always be possible, of course, because some people insist on having the CI having access to the release keys, but what can you do, right?
+If that's the decision somebody took during the development, we don't have any sway over that.
+I just wanted to mention that Fit is a standard outside of UBoot now, and there is a Linux target for building Fit now.
+I don't got the notice.
+So Fit is now a standard outside of UBoot.
+Ah, so Fit images are now maintained outside of UBoot.
+The specification. Ah, the specification. Ah, yeah, nice. That's useful. So, the notice was that the specification for flattened image trees, fit images, is now maintained outside of U-Boot. Yeah, thanks.
+no unfortunately i don't do you so the question was or the notice was that everything i was
+talking about was about nxp processors and my answer is i mostly worked with nxp processors
+a lot of projects we at panglotronics have are done with nxp processors but i would be very very
+interested in how it works on TI SOCs, especially on the new AM6-2 series.
+One thing I can mention is that my question is that TI doesn't have this secure boot off-the-game mode.
+What I have seen is that they have a processor where you can use secure boot, but only that.
+Okay.
+So the notice is that somebody in the audience looked at the TI specification for secure
+boot and the impression is that there is no provisioning for some kind of field return
+possibilities so where you can disable secure boot again but maybe somebody from ti has deeper
+information on that if you have contact me i'm very interested yes of course that's not it's very
+the audience mentions that it's very nda which is unfortunate because i do open source software
+and it kind of clashes with NDAs, so, yeah.
+So, that may be one of the reasons why I'm able to talk about the NXP process,
+because most of it, we are actually able to talk about it
+if it's contained in open source software, which is nice.
+But for other vendors, you can't even tell me if you have signed the NDA, right?
+So, it's a pretty bad situation,
+because at least for we we have some deeper insights on how the NXP process
+works and we understand how it works but for other implementations if you have
+to sign the NDA you don't know whom you can talk to except your colleagues who
+have also signed the NDAs, right?
+So, I have a TI EVK and I don't think I signed an NDA yet for some, but I didn't get deep enough to know how it actually works.
+Somebody mentions that they do have an EVK from TI, but they don't have access to the secure boot documentation.
+yeah okay so somebody in the audience mentions that there's the new IP 2350
+that's it which is a Cortex-M CPU so not really suitable for Linux targets
+unfortunately but they want to open source all the documentation required
+for secure boot which is great if you ask me now if we could get that for the
+bigger Raspberry Pi Cortex-A course right would be nice no more questions
+Thank you very much.

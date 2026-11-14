@@ -1,0 +1,212 @@
+start	end	text
+0	16000	Hello. Today I'm going to give a short introduction on Secure Boot on Arc System and how you can protect your embedded devices.
+18000	25000	So, who am I? My name is Alexandre, but you can call me Alex at Shardem.
+25000	37000	I'm a software engineer at SUSE, I currently work on the container ecosystem, and previously I worked in the automotive team where I played a bit with secure boot on R.
+37000	46000	And the open SUSE side, I'm a package maintainer, I'm a community moderator for Portuguese language in the forum and in some channels, not all channels.
+46000	54000	And I'm also a mirror administrator, I run a mirror in Brazil, but I also help with mirror infrastructure in South America.
+55000	75000	So, the agenda, the idea is to talk about what, why and how you would use Secure Boot and discuss a bit about UFI Secure Boot and the ARM Trusted Firmware 2-step board boot or TPP.
+75000	97400	So, what is Secure Boot? I believe most or everyone should be aware of what it is, because it's currently a precise standard, you basically can't disable, but it's basically on by default, and all images support Secure Boot.
+97400	113040	So Secure Boot is a way to ensure that images come from a trusted source, so that the images have not been tempered with, and this way you can ensure that you're booting what is supposed to be booted.
+113040	127040	And each component of the boot process is digitally signed, so the boot loader and potentially other things around modules, drivers could also be.
+127040	147260	And in some documentations you find the term secure boot, but you can also find trusted boot or chain of trust, but in theory it usually means the same thing, it's a way to sort of lock down and only allow what you intended to boot on that machine.
+147260	177240	And why we need it? The main reason is security. So we are building a verified and trusted image. So let's say no hacker has tempered or there is no other issues that could potentially, if you're working in IoT, you want to be sure that the appliance that you have, it could be a TV, it could be a refrigerator, washing machine, whatever, or a server.
+177260	183420	that is running a cell tower so you want to ensure that you're putting what you're supposed to be
+183420	191340	putting it could also be for compliance in some markets maybe you are required to this is something
+191340	199580	that maybe the cyber resilience i think you could potentially bring in that you need to kind of
+199580	209020	trust what you're putting on the device and thank you and how it works as
+209020	213500	mentioned the images are signed firmware bootloaders potentially can have the
+213500	219440	kernel sign if you want and other things and each image is the signature is
+219440	225380	verified before execution so this is done by let's say the motherboard or the
+225380	237300	soc boot room firmware and the keys for validation are used stored safely somewhere in harder in
+237300	246900	certain platforms it could be on the soc like using diffuses or on general pc or ufi is usually
+246900	257380	on the non-volatile RAM that is available for UFI and the process varies according architectures
+257380	265780	and manufacturers so UFI is a standard so who is using that that is a standard there is also the
+265780	272260	arm tppr is another standard so who using that is actually it is a so there are these two standards
+272260	280660	but it could potentially vary a few bits here and there how you flash the board how you use enable
+280660	290580	and possibly deploy an image so as mentioned on x86 and on usually our service for data centers we
+290580	300900	have ufi and on iot or embedded appliances so the smaller boards we usually have the trusted
+300900	310500	firmware a trusted boot. So a bit about UFI secure boot. This is a standard, is a verification
+310500	318260	mechanism from UFI and each program that is loaded by UFI is validated, verified and trusted.
+318820	326100	If it fails to verify, the boot is supported. So the boot sequence is can still be supported. You
+326100	330660	you get some error message with Variety.
+330660	334940	And in the case of most Linux distributions,
+334940	338800	we have the Sheen, that is a UFI application,
+338800	341040	is a first-stage bootloader.
+341040	346140	And this is currently signed by Microsoft,
+346140	352260	because most PC vendors come with Microsoft keys
+352260	354440	and to verify Windows.
+354440	363300	So Microsoft size machine for many distributions.
+363300	364920	You can submit your own.
+364920	367280	You need to create a request, and not
+367280	369200	entirely sure what is the process.
+369200	371740	But you can do it if you're creating your own distribution,
+371740	374300	you could potentially do that.
+374300	379960	And then Sheen is responsible to load and verify CRR
+379960	382960	with, let's say, OpenSUSE keys.
+382960	388420	So the Sheen contains our keys and the Sheen is signed with Microsoft keys.
+388420	397480	This way we can build different images and not have Microsoft to sign every single time.
+397720	405300	So as long as we don't change the Sheen or we don't change the keys that are used to sign through and everything else.
+406860	410020	So the boot sequence is fairly straightforward.
+410020	417020	you have the UFI streamer, it goes to Shin, so UFI validates Shin, Shin validates Glue, and Potential Glue could validate the kernel.
+417020	429020	So, if you're working in an IoT environment, or if you control the hardware that you're deploying to, in theory, or in practice,
+429020	436020	you can remove Shin, because if you control the hardware that you're deploying to, so an embedded device,
+436020	442020	You can embed your keys in the hardware so it doesn't need to be Microsoft keys.
+442020	447020	So in this case you could remove Sheen and potentially could even remove if you know what you're doing.
+447020	451020	You can put straight into the kernel because the kernel is 5-star.
+453020	458020	But the Sheen also allows users to manage their own keys.
+458020	462020	So there is the mock database.
+462020	465020	You can add and remove keys from it.
+465020	469420	and this separates the distribution key
+469420	472980	that is used to sign, grub.
+472980	475820	You can also add your own keys for modules
+475820	478380	that maybe you build locally and things like that.
+480520	484200	And ARM Trusted Firmware or Trusted Firmware A,
+484200	489200	Trusted Board Boot, it's based on the TBBR document
+489200	499520	TBBR document or specification that is defining the R10-06D. And this is
+499520	507200	established as a chain of trust. It's pretty similar to, it's a similar
+507200	513320	concept to the UFI CQ, but a different implementation. So each component
+513320	518120	trusts the next. So each component of the boot is going to trust the next.
+518120	525080	and the process varies also by platforms and manufacturers so depending on the
+525080	529580	vendor that you're using you need to go to their documentation in some cases
+529580	534360	you might need to sign an NDA or not because in some cases documentation
+534360	539600	might not be publicly available because includes some architectural designs that
+539600	546380	maybe they don't want to share on their program so and for a chain of trust you
+546380	552100	you require the PLO1 or the boot room to be living in the room, you need your self-site
+552100	560320	certificate to sign, and you need to sign all sorts of firmware images, so it depends
+560320	565320	on the platform, you need to sign different things. And you need a way to provision your
+565320	572180	keys in the hardware, so it is usually a way to burn the keys, so write the keys into the
+572180	577400	SOC or some place in the hardware to lock those keys so those keys cannot be
+577400	582440	replaced. Certain platforms are able to revoke so you can have revocation keys as
+582440	586160	well so you could revoke the keys if needed because the keys have been
+586160	592700	tempered or leaked or something so you can revoke that device and also you need
+592700	598580	a way to enable secure boot so usually once you burn the keys or a step before
+598580	604900	burn the keys you actually need to set the board into secure boot mode and that would mean that
+605460	614100	the board sometimes it has two modes for secure boot the secure boot for development so you can
+614100	621140	burn multiple keys multiple times or you have the secure boot for production but once lock it
+621140	625940	ready to deploy no one can change the key but you can revoke if needed put someone first
+625940	635940	And the boot sequence for TFA, it's relatively similar, so we have the chain of trust that
+635940	642940	BL1, not the trust room, actually trusts the BL2, that is the initial bootloader.
+642940	653940	And then BL2 actually trusts BL31, 32 and 33, so this is like 32 is OPT, a CQP load,
+653940	660420	load you or could be a different security load but it's official in most platforms and then you
+660420	669180	also have until u-boot you have everything signed and then u-boot could trust the kernel if u-boot
+669180	676380	has the keys and the kernel is signed so if one of this process one of this validation fails to
+676380	683120	this process the system will plan it will help and will stop in a similar behavior as as UFI so
+683120	687940	So the concept is the same, but the implementation varies.
+688060	694160	And as I mentioned, varies by architecture, vendor, board, even boards in the same vendor, they vary.
+695400	698940	Different implementations are different ways to implement.
+700300	702680	So where is this supported?
+702800	704940	Where you can use Secure Boot?
+704940	711360	So platforms combined with ARM System Ready, they support a UFI Secure Boot.
+711360	720360	So that is standard PC way of booting. So you have your Ampyrs, NVIDIA, NXP, Xilinx and many other platforms.
+720360	731360	You can check usually with your vendor or on the Arm System Radio website, you can check which platforms or which vendors are working with them and which are supported.
+731360	740360	On NXP, IMAX 6-9, you have the highest storage boot, it's an NXP R implementation.
+740360	745360	On the latest case, you have the QR-EQ Trusted Architecture.
+745360	752360	It's a similar implementation to the IMAX platforms, but it varies a bit, but it's similar.
+752360	757360	You can have Markvary, STMJ2 and many more.
+757360	764360	So you really need to, if you intend to build a device to deploy, you should check with your vendor
+764360	771360	or with the vendor documentation if they support in one way or another some kind of secure route.
+771360	779360	So it's not all platforms from the vendor support, so sometimes you need to talk to them
+779360	781360	to actually see how you can support.
+782360	793700	um so what about creating an image let's think about like in the open source tonight if you want
+793700	800480	to build something based on open source the first step would basically be to generate your keys that
+800480	810740	are going to be used to decide so again you need to prepare the binaries possibly vendor firmer
+810740	818740	You need to prepare kernel, you need to run SS, device 3, the trusted firmware A, U-boot, and possibly other bits.
+818740	824740	You need to sign, so preparing learners is by building them, and you also need to sign them.
+824740	827740	Sometimes sign happens during build time.
+827740	836740	For example, TFA handles the signing of many of the parts in the boot sequence.
+836740	843060	so you have basically one place that you put your keys and it's going to start for you
+843060	852740	and then you need to bundle everything so to prepare tfa there are few required build dependencies
+852740	860100	it depends on on the platform definitely if you're using your boot it's going to require that opt
+860100	866260	if you want to add an extra layer of security. The sign-in key is, and in some cases,
+866820	873380	provide a initialization firmware and provide a sign-in tool with the platform.
+874580	881540	You could have TFA handle all the sign-in, but sometimes you could also have platforms that
+881540	888500	require external tools. And you also need to enable a few extra build arguments, that is,
+888500	895500	this trust input port equals one, and some platforms also generate CLT, the chain of trust equals one.
+895500	904500	And TFA is basically going to handle signature of PL1, PL2, PL31, PL32, and PL30.
+904500	909500	So each image is going to have a signature.
+909500	918540	uh this is a short example what the build command for for tfa would look like on the lx-160 a
+918540	925580	platform that i used before um so in this case we need to define the platform that we're building
+925580	933100	against we define that that we we want to build a trusted we want to enable the trusted board
+933100	944700	boot we also need to inform the co-designing tool cst the nxt cst where it lives it's a
+946540	954380	slash proprietary open source uh tool but it's not baked into into tfa so you need to check out
+954380	962220	that packet it's it's open source but it leaves down on the nxt side we also need to define the
+962220	966580	the boot mode that we're selecting for our target platform.
+966580	970120	Because certain platforms support EMC, SD,
+970120	974380	or onboard flash, or different boot modes.
+974380	977040	So you also need to define that.
+977040	983380	For the LX-2160, we also need an initialization firmware.
+983380	984900	That is the RCW.
+984900	987260	This is required to build TFA.
+987260	993260	So this is to initialize CPU, RAM, and other things.
+993260	997500	And we also need to point where is our bootloader, that is,
+997500	1001120	U-boot.
+1001120	1005460	So building out together, you create a root FS.
+1005460	1010020	You put your kernel, any drum, DTBs, bootloader, user space
+1010020	1014420	applications, anything that you want to have deployed to that
+1014420	1015380	image.
+1015380	1025380	And you need to write the firmware files that have been signed in certain platforms in certain offsets.
+1025380	1029380	So this varies by platform.
+1029380	1038380	But maybe you need to write UBoot in a specific position, maybe you need to write an NXP initialization firmware in a different position.
+1038380	1043380	So you need to check the documentation because it varies by platform.
+1045380	1051380	And maybe you're asking if we can do this in OPS, in the OpenBuild service.
+1051380	1054380	The answer is yes.
+1054380	1058380	We can use Kiwi to basically build our image
+1058380	1063380	and we can use the user-defined scripts that are available in Kiwi
+1063380	1068380	to perform operations in our image.
+1068380	1091180	So most R images that we ship for OpenSUSE already use one way or other script to usually edit where, because you need to, in many platforms, you need to write Ubud in a specific location, so it can arise by platform, so we have that script.
+1091180	1117680	So, in theory, it offers a few user-defining scripts, but you can have the predisync used to change the contents of your root tree, so you can copy files to different locations, and with edit boot install, you write these files to their respective offsets in the SD card or the AMC.
+1117680	1146680	The only thing to remember is that if you want to do everything in OBS, you need to store your private keys in OBS, so you wouldn't do that in a public instance, you can do potentially on a private instance behind your firewalls, or you can build certain binaries outside OBS, upload them just inside without the keys, and then you build your image.
+1146680	1152840	so that's also a way that you could use OBS. Maybe in the future we get
+1154680	1160920	implementation of how to safely store keys in OBS because currently you can
+1161720	1168040	hold some certificates but it doesn't work for this kind of scenario.
+1170520	1175960	Some references if you want to dig into documentation. Good documentation, the
+1175960	1183560	arm trusted firmers site there is some documentation as well about ufi on on the open sus site so you
+1183560	1193960	can know how opens to the ufi works i also shared a few links to nxp that the documentation is
+1193960	1200440	pretty expensive but it's for nxp but it gives a good idea how it works on a given platform
+1200440	1212440	Possibly later these slides are going to be uploaded somewhere, so these are links that you could copy and open in a browser.
+1212440	1217440	So, that's it. Thank you. Any questions?
+1230440	1236440	You showed the example of NXP and how it's all this special source.
+1236440	1246440	I assume it's impossible to create an image that has all the sources and can decide when you put it, what it has, depending on the system.
+1246440	1249440	Impossible to create what?
+1249440	1258440	So, you showed us the procedure for the NXP ports for the TFA.
+1258440	1270440	If I had another board that had another procedure, there is no possibility that I could create
+1270440	1279440	one image for both that just decides somehow when I install them where it runs correctly,
+1279440	1283440	what are the correct options and so on and so on.
+1283440	1292440	If you're using a UFI capable system, you can create one image that works for all devices.
+1292440	1295440	So the device supports UFI.
+1295440	1301440	So that's what we do with our X86 UFI or ARM UFI.
+1301440	1304440	You take just the architecture and you boot on any machine.
+1304440	1307440	But it needs to support UFI.
+1307440	1316440	If you're using Arbitrust and firmware, TFA, you need to build the image for each platform.
+1316440	1325440	Maybe, but I'm not entirely sure if a vendor would have, let's say, a set of devices that,
+1325440	1327440	oh, you can build the same thing for all.
+1327440	1333440	Because if you, at least on NXP, each board, each revision of the board has a different procedure.
+1333440	1335440	It can have a different procedure.
+1335440	1342440	So, in theory, if you're deploying multiple devices in a field, you may need to create multiple images.
+1343440	1344440	Thank you.
+1344440	1345440	OK.
+1347440	1349440	Question, Alex.
+1350440	1357440	So recently there have been products on the market with new ARM laptops, right?
+1357440	1364440	like the very recent chips by Qualcomm, Snapdragon, and that kind of stuff.
+1364440	1371440	And I was thinking, that's very nice because those are very powerful machines and they're not Macbooks,
+1371440	1373440	so maybe you can install Linux on them.
+1373440	1379440	But then some people in some forums said, well, that's entirely up to the vendor
+1379440	1386440	because they could lock you down like a smartphone.
+1386440	1389440	And if you don't have access to the bootloader, it's game over.
+1389440	1396440	So I wanted to know, now that you have extensive experience with booting, UFI, bootloaders and stuff like that,
+1396440	1404440	do you think that what's the brand that made the best Snapdragon, I don't remember, it's a laptop,
+1404440	1411440	it's one of those, whatever, latest laptops, they could choose to cut out Linux on that,
+1411440	1423940	or it's people are going to find a way once you take on that so it depends on
+1423940	1431060	the vendor I would say because that is the intent of secure boot you can lock
+1431060	1440200	the board and you can't replace anything in that so you some Android devices like
+1440200	1448200	that use snapdragon or other processors you can replace the os but it's usually not easy to replace
+1448200	1456680	or it costs to replace so many so i have no idea about the snapdragon devices that are coming to
+1456680	1467400	market these are i believe lenovo has a few and the surface from from microsoft so if they're capable
+1467400	1477280	of putting windows in theory you could replace windows with open suits because
+1477280	1482440	it's your fact yet i don't know the platforms windows machine it's not
+1482440	1487260	the no yeah so often if you can put windows on a machine you can replace
+1487260	1495080	because it's not often block it so usually your files or the firmware in
+1495080	1499560	in the motherboard you are allowed to change configurations i'm not entirely sure what you
+1499560	1506600	can do with platforms if everything is locked or not thanks any more questions
+1510200	1520600	okay thank you
+1525080	1527080	You

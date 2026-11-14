@@ -1,0 +1,1164 @@
+1
+00:00:00,000 --> 00:00:29,980
+Thank you.
+
+2
+00:00:30,000 --> 00:00:39,600
+oh okay okay so we'll start now uh the topic of this presentation is uh overview of secure boot
+
+3
+00:00:40,320 --> 00:00:45,120
+state in the arm-based socks and this is the second edition of this uh presentation
+
+4
+00:00:47,520 --> 00:00:51,840
+no mic here i like i'm not it's only for the video
+
+5
+00:00:51,840 --> 00:00:59,240
+Okay. So, the first edition was taking place like two years ago.
+
+6
+00:00:59,240 --> 00:01:02,080
+So, now we want to present some update from
+
+7
+00:01:02,080 --> 00:01:06,740
+the research that we have that two years ago.
+
+8
+00:01:06,740 --> 00:01:09,080
+Maybe can you speak up a little bit?
+
+9
+00:01:09,080 --> 00:01:09,500
+Okay.
+
+10
+00:01:09,500 --> 00:01:10,880
+We can't hear you.
+
+11
+00:01:10,880 --> 00:01:17,080
+Okay. Sorry for some.
+
+12
+00:01:17,080 --> 00:01:22,500
+mm-hmm a little technical issue
+
+13
+00:01:36,080 --> 00:01:38,880
+sorry for that
+
+14
+00:01:38,880 --> 00:01:53,320
+Okay, so it is an agenda for this presentation.
+
+15
+00:01:53,320 --> 00:02:01,320
+So first, I will tell you who I am and where I work.
+
+16
+00:02:01,320 --> 00:02:06,620
+So say a couple of words about our company.
+
+17
+00:02:06,620 --> 00:02:18,680
+Next, I will just present shortly what do you mean by Secure Boot in the case of ARM SOX and present how the typical implementation and workflow works.
+
+18
+00:02:19,800 --> 00:02:24,920
+Later, we will show the results from the first edition, so from the 2028.
+
+19
+00:02:24,920 --> 00:02:36,080
+then we will discuss the two cases that we that we check for this edition so the Mediatek and the
+
+20
+00:02:36,080 --> 00:02:43,040
+Rockchip cases next we will summarize the whole presentation so try to look what's the most
+
+21
+00:02:43,040 --> 00:02:50,600
+difference between those two editions of the presentation mmm and and with some Q&A session
+
+22
+00:02:50,600 --> 00:03:00,920
+So, this is me, I'm Tomasz Żyewski, and I'm an Embedded Systems Team Leader at 3MDEP.
+
+23
+00:03:00,920 --> 00:03:04,740
+I work there over three years now.
+
+24
+00:03:04,740 --> 00:03:09,900
+Mostly I work on the embedded systems built with the Yoctob project.
+
+25
+00:03:09,900 --> 00:03:17,640
+So I try to integrate the update system and the OS creation for the embedded devices.
+
+26
+00:03:17,640 --> 00:03:19,440
+Because I work with the embedded devices,
+
+27
+00:03:19,440 --> 00:03:27,300
+I try to touch different areas of the whole life of the devices.
+
+28
+00:03:27,300 --> 00:03:32,400
+So one of the things I work with is also the system security.
+
+29
+00:03:32,400 --> 00:03:37,400
+This is the topic of this presentation.
+
+30
+00:03:37,400 --> 00:03:42,620
+So here a couple of words about our company.
+
+31
+00:03:42,620 --> 00:03:48,940
+We are from Poland and based in Gdansk.
+
+32
+00:03:48,940 --> 00:03:54,380
+We are the core book license service providers since 2016.
+
+33
+00:03:54,380 --> 00:03:58,840
+Also, UFI adapters since 2018,
+
+34
+00:03:58,840 --> 00:04:00,380
+the YOKTOB participants,
+
+35
+00:04:00,380 --> 00:04:07,120
+so this is the area which I work with from 2019.
+
+36
+00:04:07,120 --> 00:04:12,400
+Also, the consultants for the FWPD project,
+
+37
+00:04:12,400 --> 00:04:16,140
+and IBM OpenPower Foundation members.
+
+38
+00:04:17,760 --> 00:04:21,460
+Okay, so now let's explain first what do you mean by
+
+39
+00:04:21,460 --> 00:04:25,580
+the secure boot in the context of this presentation.
+
+40
+00:04:25,580 --> 00:04:29,640
+So here we are focused on the ARM context,
+
+41
+00:04:29,640 --> 00:04:34,620
+which is like the feature of the boot room,
+
+42
+00:04:34,620 --> 00:04:37,800
+one of the features that boot room has.
+
+43
+00:04:37,800 --> 00:04:41,360
+Maybe we should call it more like
+
+44
+00:04:41,360 --> 00:04:46,000
+the verified boot because the case here is that when we
+
+45
+00:04:46,000 --> 00:04:53,460
+start the firmware, the next steps of the loaded images
+
+46
+00:04:53,460 --> 00:04:54,820
+are verified.
+
+47
+00:04:54,820 --> 00:05:03,080
+The signature is verified by the previous part of the firmware.
+
+48
+00:05:03,080 --> 00:05:06,220
+So that's why we should call it the verified boot, maybe.
+
+49
+00:05:06,220 --> 00:05:19,220
+So, we need to use some private key to find the binary that we put into our machine.
+
+50
+00:05:19,220 --> 00:05:26,220
+Then we also need to take the public key from that private key and put it also there.
+
+51
+00:05:26,220 --> 00:05:34,220
+So, when we start it, we will be able to verify the signature and decide if it should be loaded or not.
+
+52
+00:05:34,220 --> 00:05:38,700
+In ARM context,
+
+53
+00:05:38,700 --> 00:05:44,040
+we assume that the boot ROM is our root of trust.
+
+54
+00:05:44,280 --> 00:05:49,360
+We need to take that assumption because most of them are closed source.
+
+55
+00:05:49,360 --> 00:05:52,300
+Probably it would be better if they will be open sourced,
+
+56
+00:05:52,300 --> 00:05:55,660
+but it is what it is.
+
+57
+00:05:56,880 --> 00:06:00,280
+Basically, the meaning of the secure boot can be
+
+58
+00:06:00,280 --> 00:06:01,900
+different for any given architecture.
+
+59
+00:06:01,900 --> 00:06:05,400
+So, if you will be talking about the x86,
+
+60
+00:06:05,400 --> 00:06:09,600
+that would be a different scenario.
+
+61
+00:06:10,200 --> 00:06:14,340
+Okay, so this is the typical implementation.
+
+62
+00:06:14,340 --> 00:06:19,580
+We have the public key that needs to be written inside our SOC.
+
+63
+00:06:19,580 --> 00:06:27,640
+Different vendors will have some different way to achieve that.
+
+64
+00:06:27,640 --> 00:06:29,140
+So, we can, for example,
+
+65
+00:06:29,140 --> 00:06:37,380
+fuse them using electrical fuse so one time write them in our SOC and later use it every time that
+
+66
+00:06:37,380 --> 00:06:46,100
+we start our firmware there is also a possibility of for the OTP registers so those are the one-time
+
+67
+00:06:46,100 --> 00:06:56,180
+programmable so as the name says also it can be used only one time and those one of those two
+
+68
+00:06:56,180 --> 00:07:04,580
+opportunities allow us to make from our boot room a root of trust which we later
+
+69
+00:07:04,580 --> 00:07:13,640
+use to expand it to the chain of trust next components can use like different
+
+70
+00:07:13,640 --> 00:07:23,240
+keys so in case of secure boot we take we talk about the step between the
+
+71
+00:07:23,240 --> 00:07:28,280
+bootrom and the bootloader and here we have some one key that was used to assign
+
+72
+00:07:28,280 --> 00:07:33,320
+the binary and that public key that would use to verify it but the later
+
+73
+00:07:33,320 --> 00:07:37,160
+steps of starting our machine can use different keys
+
+74
+00:07:39,560 --> 00:07:41,160
+and yeah so that would be it
+
+75
+00:07:44,760 --> 00:07:47,880
+so typically we have like let's say our host machine
+
+76
+00:07:48,760 --> 00:07:53,640
+and that should be some secure location and our target device so on our host machine we
+
+77
+00:07:53,640 --> 00:08:00,360
+generate some private keys we build binary and use specific tool to sign them
+
+78
+00:08:01,960 --> 00:08:08,600
+and later we need to take the public key part of that keys also define a binary and put it in the
+
+79
+00:08:09,240 --> 00:08:15,880
+in the target device and then try to verify it yeah so if the verification will be successful
+
+80
+00:08:15,880 --> 00:08:17,880
+then we will just boot another step.
+
+81
+00:08:17,880 --> 00:08:21,880
+If not, then specific things can happen,
+
+82
+00:08:21,880 --> 00:08:26,880
+depends on the vendor that we are using.
+
+83
+00:08:27,200 --> 00:08:29,880
+Also, let's say maybe a couple of
+
+84
+00:08:29,880 --> 00:08:34,220
+words about what it is to assign the binary.
+
+85
+00:08:34,220 --> 00:08:38,640
+Basically, what is common between all the vendors probably is
+
+86
+00:08:38,640 --> 00:08:44,160
+that a sign-in binary means that we take the original binary
+
+87
+00:08:44,160 --> 00:08:47,400
+and add some header on top of it.
+
+88
+00:08:47,400 --> 00:08:55,440
+This header contain the digital signature and
+
+89
+00:08:55,440 --> 00:09:00,340
+also some specific format at the start,
+
+90
+00:09:00,340 --> 00:09:03,900
+which can be different across some vendors or can be
+
+91
+00:09:03,900 --> 00:09:07,460
+also different within one vendor,
+
+92
+00:09:07,460 --> 00:09:10,700
+but when we are using different signing tools.
+
+93
+00:09:10,700 --> 00:09:14,640
+So, if we try to sign our binary,
+
+94
+00:09:14,640 --> 00:09:16,320
+we can always try to dump
+
+95
+00:09:16,320 --> 00:09:20,800
+the first couple of bytes of our signed image
+
+96
+00:09:20,800 --> 00:09:25,620
+and check if everything goes as expected.
+
+97
+00:09:25,620 --> 00:09:30,060
+This is a quick recap from the last edition.
+
+98
+00:09:30,060 --> 00:09:34,360
+So, we look at the 11 cases,
+
+99
+00:09:34,360 --> 00:09:37,180
+five of them like the NXP,
+
+100
+00:09:37,180 --> 00:09:46,060
+IMX and Layerscape, STSTM, Xylenix, and NVIDIA looks like were fully open-sourced, let's say,
+
+101
+00:09:46,860 --> 00:09:54,140
+and there was non-NDA problems with them, so everyone could try to take the documentation,
+
+102
+00:09:54,140 --> 00:10:00,620
+the needed fusing and signing tools, and try to implement the Secure Boot on them.
+
+103
+00:10:00,620 --> 00:10:12,060
+We have a couple of cases where there are information that there is some secure boot to enable on that given machine, but it is under the NDA.
+
+104
+00:10:12,840 --> 00:10:21,480
+So, we're talking here about the Marvel Armada, Texas Instruments, Sitara, Qualcomm, and Microchips.
+
+105
+00:10:21,480 --> 00:10:35,740
+And also, we talked about two thoughts from the Chinese vendors like Rockchip and Allwinner, where some documentation was there, another were missing.
+
+106
+00:10:36,600 --> 00:10:43,480
+Also, there were some information about tools, but we were not able to find them or maybe use them correctly.
+
+107
+00:10:43,480 --> 00:10:54,240
+Okay, so now I will go through three or four vendors that were listed from the last edition
+
+108
+00:10:54,240 --> 00:10:58,540
+and to talk about the differences that was between those two years.
+
+109
+00:10:59,040 --> 00:11:01,440
+So now let's start from the NXP.
+
+110
+00:11:02,500 --> 00:11:12,700
+In these cases, I think this is the easiest way to start with the secure boot on the ARM
+
+111
+00:11:12,700 --> 00:11:18,700
+socks, because the full documentation is there. All documentation is probably like,
+
+112
+00:11:21,580 --> 00:11:30,380
+all documentation is publicly available, so everyone can use it. We have the HAP4,
+
+113
+00:11:32,220 --> 00:11:41,100
+so the high assurance boot mechanism on the platforms that are the IMX 50, 53,
+
+114
+00:11:41,100 --> 00:11:45,940
+6, 7, and 8M. The application node is here.
+
+115
+00:11:45,940 --> 00:11:49,460
+The only difference between here and there is that
+
+116
+00:11:49,460 --> 00:11:55,720
+those applications are under the free registration to the site.
+
+117
+00:11:55,720 --> 00:11:59,860
+The same is for the AMX8 and AMX8X,
+
+118
+00:11:59,860 --> 00:12:02,860
+which uses the AHIAP mechanism,
+
+119
+00:12:02,860 --> 00:12:05,480
+so Advanced High Assurance Boot.
+
+120
+00:12:05,480 --> 00:12:13,560
+The same for CoreQ, and as you see here, the signing tool are available after the free registration.
+
+121
+00:12:15,880 --> 00:12:24,680
+For Marvel Armada, we can look at the manuals that are available on their sites.
+
+122
+00:12:26,040 --> 00:12:33,560
+We saw that for the 38 and 39X families, we have some information that NDA is needed.
+
+123
+00:12:33,560 --> 00:12:39,800
+for other families like I believe 8k there is only information that there is
+
+124
+00:12:39,800 --> 00:12:46,100
+a secure boot available but nothing else there at the last edition we present
+
+125
+00:12:46,100 --> 00:12:50,620
+that in the u-boot repositories we can find some information about how to
+
+126
+00:12:50,620 --> 00:12:57,960
+implement the secure boot on the Marvel Armada but now it is not there it is
+
+127
+00:12:57,960 --> 00:13:05,880
+only on all the releases, so this is another difficult step that
+
+128
+00:13:05,880 --> 00:13:10,200
+needs to be taken to find those informations.
+
+129
+00:13:12,660 --> 00:13:17,340
+But yeah, if you will just use this from the 2018 branch, we'll
+
+130
+00:13:17,340 --> 00:13:20,820
+see the information how to implement the secure board, but
+
+131
+00:13:21,160 --> 00:13:25,080
+yeah, still this is only the theoretical knowledge and there's
+
+132
+00:13:25,080 --> 00:13:28,540
+know like step-by-step solution how to achieve that,
+
+133
+00:13:28,540 --> 00:13:32,840
+so probably there's room for mistakes.
+
+134
+00:13:33,400 --> 00:13:40,100
+In VDategia, another quick update.
+
+135
+00:13:40,100 --> 00:13:43,520
+Last time we saw that there are
+
+136
+00:13:43,520 --> 00:13:47,520
+some documentations and tools available.
+
+137
+00:13:47,520 --> 00:13:51,680
+We checked that within last year and it looks
+
+138
+00:13:51,680 --> 00:13:58,960
+like the documentation is some kind of uncertain because it says in one point it tells that
+
+139
+00:13:59,760 --> 00:14:05,760
+the security is available and they also provides like the flashing rules the script called flash
+
+140
+00:14:05,760 --> 00:14:11,520
+sh but in the other place they just say that the secure boot will be available in the future
+
+141
+00:14:11,520 --> 00:14:19,520
+not exactly no nobody exactly know when the future will be but yeah that would be it
+
+142
+00:14:19,520 --> 00:14:25,760
+also about fusing there's additional script for that but documentation of it
+
+143
+00:14:25,760 --> 00:14:30,920
+is also some kind of updated there is also like one thread in the form of
+
+144
+00:14:30,920 --> 00:14:38,460
+Nvidia where someone tried to use it to fuse keys on its platform and it caused
+
+145
+00:14:38,460 --> 00:14:43,280
+the platform to break because it looks like not every board can be fused and
+
+146
+00:14:43,280 --> 00:14:48,440
+before we execute that we just need to check the serial numbers because some of
+
+147
+00:14:48,440 --> 00:14:57,800
+them are supported, so not. Also, update on Alwinner. So, still we think that there is
+
+148
+00:14:57,800 --> 00:15:03,400
+no official documentation about the Alwinner SOX which will tell us about the Secure Boot,
+
+149
+00:15:03,400 --> 00:15:09,300
+and also no official documentation about the Secure Boot itself. But we found some interesting
+
+150
+00:15:09,300 --> 00:15:17,340
+case on the forum where someone was able to use the Nanopi Neo with Alwinner H3. And
+
+151
+00:15:17,340 --> 00:15:22,940
+he there provides like all the useful links there's like the 10 or 15 of them or also the
+
+152
+00:15:22,940 --> 00:15:31,980
+whole list of the verification process uh with the link to the sanction tools repository which
+
+153
+00:15:31,980 --> 00:15:38,300
+contains some tools which which later which need to be used in order to find the binaries and also
+
+154
+00:15:38,300 --> 00:15:51,580
+fuse the SOC. The one vulnerability there is that, in any case, when we—oh, sorry,
+
+155
+00:15:51,580 --> 00:15:59,820
+yeah, the one vulnerability is here that if we try to start our firmware, which is signed,
+
+156
+00:15:59,820 --> 00:16:05,740
+and the verification fails, the platform always goes to the cell mode, which is some kind like
+
+157
+00:16:05,740 --> 00:16:16,060
+the debug mode uh-huh and this debug mode can be accessed via the usb port so if the verification
+
+158
+00:16:16,060 --> 00:16:23,740
+fails someone would or could always like plug in the usb start from minicom and then read everything
+
+159
+00:16:23,740 --> 00:16:30,620
+from the fuses or maybe even wipe them so the solution there for that was just to destroy the
+
+160
+00:16:30,620 --> 00:16:36,540
+usb lines data lines on that given port so even if the platform goes into the cell mode
+
+161
+00:16:37,340 --> 00:16:45,100
+no one will be able to just read anything from it okay so now the mediatek case
+
+162
+00:16:46,540 --> 00:16:52,620
+documentation is provided on the gitlab pages it is based on the yokto project
+
+163
+00:16:52,620 --> 00:17:02,220
+like project so the steps there needs to be done inside the yorkto project build system to achieve
+
+164
+00:17:02,220 --> 00:17:11,180
+the signing to achieve the implementing the secure boot but basically as in other arm socks the boot
+
+165
+00:17:11,180 --> 00:17:18,940
+rounder is like the root of trust and later we just achieve it using other mechanism to
+
+166
+00:17:18,940 --> 00:17:25,660
+to have the whole chain of trust so after secure boot we have the tfa trusted board boot and then
+
+167
+00:17:25,660 --> 00:17:31,500
+we can use the u-boot feed verified boot to load our kernel image so if we have all those steps
+
+168
+00:17:31,500 --> 00:17:46,460
+then we have like whole boot process verified uh yeah and it also was shown in a couple of
+
+169
+00:17:46,460 --> 00:17:59,460
+in a couple of reports that the Mediatek boot room has some vulnerability which if we like power it in some special scenario
+
+170
+00:17:59,460 --> 00:18:06,460
+then the boot room may just skip the process of verification the image and still load the firmware
+
+171
+00:18:06,460 --> 00:18:15,340
+the firmware so it looks like even if we like have the public key in the fuses and also the
+
+172
+00:18:15,340 --> 00:18:22,620
+firmware signed a public key in the fuses and we provide the unsigned image and like use this
+
+173
+00:18:22,620 --> 00:18:30,940
+vulnerability we will be still able to to boot our our platform this is a short recap how the
+
+174
+00:18:30,940 --> 00:18:39,420
+secure boot looks on the mediatek so we have the bl1 step which is like the boot home which load
+
+175
+00:18:39,420 --> 00:18:45,740
+the hashed based on the root of trust public key so this is the public key that we put in the fuses
+
+176
+00:18:47,740 --> 00:18:54,140
+and calculates also the sha of the signatures of the bl2 so this is like the next step loaded
+
+177
+00:18:55,020 --> 00:19:01,580
+After that we compile those two values and if everything is okay, we go next and the same
+
+178
+00:19:04,620 --> 00:19:09,960
+Yeah, and then we go like with the then we load the signature from the BL2
+
+179
+00:19:11,080 --> 00:19:19,600
+Mmm, and also calculate the shot of it made the comparison and if everything is once again, it's okay. We boot the the next steps
+
+180
+00:19:19,600 --> 00:19:29,160
+okay and here's the process of enabling the secure boot it is not clear from the
+
+181
+00:19:29,160 --> 00:19:34,480
+documentation on which socks the secure boot can be enabled the documentation
+
+182
+00:19:34,480 --> 00:19:45,720
+mentioned the MT8365 and MT683695 ones different socks may have different FUs
+
+183
+00:19:45,720 --> 00:19:54,300
+indexes so this it isn't really like we need to check those before we try to
+
+184
+00:19:54,300 --> 00:20:00,580
+fuse our our fuses in those socks but unfortunately those information is
+
+185
+00:20:00,580 --> 00:20:06,020
+provided with NDA in the process of enabling the secure boot we need to
+
+186
+00:20:06,020 --> 00:20:12,940
+create the two keys private keys and provide them to our build system which
+
+187
+00:20:12,940 --> 00:20:19,720
+signed the bl2 load firmware and also the something called the download agent
+
+188
+00:20:19,720 --> 00:20:27,380
+which is later used by additional proprietary tools to flush the image
+
+189
+00:20:27,380 --> 00:20:35,920
+inside our our platform which is also described like here so we have the f
+
+190
+00:20:35,920 --> 00:20:42,820
+use writer tool this is another tool provided with the NDA only which can be
+
+191
+00:20:42,820 --> 00:20:48,660
+used to check the Secure Boot state on our platform and check if the download
+
+192
+00:20:48,660 --> 00:20:56,900
+agent authentication bits are set. If they are not set, we just need to set them
+
+193
+00:20:56,900 --> 00:21:04,180
+and then provide the public key, which will be fused on the key hash zero field.
+
+194
+00:21:06,700 --> 00:21:11,900
+And after that, we will just sign our firmware and use this public key to verify it.
+
+195
+00:21:12,820 --> 00:21:19,780
+Okay, so now let's go to the Rockchip case.
+
+196
+00:21:19,780 --> 00:21:26,380
+The public key here can be stored in FUSES or in the OTP, and it depends on which SOC
+
+197
+00:21:26,380 --> 00:21:30,960
+we are using.
+
+198
+00:21:30,960 --> 00:21:38,700
+If the verification of loaded binary will be successful, then we'll just extend our
+
+199
+00:21:38,700 --> 00:21:46,620
+rule of trust so the boot rom as in the other arm core socks to the chain of trust and later
+
+200
+00:21:47,340 --> 00:21:53,340
+in case of log chip you can use the verified boot mechanism a fit verified boot mechanism
+
+201
+00:21:54,300 --> 00:22:00,140
+from the spl to the u-boot and from the u-boot to kernel to provide the whole chain of trust
+
+202
+00:22:02,060 --> 00:22:07,980
+so basically to establish it we need to like once again generate some private private and public
+
+203
+00:22:07,980 --> 00:22:14,300
+keypire, burn the public key into the FUS or OTP registers, depends on which
+
+204
+00:22:14,300 --> 00:22:20,780
+SOC we are using, then find our firmware called EDBLoaderImage in case of
+
+205
+00:22:20,780 --> 00:22:27,900
+Rockchip, which is like the uBoot TPL plus SPL merge into one file,
+
+206
+00:22:28,220 --> 00:22:32,940
+then configure verified boot in SPL and uBoot, which means that we will use the
+
+207
+00:22:32,940 --> 00:22:37,420
+fit images to verify it from the SPL to uBoot and from the uBoot to kernel,
+
+208
+00:22:37,420 --> 00:22:45,260
+and just flush our signed images documentation for work chip and as well for our winner is like
+
+209
+00:22:45,260 --> 00:22:54,380
+hard to find and if any any find if we find any uh probably it will be outdated or really short or
+
+210
+00:22:54,380 --> 00:23:06,620
+just not not such useful at first so here uh we have a diagram of signing the whole
+
+211
+00:23:06,620 --> 00:23:12,920
+of enabling the secure boot but I will basically it is something I just
+
+212
+00:23:12,920 --> 00:23:17,840
+described on the previous slide and sorry for that but because of time we'll
+
+213
+00:23:17,840 --> 00:23:24,080
+go just need to to skip description of it and now we can talk about signing code
+
+214
+00:23:24,080 --> 00:23:30,320
+in Rockchip so code can be signed using one of the two tools the erika sign
+
+215
+00:23:30,320 --> 00:23:33,980
+tool which can be started on Linux or secure boot tool which can be
+
+216
+00:23:33,980 --> 00:23:40,860
+on Windows. Linux tools can be found on the air cabin repository. Windows tools
+
+217
+00:23:40,860 --> 00:23:49,440
+was, a couple days ago, some time ago, was on the repository called
+
+218
+00:23:49,440 --> 00:23:56,540
+Cooltools, but now we are not able to find it. For some reasons, the Rockchip
+
+219
+00:23:56,540 --> 00:24:03,580
+based repositories are maintained in such way that some things may be missing
+
+220
+00:24:03,580 --> 00:24:09,660
+after some time. But if you use the ericassign tool we can just generate
+
+221
+00:24:09,660 --> 00:24:14,220
+the signing keys and those keys can be used later with the Linux or Windows
+
+222
+00:24:14,220 --> 00:24:20,580
+tools. And if you use it and also the ericassign repository provides the
+
+223
+00:24:20,580 --> 00:24:27,180
+any files which are the the files that can be used to create the Danish mini
+
+224
+00:24:27,180 --> 00:24:36,080
+loader used later to fuse our our keys in in the firmware and basically any
+
+225
+00:24:36,080 --> 00:24:41,520
+given firmware that we want to sign and use in our socks can be also signed with
+
+226
+00:24:41,520 --> 00:24:50,020
+those two tools mm-hmm there is another tool just to bind the fuses and we have
+
+227
+00:24:50,020 --> 00:24:57,920
+for the effuse tool, which is only for the Windows machines.
+
+228
+00:24:57,920 --> 00:25:03,060
+It turns out that when we're burning the effuses on the rockchip socks, we also need
+
+229
+00:25:03,060 --> 00:25:12,560
+to provide the voltage for one of the pins of the sock, so it is not visible here, but
+
+230
+00:25:12,560 --> 00:25:28,720
+there should be like VCC, VE, a fuse pin, which needs to be powered up when we want to fuse the
+
+231
+00:25:29,360 --> 00:25:36,480
+keys in our SOC. So for that we need to find some pin that is there and provide the power by
+
+232
+00:25:36,480 --> 00:25:43,240
+ourselves or maybe our our platform has some special like circuit just to enable
+
+233
+00:25:43,240 --> 00:25:48,700
+that. Also this information comes from the another documentation that are hard
+
+234
+00:25:48,700 --> 00:25:55,480
+to find. This is some summarize of enabling the secure boot so we need to
+
+235
+00:25:55,480 --> 00:26:00,000
+create loader using the boot merger script that is in the ERCA bin
+
+236
+00:26:00,000 --> 00:26:06,460
+repository. Next we create the keys with ERCA sign tool. Next we need to sign the
+
+237
+00:26:06,460 --> 00:26:13,660
+loader with secure boot tool because from what we know now only sign it with
+
+238
+00:26:13,660 --> 00:26:19,180
+that tool binaries can be later used on our socks. We try to sign with the ERCA
+
+239
+00:26:19,180 --> 00:26:25,800
+sign tool and it doesn't work and now it like looks like this can be hard to
+
+240
+00:26:25,800 --> 00:26:32,460
+achieve, because there is no way to download the Securiboot tool, from what we know now.
+
+241
+00:26:32,460 --> 00:26:41,300
+Then we need to use the fuse tool to fuse our public key in Socks, and use another tool
+
+242
+00:26:41,300 --> 00:26:46,540
+called the ERCA develop tool, which is in the ERCA bin repository, just to load the
+
+243
+00:26:46,540 --> 00:26:52,920
+scienet loader into our platform and have Securiboot enabled.
+
+244
+00:26:52,920 --> 00:27:03,380
+Here's a link for the blog post which describes all of that, what we've done with the ROGchip
+
+245
+00:27:03,380 --> 00:27:05,500
+platforms.
+
+246
+00:27:05,500 --> 00:27:10,760
+So this is the summarize of where we are after the second edition.
+
+247
+00:27:10,760 --> 00:27:18,360
+The changes are here about the NXP platforms where it looks like we now need to register
+
+248
+00:27:18,360 --> 00:27:26,280
+to get the SOX reference documentation the NVIDIA Tegra looks like the
+
+249
+00:27:26,280 --> 00:27:32,900
+documentation is not really some is uncertain and may be outdated the rock
+
+250
+00:27:32,900 --> 00:27:37,320
+chip one we know now that it can be achieved but still the documentation is
+
+251
+00:27:37,320 --> 00:27:42,000
+not the best quality the same with the all winner and for the media tech we see
+
+252
+00:27:42,000 --> 00:27:48,180
+that NDA is needed to achieve the Secure Boot.
+
+253
+00:27:48,180 --> 00:27:51,880
+So, this is the summary of the presentation.
+
+254
+00:27:51,880 --> 00:27:53,640
+Looks like our knowledge is
+
+255
+00:27:53,640 --> 00:27:55,940
+expanded over the last two years.
+
+256
+00:27:55,940 --> 00:27:58,660
+We, for example, know now how
+
+257
+00:27:58,660 --> 00:28:01,680
+to enable the Secure Boot on the ROG chip.
+
+258
+00:28:01,680 --> 00:28:04,440
+Still, the general principles
+
+259
+00:28:04,440 --> 00:28:07,240
+is common for all the vendors,
+
+260
+00:28:07,240 --> 00:28:11,720
+so we want to authenticate image before we load it.
+
+261
+00:28:11,720 --> 00:28:14,300
+We have some private key to sign the firmware,
+
+262
+00:28:14,300 --> 00:28:17,020
+we need to fuse the public key inside the SOC,
+
+263
+00:28:17,020 --> 00:28:21,520
+and the boot room is still fit on us the root of trust.
+
+264
+00:28:21,520 --> 00:28:24,700
+All cases use the SHA-2456 as
+
+265
+00:28:24,700 --> 00:28:27,580
+a hash function for digital signatures.
+
+266
+00:28:27,580 --> 00:28:30,300
+And we see that more and more cases,
+
+267
+00:28:30,300 --> 00:28:34,320
+the documentation is under the NDA or
+
+268
+00:28:34,320 --> 00:28:39,040
+the quality of it is really not the best.
+
+269
+00:28:39,040 --> 00:28:43,980
+Okay, here's the way of how you can contact us,
+
+270
+00:28:43,980 --> 00:28:47,060
+and thank you for that presentation.
+
+271
+00:28:51,800 --> 00:28:54,440
+I think we are a little after time,
+
+272
+00:28:54,440 --> 00:28:58,700
+or maybe one question if there is any.
+
+273
+00:28:59,400 --> 00:29:02,480
+Yes? Okay.
+
+274
+00:29:03,440 --> 00:29:08,180
+The question is about an NXP secure board.
+
+275
+00:29:08,180 --> 00:29:17,300
+you have a possibility to use ROM in your bootloader to check the fiber blocks.
+
+276
+00:29:17,400 --> 00:29:22,280
+So you can use the secure boot of NXP for more components, like Fit and Hubot and so on.
+
+277
+00:29:22,280 --> 00:29:27,920
+Do you know if any of those new or the chips you have analyzed on other platforms have similar things,
+
+278
+00:29:28,100 --> 00:29:32,800
+that you can call the ROM and use it as a route for trust of everything?
+
+279
+00:29:32,800 --> 00:29:47,900
+Okay, so the question was that the NXP provides the possibility to use the boot run to verify other parts of the firmware loaded in the whole process, and the question is if other vendors also provide such things.
+
+280
+00:29:48,320 --> 00:29:57,020
+From what we know, no, this is only like the NXP case, and yeah, basically that's the answer.
+
+281
+00:29:57,960 --> 00:29:58,960
+And yeah, maybe this one.
+
+282
+00:29:58,960 --> 00:30:19,260
+How is, given that you analyze so many vendors, how is the support among the vendors for different types of key with different trust boundaries, like, for example, like the delegation key for, like, the production in Asia, and then you would remove that key using rowback levels and use cases like this?
+
+283
+00:30:19,260 --> 00:30:30,600
+Okay, so the question was, I believe, if we try to somehow, if there are any process
+
+284
+00:30:30,600 --> 00:30:34,800
+to, in order to change the key used to sign the firmware, yes?
+
+285
+00:30:35,580 --> 00:30:38,920
+To have multiple keys, like you would hand out one key.
+
+286
+00:30:39,100 --> 00:30:43,420
+Okay, to have like multiple keys to one person and to another team, to another company maybe
+
+287
+00:30:43,420 --> 00:30:45,060
+even, and then later revoke it.
+
+288
+00:30:45,060 --> 00:30:57,300
+I believe that this will be depends on if we have some mechanism in our socks to provide
+
+289
+00:30:57,300 --> 00:31:04,500
+more than one public key yeah but as we said those are one time only flashed in the socks
+
+290
+00:31:04,500 --> 00:31:09,780
+so if there is only one place then I think that it will be only one the private key used later
+
+291
+00:31:09,780 --> 00:31:24,780
+for the verification okay thank you
+

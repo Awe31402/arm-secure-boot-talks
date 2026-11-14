@@ -1,0 +1,459 @@
+start	end	text
+440	27220	Okay, let's get started. Welcome to my talk, Practical Application of Verified Boot. My name is Ruben Selvinsky, and the first slide is also about me. This is mostly useful if you want to contact me later or look me up on GitHub. I work for Pangotronics. We do Embedded Linux Consulting. I started out doing testing for Embedded Linux Systems and then moved on to Opti and Security. So that was my area of expertise for some years, and I'm also doing a lot of stuff in this area still.
+27220	31640	I do system integration. Everybody at Pangotronics pretty much does system integration.
+31860	33500	And I'm also interested in Linux Media.
+33940	36160	So I work with GStreamer pipelines.
+36620	44040	The very first thing you have to remember about verify boot is Boromir says one does not simply implement verified boot.
+44460	46720	Everybody thinks it's so easy.
+47280	50500	You just go to a contractor and say, we want verified boot.
+50600	53780	We require it for the Cyber Resilience Act, for example.
+53780	56180	That's what's happening to us a lot at the moment.
+56180	61180	But it's not that simple and I will explain why it isn't simple, unfortunately.
+61180	63180	I would like it to be simple.
+63180	66180	First off, why am I talking about verified boot?
+66180	71180	It's because x86 already has a coin on the secure boot term.
+71180	76180	So in x86 systems, so on your laptop or on most of the laptops,
+76180	81180	excepting the Mac systems, of course, or the modern ARM systems,
+81180	86460	secure boot is the implementation which is used to verify that you are only
+86460	90760	booting the kernel you have signed beforehand and for arm systems which we
+90760	94580	have a lot in the embedded space there's always another vendor implementation so
+94580	99300	everybody does their own implementation as an example from NXP it's called high
+99300	104640	assurance boot for the older SOCs the newer IMX 9x systems use advanced high
+104640	108040	assurance boot which is just a further development of the system they had
+108040	113120	before. Rockchip has an NDA requirement. There is not even a name, or at least I couldn't find it.
+113200	118260	If you know the name, please tell me later. I'm interested. And TI also calls it Secure Boot,
+118380	124240	but it has completely nothing to do with the x86 implementation. And that's why I'm saying
+124240	129340	verify boot when I include all the different vendor implementations and the things you have
+129340	137880	to look out for. How does x86 Secure Boot work? So you have some kind of ROM implementation for
+137880	143640	intel it's contained in the boot guard description which verifies the components which are booted so
+143640	151560	in this case your uefi is verified and then is then able to in turn in turn verify the kernel
+151560	157160	and the file system or your kernel will verify the file system and for amd it's the guard me
+157160	162920	extensions so the rom code verifies the uefi and then the uefi verifies the further components and
+162920	164380	and we get a secure boot chain.
+167240	171100	It works with its own certificate authority.
+171640	177760	So, the tool for Linux systems to implement this is SPCTL,
+177860	181200	and then you can deploy your own certificates into your UEFI.
+181700	184820	So, they are saved within the EEPROM, I guess.
+185620	191760	The license problems and the complexity of implementing the secure boot solutions stay the same,
+191760	198860	but at least it's unified across both x86 or across all x86 platforms so it has that going
+198860	205500	for it and that is quite nice and you will also have to set up some kind of uefi password because
+205500	210900	if there is no password for the uefi somebody can just remove the installed certificate and
+210900	218400	then the bios will boot whatever you want this has to be taken into account for this implementation
+218960	222240	For ARM, it's pretty much the same.
+222800	224040	You also have a ROM code.
+224140	226420	You have some kind of vendor ROM implementation.
+226740	227620	Depends on your vendor.
+227760	229860	Maybe you have to sign an NDA, and then you can look at it.
+230160	231600	You have some bootloader.
+231940	233860	It doesn't have to be only U-Boot.
+233980	236420	It can also include an ARM-trusted firmware.
+236600	237300	It can be barebox.
+237400	239600	It can be some kind of Linux boot system.
+239600	242240	But the ROM code will need to verify the bootloader.
+242760	246960	And then pretty much the standard nowadays, at least for U-Boot and barebox,
+246960	253520	is to use so-called fit images to verify a kernel and the device tree, for example,
+253520	260000	or another initramfs. Fit stands for flattened image tree, which is a deviation of the
+260000	271440	flattened device tree naming. Almost all of the vendor implementation will require you to burn
+271440	276480	some fuses inside the processor which is a process that can only be done once so
+276480	283080	a fuse is a little one-time programmable or one-time burnable thing where you can
+283080	287280	burn the fuse and then it turns to a one but you can never turn that fuse back
+287280	293820	into a zero and for NXP they use that to burn a hash over your certificate
+293820	298540	authority certificates so at the very beginning you create a certificate
+298540	302860	authority with your root certificate at the top then you create a hash over the
+302860	308980	certificates and you burn it into the SOC and then your processor will be able
+308980	313540	to verify your secure boot flow this is a one-time operation it's very important
+313540	317320	you will totally brick a board if you burn the wrong fuse and you won't be
+317320	323380	able to burn or to use other software to recover the board if you also burn the
+323380	329080	additional lock fuse that is required on nxp socks it also means there's no new
+329080	334360	deployment of certificate possible as is with x86 as long as you have the UEFI
+334360	339440	BIOS password you could in theory go out into the field and then replace the
+339440	343620	certificates on the devices in the field it's going to be very expensive but it's
+343620	349540	possible at least I'm going to share a bit of an anecdote with you once upon a
+349540	358580	time i had a project from 2019 to 2021 we had an arm embedded imx6 ul nxp platform it used high
+358580	363940	assurance boot we also implemented the usage of opti to save authentication information for the
+363940	368340	cloud so there was going to be a cloud backend which required authenticated information from the
+368340	374020	device we also employed up armor to have another layer of security where we could control what the
+374020	380100	user space application can access in the end we used rock for updates the whole system the
+380100	386180	complete system was always built inside of your toe which ensured that you always got images that
+386180	392660	were bootable on a device and for storage of the backend keys so for storage of the keys that were
+392660	398820	used to sign the secure or sign the artifacts so where the secure boot keys are stored we use the
+398820	405620	to NitroKey HSM. How does the complete chain look like, you might ask? It looks like this.
+405960	411520	So at the very beginning, we have a ROM code that verifies the bootloader, which in turn already
+411520	417500	contains the Opti. So the verified bootloader then loads Opti, and Opti will then return back
+417500	421700	into the bootloader. We have different colors here, since Opti will be running inside of the
+421700	427160	trust zone, which is marked in the green color. The blue color signifies the so-called normal
+427160	433720	world in trust zone lingua the bootloader then goes on to verify the fit image which contains
+433720	440120	the device tree the init ramfs and the kernel and the kernel in turn internally uses the dm
+440120	446440	verity file system to verify the file system where all our binary information is contained
+448840	456120	and that's the chain we also implemented inside the project which worked well and then 2022 came
+456120	461800	around and the customer team no longer existed the team members left the company over time due
+461800	467320	to external pressure or project pressure and eventually the whole company side was sold off
+467320	472280	to another company so they said we no longer leave this branch of the company we're just going to sell
+472280	478120	it um the octo was pretty much left in the state when we last touched it in 2021 and questions to
+478120	483400	the customer whether we want to do further development or still or do some yokto updates
+483400	488920	or update the system in general or provide some documentation on how systems are booted and so on
+488920	493240	and so on was unanswered nobody was taking our course because the project lead for the project
+493240	500200	was missing he was sold off with the with the site so nobody answered there and then what happened
+500200	510200	in end of 2023 is a totally new team appeared and they were like verified boot hsm pkcs11 what what
+510200	518040	is this all about we don't understand can you explain i will start by explaining pkcs11 pkcs11
+518040	522840	is a standard programming interface for hardware security modules those come in different form
+522840	528520	factors i will show on the next slide and is usually used to generate a key on the device
+528520	534760	so generate a private public asymmetric key pair where the private key is generated on the device
+534760	540280	never exportable so it stays on this device and the idea behind is that
+540280	544720	behind that is that the device with the very important keys which is able to
+544720	549280	assign the software was taken out of the computer where it was used to sign the
+549280	555940	software and then stored inside the safe and the nice thing about PKCS11 is
+555940	560200	that we got a lot of support for different authentication methods it's
+560200	566780	it's this slide. So for Chromium, NGINX, SSH, VPSupplicant, a lot of software that's already
+566780	574920	out there already supports using PKCS11 as the authentication information or to access
+574920	583140	the backend keys. And also there's the usage possible in conjunction with OpenSSL and GNU
+583140	589560	TLS for the new open SSL 3 version there's the new open SSL provider
+589560	594420	interface which is much nicer than the old and now deprecated engine interface
+594420	599400	where instead of having the private key in a file you can specify a PKCS 11 URI
+599400	604380	which points to the device and then to the specific key that should be used so
+604380	610740	this makes it a lot easier for newer deployments which haven't gotten the
+610740	615300	profit of using new interfaces yet. We back then still used the old engine
+615300	622320	interface. Regarding PKCS11 HSM form factors, we have three examples here. So
+622320	626340	we have a PTIE add-in card that's supposed to be used inside of a secure
+626340	630460	server and then you can generate the key on the card and then there's some
+630460	634380	management software where you can do smart card authentication from remote.
+634380	639420	There's also the very easy USB option. Here we have a YubiKey, there's also a
+639420	644220	nitro key hsm which you can then unplug and store in a safe and then you have to have some kind of
+644220	649420	procedure where somebody knows how to access the safe and then get the device out of the safe build
+649420	654620	the software and sign the software and then deliver it and there's also rack mounted hardware
+654620	660380	so for bigger projects which contain millions of devices it might be more suitable to have
+660380	665420	rack mounted hardware inside of a secure data center and then have the capability to send
+665420	671660	artifacts over the network to the device which then signs it and sends it back to you and this
+671660	682540	is all possible using the pkcs11 api and then we turned around and it was end of 2023 and everything
+683180	687900	inside of the project totally changed so they set up a new team because they realized at some point
+687900	693420	they have to do a software update of the software they released back in 2021 because vulnerabilities
+693420	699660	are everywhere, as we all know. The USB HSM was to be replaced with the cloud
+699660	704400	HSM, which is already tricky because you have devices out there which rely on the
+704400	709880	keys that are on the hardware HSM, where they are not exportable. So how do you
+709880	714000	export the keys? It's just not possible and we tried to tell them that, but it
+714000	717840	was really really hard for them to understand why that was the case. They
+717840	722520	also had the Software Bill of Material requirement, which necessitated a Yocto
+722520	728840	update and by the way excuse me but do you know how all this works so how the individual parts
+728840	735640	work together could you explain that again to us and so we did to a new team and the conclusion
+735640	744600	of this whole odyssey with the vendor was project knowledge for verified boot projects is very very
+744600	751000	essential so for if you give me a normal linux device which like an embedded linux device which
+751000	755480	doesn't have a verified boot chain I can kind of figure out what's going on I can start the device
+755480	760520	then I can access the bootloader maybe I can say init equals bin bash and then I will get a root
+760520	765720	shell and everything is going to be fine I can get that system open but for systems that are
+765720	772200	specifically built to be closed it's really really hard because sometimes not even bring up works
+772200	778520	you don't know what kind of device do I have in my hands is it a production device signed with
+778520	785080	the release keys is it a development device with development keys which keys do i have to use how
+785080	789400	do i even update the system is there some kind of update demon surely there is maybe you find out
+789400	793880	it's wrong maybe you have access to the system console which is already great but some of the
+793880	800280	devices were so locked down even for development purposes to test the release configuration that
+800280	806280	you couldn't access the device and nobody wrote down that this device is pretty much burned and
+806280	808040	and can't be used any longer.
+808040	810460	Your bootloader is locked, so no reconfiguration.
+810460	812500	Innet equals bin bash isn't an option,
+812500	814160	and you can't even change the kernel
+814160	815820	that is going to be booted on the device.
+815820	819100	You may get lock output, sure, for diagnostic information
+819100	822440	so that somebody later can recover the device,
+822440	826200	but you don't have any access to reconfigure anything.
+826200	830540	So the absolute bare minimum you have to do
+830540	834380	is you have to do some kind of handover workshop.
+834380	837400	at least some kind of workshop where you write down
+837400	840240	what can be done and which devices can be used.
+840240	843460	If you don't do that, what are you going to do?
+843460	845160	You can't access your devices any longer.
+845160	848140	And that's a very, very bad situation to be in.
+848140	851420	And even better is if you can somehow arrange
+851420	854240	to have a handover period where questions can be answered
+854240	855440	by the old team.
+855440	858660	So before people are leaving with the project knowledge
+858660	861440	of your verified boot systems, you have to ensure
+861440	863860	that there's some kind of handover period
+863860	865300	where people can be taught
+865300	867800	how to access these devices.
+869400	873600	And oftentimes, our customers think it's easy.
+873600	876100	The contractor does it, right?
+876100	878140	We just say we want secure boot,
+878140	881540	and then we say, okay, we can implement that,
+881540	884840	but it's not how it's going to work out in the end,
+884840	886440	because we can't do it alone.
+886440	889560	We can implement the procedures to sign the bootloader,
+889560	893180	to verify the fit image, to create the signed images,
+893180	899580	to verify the file system but your technical decisions concerning the project have to be done
+899580	906620	by you as the device vendor and we can't make these decisions because oftentimes we don't even
+906620	913180	have the broad overview of how the product is going to be used oftentimes people have platform
+913180	918540	ideas instead of building a specific device for a specific purpose so in the end inside of the
+918540	922980	company there are four five six ten stakeholders who want to use the device
+922980	927480	for different purposes and then we don't have any idea how the device is going to
+927480	934560	be used and if we are we as a contractor are no longer involved every every
+934560	939240	project at some point down the line switches to some kind of support stage
+939240	944280	where we are no longer deeply involved sometimes decisions have to be made by
+944280	949800	the vendor or somebody building the device and you have also have to be to
+949800	954660	remember that the key management for the secure boot keys can't be done by us
+954660	960720	the devices or the software is going to be signed in your infrastructure the
+960720	965640	devices will need to be fused inside of your infrastructure and we can't arrange
+965640	972360	that we oftentimes don't even have an overview of how these devices are
+972360	981980	provisioned for deployment on the devices there are often two choices so we do one
+981980	986400	for development publish purposes and open reconfigurable bootloader which can
+986400	991500	boot anything because for development we sometimes want to change parameters we
+991500	995700	want to test something then it's required so either you create a
+995700	999860	development bootloader that is going to be signed with release keys which has
+999860	1005300	the advantage that every time you get a device from the field back which is somehow broken you
+1005300	1010340	can just use your development bootloader and boot it up on the device it's really easy for support
+1010340	1016420	cases but the disadvantage is if anybody gains access to this bootloader all your devices out
+1016420	1022980	there are potentially vulnerable because now everybody can access or release devices and the
+1022980	1027780	other choice you can you have is you can use the development bootloader with special development
+1027780	1032680	keys it has a great advantage that your bootloader will be billable in CI if you
+1032680	1037540	have development keys which can be leaked because there are only like 10 20
+1037540	1040860	development devices out there and they are never going to reach the field and
+1040860	1044940	nobody is going to use them out there it doesn't matter right and the
+1044940	1049840	disadvantage is that you now have special development devices as I said
+1049840	1055740	before you have to mark these devices as being used with development keys so
+1055740	1060820	So every developer in the later development cycle, if he wants to use new software, he
+1060820	1062180	has to use the development keys.
+1062180	1063580	This is not a release device.
+1063580	1065320	It doesn't use the release keys.
+1065320	1067980	And you have to take care that this is done.
+1067980	1075860	And what also can happen if you put too much stuff into the CI is this sign all the things.
+1075860	1082700	In one of our projects, they set up the CI pipeline for their release devices as well.
+1082700	1089100	And then somebody checked in development bootloader with development options, which was totally
+1089100	1090100	open.
+1090100	1092400	And the CI just went, okay, that's a valid configuration.
+1092400	1093400	I can build that.
+1093400	1095060	And then they had an artifact.
+1095060	1101500	So a bootloader signed with release keys, which was open and which was now out on the
+1101500	1105040	internet because it was cloud infrastructure that built this.
+1105040	1109940	And they had to go to greater length to delete the artifacts back again.
+1109940	1112200	So you have to take this into account as well.
+1112200	1116680	CI is involved you have to be really really careful when you are using the release keys
+1118200	1125720	and then there's the additional question of device provisioning so we have Anakin here which says
+1125720	1133400	we use verified boot now but we do have a trustworthy manufacturer do we do yeah yeah
+1133400	1139560	please so for another project they decided to outsource their production facilities to another
+1139560	1144360	country and then decided oh we don't necessarily trust that factory even
+1144360	1148380	though it's our own but then you have to set up some kind of procedure so you
+1148380	1153720	can still manufacture your product board but you won't be able to provision your
+1153720	1157980	device there right because somebody could replace the keys which are used
+1157980	1163740	there and emulate your software so you're constantly or the potential for
+1163740	1168000	harmful deployment on your devices there if you don't have a trustworthy
+1168000	1174720	manufacturing facility and you have to take this into account so now you are
+1174720	1179220	done with development verify boot is done everything works you have tested
+1179220	1183880	that it works it's ready for release so now you have to think about the
+1183880	1187820	provisioning of the device as in the previous example so steps before
+1187820	1191880	deploying the software and the device you have to somehow set up the
+1191880	1196940	enablement of verified boot so inside of your production or inside of the
+1196940	1202960	production environment, yes, you have to fuse your release keys into the device. You may want to test
+1202960	1208940	that the release keys work correctly. You may want to do additional initialization as well in this
+1208940	1215440	key, if you are already there. So, for Opti, you often want to exchange a key with the RPMB partition
+1215440	1223200	of the EMMC. Or maybe you also want to set up the pseudo-SLC mode for your EMMC so it lives a bit
+1223200	1228180	longer then you have to provision a device private key so if you want to
+1228180	1232260	use your device for cloud authentication you either have to load the private key
+1232260	1237300	onto the device or better you have to generate the key on the device so the
+1237300	1242220	key can never leave the device again and all that has to be done in a trusted
+1242220	1249200	environment otherwise you're up to your luck pretty much another question which
+1249200	1254420	also comes up all the time is how many keys do we generate do we generate one
+1254420	1260700	key for all devices this pertains to how you authenticate to your cloud API as
+1260700	1265700	well as how you install updates on the device so is there a global update key
+1265700	1270620	maybe there's an update key for each revision of the device or maybe even for
+1270620	1274760	each production run or for each individual device these are choices
+1274760	1280940	which make it harder to deploy on a device or easier and make it more secure
+1280940	1286040	or less secure in case of compromise of private key material and you also have
+1286040	1290240	to ensure that you document your decision in this case so you have to
+1290240	1294620	document it for anybody else who may have to touch the device in the future
+1294620	1298640	for software updates as an example because oftentimes regarding
+1298640	1304320	documentation what happens is something akin to this so we get a this is pretty
+1304320	1309040	much what happens all the time we say we need to we need some time to write documentation the
+1309040	1314080	customer says oh it's going to be fine we'll have documentation time later and then this is the
+1314560	1322560	situation we end up in things you need to document as a starting point how are your release keys
+1322560	1328160	created and provisioned on the device how was that done maybe if somebody else wants to create
+1328160	1333360	another device which also uses verified boot if you have instructions for your
+1333360	1338900	HSM how to create the how to create these keys it's already easier much
+1338900	1344180	easier how do you distinguish development devices from release devices
+1344180	1349040	do you have big red stickers or do you have a system online do you have QR
+1349040	1352940	codes on the device I have there there are many many possible choices but you
+1352940	1357160	should have thought about that and documented how it works how do I handle
+1357160	1361780	devices that are returned from the field depending on which choice you made in
+1361780	1366400	the initial bootloader signing you may be able to just run a development boot
+1366400	1371480	order on the device then it's easy or you may have to do the field return
+1371480	1376160	procedure for this specific implementation of secure boot and also
+1376160	1381100	test and verify these instructions periodically they may be out of date
+1381100	1385500	because they were created in a workshop two years ago and are no longer very
+1385500	1390540	it valid for current software. You have to ensure that they are still working if everybody or anybody
+1390540	1398560	wants to change the device later on. There's also some licensing problems. So GPLv3 contains the
+1398560	1407200	TiVo clause and the idea behind that is that when you deploy GPLv3 software on the device,
+1407200	1414260	you also have to ship out information to run modified versions of this GPLv3 software on the
+1414260	1419900	device, which in the worst case means that you have to ship out your private key material for
+1419900	1425140	secure boot, because otherwise nobody can change the software on the device. And that's not something
+1425140	1433840	you want. The solution for this is either you use no GBL v3 software, which is from my point of view
+1433840	1439520	still bad, because it becomes, it's harder and harder to avoid GBL v3 software. We are trying
+1439520	1444980	very hard and for the project in 2019 it was still possible but nowadays I'm not
+1444980	1450500	entirely sure and the other option you do have is you implement an unlock mode
+1450500	1455580	inside of your bootloader so some kind of mechanism where the customer can
+1455580	1459080	decide okay I don't want to use this device with your infrastructure any
+1459080	1464120	longer and then the device just deletes all key material or makes it inaccessible
+1464120	1469120	which comes out to the same point and then unlocks the device and they can run
+1469120	1476460	their own GPLv3 software. That's totally valid. I think in one of the examples in an automotive
+1476460	1481940	presentation, they said you can totally break your core and not use it any longer, but at least you
+1481940	1489520	can run your own software on it. And this is valid. There's also the question of how to handle
+1489520	1495700	devices returned from the field. This is unique per verified boot implementation. If you have
+1495700	1500820	information on this pertaining to other socks than nxp let me know i'm very interested on how that
+1500820	1508260	works for nxp devices you have to sign the bootloader and it has to include the unique id of
+1508260	1514180	the soc so if you have a device returned from the field you definitely want to know the unique id of
+1514180	1524420	the processor that was soldered onto the device and then the device can burn another fuse which
+1524420	1530580	totally disables the secure boot process and then you can again boot any boot loader out there so
+1530580	1536420	you can create another boot loader and then boot that this is a complex process and may need some
+1536420	1543780	automation for support cases right because device support way may not necessarily be able to run
+1543780	1550020	the whole yokto system to sign the boot loader so you may have may want to have a simple portal for
+1550020	1555940	that where they can type in the soc and then your internal inventory already marks as no longer
+1555940	1565380	usable there's also yokto integration we upstream in the last few years so for example there's this
+1565380	1572980	signing bb class which is made which was made by my colleague jan lube which implements the usage
+1572980	1581620	of PKCS11 inside of Yocto recipes. So inside of the recipes you just say which PKCS11 URIs to use,
+1581620	1587060	and then the HSM axis happens in the background during the build of the recipe, which makes it
+1587060	1593220	really easy to integrate even complex HSMs into a Yocto build. It's really nice. This is upstream
+1593220	1597940	in MetaOE since Mickeldor, which means it's also contained in the latest LTS release, ScarfGap.
+1597940	1604820	it's a good reason to update to the latest lts and usage examples are like the whole chain up to
+1604820	1610340	the kernel where the kernel then verifies the file system so bootloader signing can be done
+1610340	1615940	update signing can be automated to action access and hsm and fit image signing as well there's
+1615940	1619780	also an integration example on github it's linked in the slides you can download
+1619780	1631020	How this works is that you pretty much say I would like to use the following HSM here
+1631020	1637060	it's identified by the serial number and then you have an additional argument you have to
+1637060	1647660	construct in this escaped manner and you can also provide a pin and you can point to the
+1647660	1657180	respective implementation of the PKCS11C API and then inside of your configuration you can set up
+1657180	1663340	which objects are going to be used so in this case we have four SRK keys which are the super
+1663340	1671260	root keys used for nxp verified boot we then additionally have the command sequence file
+1671260	1677260	and image keys and then we have a key for fit image signing and for update signing down here
+1677260	1683020	so this is all that's that's needed to be done to switch the keys from development keys which
+1683020	1688460	may be contained inside your bsp so you don't have to access an external hsm to switch over
+1688460	1694220	to a real hsm implementation which is maybe connected via usb to your device
+1696460	1703340	so in conclusion what we want for a variable boot process is documentation documentation and more
+1703340	1708200	documentation we want to know which decisions were made during the initial
+1708200	1713460	project creation we want to know which devices are still usable and how they
+1713460	1718040	are going to be used how a device can be flashed how the build system can be
+1718040	1723300	instructed to build a complete image for the device everything that's documented
+1723300	1728060	makes it easier for anybody else who has no information on the project to get out
+1728060	1732800	how to build devices how to build software for the device you want to have
+1732800	1737440	hand over process express especially when the contractor leaves or a new team member needs
+1737440	1744160	onboarding which is essential in our fast living software world at least that's what i've seen from
+1744160	1750160	customers oftentimes people are only there for two to three years so a handover process for verified
+1750160	1755760	boot projects is pretty much pretty much essential and be also very really really careful about
+1755760	1763360	provisioning and remember or document how to manage field return devices. And with that,
+1764000	1766400	I'm pretty much done and I would like to hear your questions.
+1785760	1794980	So the question was whether the NXP signing or HSM access pertains to signing data for the device,
+1795080	1800120	so signing bootloaders, if I got that correctly, or using PKCS11 on the device.
+1800480	1801760	Did I get that correctly?
+1802360	1803880	So in the end, both.
+1805020	1811340	The signing BB class for Yocto uses the external HSM connected to your developer machine
+1811340	1814080	to sign artifacts for the device.
+1814080	1819900	But then inside of the device, if you employ Opti, there's for Opti a PKCS-11TA.
+1820320	1825440	So on the device itself, you can also use PKCS-11 to authenticate to a cloud interface.
+1826060	1827340	So both.
+1827820	1830000	So the Opti speaks with the internet and gets the system?
+1830740	1836080	The Opti doesn't speak with the internet, but the Opti is able to generate key material
+1836080	1840280	and then is able to sign requests from Linux user space.
+1840280	1850680	So if you want to do, for example, client certificate authentication, there is the PKCS11 or OpenSSL PKCS11 provider interface.
+1851100	1860120	And then your software can instruct OpenSSL not to use a private key which is stored in the Linux root file system, but to use a private key that is stored inside of Opti.
+1860440	1865380	And then software or data that needs to be signed is handed over to Opti.
+1865380	1869720	Opti does the signing without Linux being able to inspect what happens.
+1869720	1871880	and then the signed data is handed back.
+1875700	1876220	Yes.
+1876220	1877820	Yeah, thanks for a great talk.
+1878300	1883300	I would like to highlight one pitfall that I find often on variable boot setup
+1883300	1886200	is that people forget about downgrade attacks.
+1886720	1890060	For example, when your bootloader has a security vulnerability
+1890060	1892080	and you have to rebate the bootloader,
+1892180	1895520	but you have to make sure that nobody can reinstall the buggy bootloader.
+1895900	1896060	Yes.
+1896060	1904300	So, not really the question, but the notice from the audience was that downgraded techs in this case are still possible.
+1904660	1906980	So, there's no downgrade protection for the bootloader.
+1907040	1912140	Somebody could install an old vulnerable bootloader on the device, which is correct.
+1912320	1914760	And in the current scheme, there's no mitigation for that.
+1914980	1918680	I have ideas for mitigation, but they are not implemented at the moment.
+1919620	1920900	Yes, that's correct.
+1921620	1922560	There's a question up there.
+1922560	1927200	I have a question regarding the GPL version 3 problem.
+1927540	1927760	Yes.
+1929080	1937800	I thought it would be necessary to offer a possibility to deploy the modified version 3 software on the device.
+1939940	1945140	You do not need to guarantee a warranty for the device anymore.
+1945240	1945500	Yes.
+1945500	1948900	But it should keep its functionality.
+1948900	1966760	So, the question is, for the GPLv3 problem, the deployment of modified software needs to be done, but that the device should keep its functionality. I am not a lawyer, and I'm afraid that I can't answer this question definitely.
+1966760	1972260	So, from my understanding, that's not what's required by the GPL.
+1972660	1975000	So, functionality doesn't need to be retained.
+1975380	1978120	Your software just has to be able to run on the device.
+1978520	1981340	But still, this is no legal advice.
+1983680	1990280	You said that for NXP, you can disable the HAD again for few different devices.
+1990820	1992740	Why is this not a security issue?
+1992740	2002620	So, the question was, why is the disablement of HAB for field return devices not a security vulnerability?
+2003180	2007920	Because you need to have the private key material.
+2008360	2011920	So, you need to be the one that initially deployed software on the device.
+2012200	2014680	And you also need the SoC Unic ID.
+2014960	2018880	So, there's no global unlock bootloader for every device out there.
+2018880	2029200	The bootloader, which is able to return your device from the deployed state into the return state where HAB is disabled, needs to be specifically created for the device.
+2030160	2033500	So that's pretty much how this works for NXP.
+2034840	2038880	If you do like that and disable the bootloader, can you come back to an enable it again?
+2039140	2042340	No. At least for the NXP HAB.
+2042480	2045780	So the question was, can you return back to the production state?
+2045840	2046600	And the answer is no.
+2046600	2056200	So, during the disablement of HAB, you have to burn a fuse, which says this is now a field return device, and burning the fuse means you can never go back.
+2057400	2062540	Does PKCS11 have anything to support revocation?
+2063380	2071640	The question was whether PKCS11 has anything that supports revocation, and as far as I know, no, it doesn't.
+2071640	2089180	This is due to PKCS11 being often used with client certificate authentication, and then you have a CA setup where you can have certificate revocation lists, of course, and then the revocation can be done that way, but PKCS11 doesn't implement revocation.
+2091320	2096760	How do you protect the integration of PKI for all RCA?
+2096760	2124240	So the question was how the key material to assign the devices
+2126760	2132760	I mean, the configuration of your PKCS subsystem.
+2132760	2138760	So, the question is how the PKCS11 subsystem is protected.
+2138760	2143760	Is the question pertaining to using PKCS11 on the device or during the build process?
+2143760	2145760	During the build of the system.
+2145760	2150760	During the build of the release.
+2150760	2152760	During the build of the release.
+2152760	2157580	During the build of the release, it depends on which kind of HSM you choose.
+2157580	2164840	If you use a USB HSM and it needs to be connected, then you can use a developer or you can use
+2164840	2169100	a laptop or a computer which doesn't have any internet connection, for example, if you
+2169100	2173360	want to be really safe, and then only copy over the source artifacts required to build
+2173360	2174860	your complete software.
+2174860	2176360	That's one of the possibilities.
+2176360	2192680	The question pertains to how do you verify that the configuration in the release device
+2192680	2194680	isn't different from the development device.
+2194680	2202520	it's it's most of the customer is main demand uh but if you configuration is public for all
+2202520	2213000	developers i mean the team and pass today you move some to some e so how do you provide how
+2213000	2222680	do you hide this integration from uh well not so how do you separate the security in this case
+2222680	2228860	Because CI is going to be accessed by everyone in the development team.
+2229640	2240620	I guess the question was, how do I protect my keys from a certain, or from some people in the development team,
+2240620	2243940	which may not be allowed if the signing is done by a CI?
+2244300	2246960	I would say don't do the signing by the CI.
+2247320	2251720	I would totally recommend against that, which is a pretty good mitigation.
+2251720	2268060	So, that's one of the possibilities, which may not always be possible, of course, because some people insist on having the CI having access to the release keys, but what can you do, right?
+2268620	2274600	If that's the decision somebody took during the development, we don't have any sway over that.
+2274600	2289500	I just wanted to mention that Fit is a standard outside of UBoot now, and there is a Linux target for building Fit now.
+2290720	2293340	I don't got the notice.
+2294920	2298920	So Fit is now a standard outside of UBoot.
+2298920	2302820	Ah, so Fit images are now maintained outside of UBoot.
+2302820	2320840	The specification. Ah, the specification. Ah, yeah, nice. That's useful. So, the notice was that the specification for flattened image trees, fit images, is now maintained outside of U-Boot. Yeah, thanks.
+2320840	2337200	no unfortunately i don't do you so the question was or the notice was that everything i was
+2337200	2344740	talking about was about nxp processors and my answer is i mostly worked with nxp processors
+2344740	2350200	a lot of projects we at panglotronics have are done with nxp processors but i would be very very
+2350200	2355060	interested in how it works on TI SOCs, especially on the new AM6-2 series.
+2355060	2365440	One thing I can mention is that my question is that TI doesn't have this secure boot off-the-game mode.
+2365440	2372520	What I have seen is that they have a processor where you can use secure boot, but only that.
+2372520	2373520	Okay.
+2373520	2378520	So the notice is that somebody in the audience looked at the TI specification for secure
+2378520	2383000	boot and the impression is that there is no provisioning for some kind of field return
+2384200	2391160	possibilities so where you can disable secure boot again but maybe somebody from ti has deeper
+2391160	2398600	information on that if you have contact me i'm very interested yes of course that's not it's very
+2399320	2405000	the audience mentions that it's very nda which is unfortunate because i do open source software
+2405000	2407300	and it kind of clashes with NDAs, so, yeah.
+2411200	2415200	So, that may be one of the reasons why I'm able to talk about the NXP process,
+2415200	2419500	because most of it, we are actually able to talk about it
+2419500	2422400	if it's contained in open source software, which is nice.
+2422900	2427860	But for other vendors, you can't even tell me if you have signed the NDA, right?
+2427860	2431900	So, it's a pretty bad situation,
+2431900	2437900	because at least for we we have some deeper insights on how the NXP process
+2437900	2440960	works and we understand how it works but for other implementations if you have
+2440960	2445100	to sign the NDA you don't know whom you can talk to except your colleagues who
+2445100	2448900	have also signed the NDAs, right?
+2448900	2460900	So, I have a TI EVK and I don't think I signed an NDA yet for some, but I didn't get deep enough to know how it actually works.
+2460900	2468900	Somebody mentions that they do have an EVK from TI, but they don't have access to the secure boot documentation.
+2468900	2493560	yeah okay so somebody in the audience mentions that there's the new IP 2350
+2493560	2500740	that's it which is a Cortex-M CPU so not really suitable for Linux targets
+2500740	2503880	unfortunately but they want to open source all the documentation required
+2503880	2509960	for secure boot which is great if you ask me now if we could get that for the
+2509960	2516880	bigger Raspberry Pi Cortex-A course right would be nice no more questions
+2516880	2518260	Thank you very much.

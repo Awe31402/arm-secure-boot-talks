@@ -1,0 +1,282 @@
+start	end	text
+0	28000	I have quite a bunch of slides that have only 25 minutes so I will go quite quickly and I will leave any questions if any at the end of the presentation
+28000	33000	or we can follow up offline if you are interested in specific topics
+33000	37000	so let me need a strike first of all
+58000	68000	Okay, so I'm Matteo Cardini, I'm the software technology manager within ARM for the firmware,
+68000	73000	boot, UEFI and recently system guidance software.
+73000	82000	So what I'm going to present today is a quick journey about the secure boot story within
+82000	90000	ARM, so talking about specifically the ARM Trusted Goal Boot, its public infrastructure,
+90000	96000	its chain of trust, and how the ARM Trusted Firmware implements this specification.
+96000	103000	And then I will move to combine this spec with the UEFI Secure Boot, so explaining which
+103000	110000	are the differences and how to combine these two spec with open source software implementations
+110000	117200	actually basically a complete chain of trust then i will also mention very briefly some other
+117200	126480	solutions like android base or view boot base and i will share the next plans and future steps
+126480	134560	from an hour perspective so very quick introduction what is secure boot well it's all about trust
+134560	141080	It's all about creating and maintaining a chain of trust among the different software
+141080	144160	layers that are executed on a system.
+144160	150860	So as George pointed out yesterday during the keynote, if we implement a secure boot
+150860	156940	based on industry standards, existing specs, and specifically open source software, we
+156940	164000	can achieve basically full interoperability, a faster integration on time to market, and
+164000	171760	improved open source security leveraging the community effort so all the concepts
+171760	179280	that i'm going to explain especially for the armed trusted board boot and partially for the uefi boot
+179920	187760	are applicable on different market segments the first obvious one is the enterprise server networking
+187760	195280	where UEFI is the number one choice then we can also make some thoughts about the embedded and
+195280	203360	mobile client where trusted board boot can be married with some other concepts like verified
+203360	212400	boot or u-boot basically but in general i will talk about on the 8a ecosystem this
+212400	222120	The focus of this presentation is not about M or R-class devices, it's just about A.
+222120	229080	And a couple of well-known pictures from our website, just to point out which is the focus
+229080	230580	of this presentation.
+230580	238520	So the trusted firmware layer with the PBR spec, that's the software side spec, and the
+238520	242160	UEFI layer, so having a UEFI compliant firmware.
+242160	249200	i'm not going to talk about hardware i'm not going to talk about how to create and have
+249760	253600	a tamper-proof protected root of trust there is a separate session
+254160	258800	and other are representatives that will talk about hardware part
+261120	270560	so what are untrusted boot pdb for friends and the uefi secure boot so those are two distinct
+270560	278560	specifications uh that have that defines different keys different certificates but basically they
+278560	285280	have the same goal so verifying the authenticity of the software images so building the chain of trust
+285920	292880	the only point is that they target different bootloader images at different layers so on the
+292880	299280	right you can see a high level picture that we will go into detail about this picture but so
+299280	307280	So RTPB basically spans from the so-called BL1, so the very first firmware executed after
+307280	315600	power on reset, up to the BL33, so the normal world bootloader, while the UEFI Secure Boot
+315600	321140	starts from there and it arrives to validate in the open source image.
+321140	325780	So these are the boundaries basically of the two specs and implementations.
+325780	330500	So if we try to combine them together, we will then achieve a full chain of trust from
+330500	336560	the very first firmware up to the OS.
+336560	338100	So what is ARM TBD?
+338100	347340	So ARM TBD is based on a couple of specs, TPSA and DBBR, that are part of the VSA,
+347340	354460	DBBR test spec suite from ARM, so the base system architecture for the hardware requirements
+354460	359260	and the board boot requirements for the software firmware requirements
+359260	363740	they are available still under ndh but we are working on it
+366140	370860	the trusted firmware implementation is specifically based on the dbdr client spec
+371900	379180	and again we are working internally to revive the spec and maybe provide a server-side
+379180	387580	specification if you are interested in we can catch up later on so our dbd is all about creating
+387580	393900	a chain of trust from the very first rom firmware bl1 up to dbl33 so the normal world here one
+394940	402300	a quick news we are discussing on arm server i see a new change of request to the new 1.1
+402300	411660	sbdr spec that will basically extend the concept of secure boot mandating at least the presence
+411660	417900	of a complete cascading chain of trust we will not mandate any specific implementation that's
+417900	424860	not the purpose we are discussing at least to have a complete chain of trust from the very first
+424860	432540	firmware up to the normal world bootloader tdb and arm plus the pure implementation provide
+432540	439900	a reference example and reference software for achieving this goal but as i said other
+439900	444860	third-party solution will be anyway allowed from for the sddr
+444860	456380	so quick details on how the tbb defines the public infrastructure so it starts with defining two
+456380	464700	implicitly trusted components and hardware protected root of trust was public part the
+464700	473340	public keys stored on some trusted registers and the bl1 that is supposed to be trusted because
+473340	480780	again protected by hardware then every subsequent yellow image we have 3x image
+481500	487580	will come with two certificates a key certificate and the content certificate
+488460	497100	the key certificate basically holds the public key corresponding of to that specific bl3x image
+497740	504060	that will be used to validate the content certificate and the content certificate
+504060	513020	will hold instead the hash of the bl3x image that is then checked against the hash of the
+513020	519740	provided image to verify the authenticity of the image then there are two key pairs
+519740	524940	that are defined we will see them more in detail in the next slides a trusted word key
+525820	533260	and the normal world key pair all these keys and hashes are included as extensions to the standard
+533260	540300	x509 certificates certificates are self-signed there is no need at all for a proper ca here
+540940	548300	because basically we are building the we are establishing the chain of trust by verifying
+548300	554780	the content of the certificates and not by verifying the validity of the issuer of a
+554780	558940	specific certificate. So there is no need for a valid CA.
+561340	565180	This is just an explanation for offline reading. I'm going to skip this one.
+566700	572620	So the big picture of the different bootloader stages. On the left we see the implicitly trusted
+572620	578460	components in the middle the secular world images and on the right the normal
+578460	588380	world bootloader stage bf3 from a key ownership perspective the dpbr spec
+588380	593120	foresees basically that the root of trust public key and the trusted key
+593120	599320	certificates are owned by the oem while the other key certificates are there
+599320	605480	because they allow for delegating the signing authority to other parties for
+605480	611920	example the SOC vendor, the trusted OS vendor or the rich operating system vendors.
+611920	620100	So that's why there are all these kinds of different key certificates. So now
+620100	626500	let's see from a high level point of view but which are the basic steps for
+626500	634340	providing the authentication from bl1 up to bl33 every mage has a color there is an agenda that
+634340	641220	explains the execution level in which this bootloader stage executes so at power on bl1
+641220	650740	is executed the first thing that it does is uh it checks the blue light blue certificate that
+650740	658020	is the bl2 content certificate and it checks the validity of the root of trust public key
+658020	664740	that is enclosed in that certificate and then using this root of trust public key
+664740	670980	it basically verifies the authenticity of this content certificate it extracts the hash of the
+670980	681140	bf2 image and it verifies the bf2 authenticity by checking its edge
+683140	692260	so this is the only code that is executed at el3 up to now then the execution is passed to bf2
+693300	699860	that does not execute anymore at el3 it executes at secure year one so this is done for minimizing
+699860	703780	the code that is executed at year 3 from an authentication point of view
+706020	714100	so now VHQ executes and its job is to verify the authenticity of all the subsequent images
+715140	721620	and how it does it is again it verifies the validity of the root of trust party key that
+721620	729300	is enclosed in that top level gray key certificate that is called by the spec trusted key certificate
+730660	736340	so using this root of trust public key it basically verifies the certificate and
+736340	742260	extracts the two enclosed public keys that are trusted world public key and normal world public
+742260	749460	key as i said these are still owned by the oem from spec point of view
+749460	761860	so then for each bl3x image bl2 first of all verifies the authenticity of the key certificate
+761860	772660	that is corresponding to that bl3x image using the trusted word public key that it has stored before
+772660	785980	then it reads the enclosed bl3x public key that is used to verify the authenticity of
+785980	798180	the underlying light blue content certificate and the content certificate holds the corresponding
+798180	805780	bl3x hash of the bl3x image so then the final step is performing the hash check
+807940	813700	between bl3x provided image and bl3x into the certificate
+817540	826660	so by doing so all the bl3x images are verified and then it's again bl2 responsibility
+826660	835900	running at C3L1 to verify the final BL33 normal world image there are separate
+835900	843280	set of certificates also in this case again for allowing a separation of the
+843280	849520	of the signing authority in this case to an operating system vendor so in this
+849520	861520	case we use the normal word key that is used to verify bl33 key certificate that holds the bl33
+861520	872720	public key used to verify the content certificate and then very final step bl33 image is validated
+872720	886220	against its hash. That's it from a DBV perspective. The execution is then passed through the various
+886220	900220	stages, BL3-1, BL3-2, and so forth, till BL3-3. This is the big picture of the spec. Now let's
+900220	905420	a look at the trusted firmware implementation trusted firmware implements everything of the
+905420	913100	tpbr spec including the no volatile counters that i didn't mention but these are used for
+913100	918380	protecting against rollback attacks the only thing that this doesn't implement yet are the
+918380	925740	trusted debug certificates that are used basically to put the system in a debug mode but if someone
+925740	933100	is interested in please shout and we will push it into our roadmap the trusted board boot works
+933100	941900	perfectly on both ar64 and ar32 on the upstream github code and we have reference example on
+941900	951180	juno and fbp platforms of the tvvb running at ar32 as well i'm not going through all the
+951180	960140	build flags you can go have a look at the user guide on github another big news below involved
+961020	968140	so in the last release well upstream since few months there is an integration of the trusted
+968140	973900	board boot with the arm trust zone crypto cell product specifically the cc712 product
+973900	981460	in order to take advantage of the hardware root of trust and the hardware acceleration
+981460	988000	engines for verifying the images.
+988000	989900	So this is all about DBB.
+989900	994060	Now a quick look at UEFI Secure Boot.
+994060	1002660	So UEFI defines basically an ownership model for the platforms based on three main actors,
+1002660	1010340	platform owner that is usually the odn the oen or the end user the platform firmware it is whatever
+1010340	1018180	uefi compliant firmware and the os or third-party software vendors in brief software vendors as
+1019220	1030020	so uh it defines a known set of key certificates uh and so forth and a signature database so a
+1030020	1037540	database of white and blacklist signatures of allowed and forbidden images so using this framework
+1037540	1044580	the firmware the UEFI firmware running at PL33 is able to authenticate all the UEFI acceptable
+1045540	1052980	and there is also a way through the ownership model to update the signature database from trusted
+1052980	1062900	sources uh we will see that in the next slides very quickly again so uefi secure boot defines
+1062900	1068660	two different keys platform key owned by the platform owner and key exchange keys
+1070340	1077780	the main point of this slide is that the platform key owned by the platform owner is the real root
+1077780	1085300	on trust of the UEFI secure boot because using the private part of the platform key you can
+1085300	1092180	enroll and deploy to the firmware all the public keys either the platform key and the key exchange
+1092180	1102500	keys obviously all those keys based on the UEFI spec must be on tamper-proof storage hardware protected
+1102500	1114260	and as i said the ownership model allows them the platform owner and the software vendors to
+1114260	1122180	update this the database of the signatures uh with white or blacklist through the uefi runtimes
+1122180	1130260	of variable api from trusted sources so using the public part the public portions of the key that
+1130260	1144580	have been deployed into the firmware and then very obviously as one could expect these signatures
+1144580	1153220	are used to verify and to run or prevent execution of specific ufi acceptables so
+1153940	1159380	all the images that comes with a forbidden signature or with an unknown signature in
+1159380	1167940	light gray are not allowed to be executed while the all the images that comes with
+1167940	1175140	the green signatures are obviously executed so what is the status on arm what the status
+1175140	1181060	on arm is exactly the same at the moment as r explained one and a half year ago in i think
+1181060	1190980	last vegas 2016. so the outstanding problem was okay how can we update the variables through the
+1190980	1199860	secure world so now one and a half year later we can provide a mechanism for doing that so we have
+1199860	1207540	and we will i will show you in the next couple slides a way to uh from a spec perspective
+1207540	1210680	implement a secure variable access
+1210680	1212660	and update the UEFI variables.
+1217220	1220380	So, this is a picture that basically puts all together
+1220380	1221840	the pieces that we saw before.
+1222120	1223680	I'm not going to spend too much time,
+1224140	1225820	so all the different bootloader stages
+1225820	1230320	are verified either by the TBD spec and implementation
+1230320	1233820	and subsequently from the UEFI firmware spec.
+1234760	1237180	But here is the picture that I would like to land
+1237180	1244460	two so how to access secure variable through the secure world so as promised i'm not going
+1244460	1251420	to talk about hardware so i suppose just that the keys are stored in some sort of secure storage
+1251420	1259580	hardware protected uh but how can we access those keys and update them from the normal world
+1259580	1267120	so that the OS running in the normal world will call as usual the runtime set variable API
+1267120	1274840	that we go into the firmware and then with the implementation in the firmware of the RMM interface
+1274840	1280260	we can go down into the trusted firmware running a PL3.1
+1280260	1282840	and here is the new part
+1282840	1286160	so in orange you will see the secure partition manager
+1286160	1288820	that is a functional block
+1288820	1292740	that basically instantiates, manages and deletes
+1292740	1296560	secure partitions running in secure EL0
+1296560	1300140	please note that this is a framework
+1300140	1303540	that is in common with the RAS story
+1303540	1306480	that someone else will explain during this connect
+1306480	1309240	so this is the very same exact framework
+1309240	1311360	RAS is one use case
+1311360	1314260	secure variable access is another use case
+1314260	1316940	using the same functional pieces altogether.
+1318540	1322980	So the secure partition manager in BL3.1 will route this request
+1322980	1325940	and will instantiate a secure partition
+1325940	1329020	that then will handle and will have a driver
+1329020	1333780	to access the variable storage somewhere on hardware tamper proof.
+1336540	1342400	So the various pieces are currently in development within ARM
+1342400	1348840	and they will be upstream very soon and we will also work internally to provide
+1348840	1353980	a reference example of all the boot flow, the secure boot flow including secure
+1353980	1359980	variable access on one of our system guidance platform and we are going to
+1359980	1365440	upstream also the support for this specific system guidance platform with
+1365440	1369960	all the surrounding patches to EDK2, EDK2 platform, untrusted firmware and so
+1369960	1383520	support for implementing all this story here very very quickly just to mention other possible
+1383520	1393960	solution to implement verified boot well on the mobile client side UEFI is kind of nonsense
+1393960	1399880	to some extent so android has its own concept of verified boot uboot has its own concept
+1399880	1405560	all of them have concepts of uh channel trust hardware root of trust and so on
+1406680	1414600	uh a provocation the last bullet point so what if we think of extending the work that has been
+1414600	1423400	done by the suzer guys so putting ufi on top of uboot what if we extend it trying to implement
+1423400	1428520	the set variable and get variable apis on uboot
+1428520	1434040	and maybe what if we try to plug shim over a uefi enabled uboot for handling
+1434040	1438600	the key management so this will introduce a lot of problems
+1438600	1444760	that we will have to address especially on the embedded devices
+1444760	1449560	but the end goal could be ideally to have a convergence of the embedded and
+1449560	1456120	enterprise secure boot flows and secure boot apis and these are some folks that we are doing internally
+1459720	1464760	last slide which are the plans so as i said we are working internally
+1465400	1468840	to implement and then open source a reference platform software
+1470600	1475240	well apart of the different pieces in our firmware and vdk2
+1475960	1479640	also to provide the complete boot path on the system guidance platform
+1480760	1485320	actually it should be brooks that the enterprise server platform
+1487400	1494360	in the future we are thinking of uh okay as i said investigating a new boot based solution
+1494360	1501320	but also how to combine the firmware update story so arm trust the firmware has its own
+1501320	1508360	firmware upgrade uefi has recently defined the sign capsule update for secure update so how to
+1508360	1514840	combine the tools and have also a proper secure firmware update mechanism so these are all thoughts
+1514840	1520840	for the future on a specification perspective i'm not specification guy there are different
+1520840	1528040	our representatives here talking about spec but we are talking about reviving the tbbr
+1528040	1535060	and putting some mentions in the SBBR and as I said the possibility for having a
+1535060	1540200	server-side TPSA-TBBR that will take care of so other concepts like the TPM,
+1540200	1548140	DCRs and measure boot that are currently not covered by ARM specs in general and
+1548140	1554260	there is one outstanding question on the table so what is the proper level of
+1554260	1560700	standardization required by ARM on the pre UEFI environment for the trusted
+1560700	1567660	board would solution so we want still to allow for differentiation on that level
+1567660	1575480	but we also see a lot of security reports that sadly demonstrate how some
+1575480	1582160	flows implementation on commercial products allows for running arbitrary
+1582160	1588320	code at year three so compromising the entire trusted execution environment so and that's
+1588880	1593760	probably something we would like to avoid at least providing some guidance on the
+1594800	1600960	apis that could be implemented and where to implement those apis in which at which execution
+1600960	1606640	levels but these are all open thoughts so if you are interested in get in touch
+1606640	1614640	And that's it. So I am just referring to that specific session for how you are root of trust.
+1614640	1627640	That should be on Thursday, I think. That's it. That's all that I have. Any questions?
+1627640	1643640	Yeah, right now your checks for validating images only has one kind of hash, it doesn't
+1643640	1644640	have to allow for it.
+1644640	1647640	I don't think it allowed for a Shopify 12 or HMAC.
+1647640	1652640	I was wondering if you guys were thinking of adding one to HMAC, having more types of
+1652640	1656640	validations that you support.
+1656640	1663100	Okay. I don't have the answer for it, so we can follow up later on. Maybe Dan can answer.
+1663680	1667500	Can we wrap the microphone to Dan? That's the tech lead for our first firmware. Thank you.
+1668960	1675180	Hi. The answer to firm by reference implementation is just kind of following what the TBBR spec says.
+1675180	1682080	So if the TBBR spec was updated to include other stronger crypto, then we'd certainly follow.
+1682200	1685340	But there's no reason why we couldn't add that or someone couldn't contribute that.
+1685340	1692340	But anyway, we're not motivated to do that because it's not expected.
+1692340	1699340	A related question. I noticed you guys use a lot of the x509 extensions. Why not use them?
+1699340	1712340	In some of the cases it seems like the same rigor 509 rigor fields. Why add all these extensions to the existing fields?
+1712340	1721340	That again comes to the specification does talk about that. I guess the specification
+1721340	1727340	had a lot of design information as well as specification information so it could have
+1727340	1734340	a bit more freedom perhaps to do things in a different way there but it works.
+1734340	1740340	Well that's anyway a good moment for discussing any updates on that spec if you want
+1740340	1748100	because as i said so we are thinking of reviving and updating that spec that's becoming quite old
+1748100	1754580	and also providing a server-side equivalent so if you have any specific needs to target
+1756260	1758820	we can discuss it and try to push it into the spec afterwards
+1760580	1765940	the latest is 2013 is there any more spec than that sorry the latest spec i see is from 2013.
+1765940	1768940	No, it should be 2015 or...
+1768940	1770940	That's client spec, it's 2015.
+1770940	1771940	Yeah.
+1771940	1774940	And the server spec hasn't been updated since 2015.
+1774940	1778940	Oh no, but the server spec basically, it was just an experiment.
+1778940	1782940	It has never been finalized properly.
+1782940	1787940	So it would be basically to rewrite it from scratch, from the beginning.
+1787940	1792940	And we are working with the architecture guys to start the discussion around it.
+1792940	1801940	Any other questions?
+1801940	1805940	Sorry, one more.
+1805940	1809940	I know it's your slide on secure partition variable access.
+1809940	1814940	You didn't have anything like Opti or secure OS in that picture.
+1814940	1820940	Is there your plans to actually do it without having all that other infrastructure?
+1820940	1832940	Good question, thank you. So currently this model does not allow for a combination of different
+1832940	1842940	applications, secure applications to be run in the secular world, but so you cannot have in parallel running a trusted OS together with a secure partition at the moment.
+1842940	1849940	But we are working for extending this model, allowing for multiple secure partition to be run
+1849940	1858940	and depending on the use case you can have as well as OPT running in parallel with a secure partition
+1858940	1864940	and then you will have to decide who is doing what, so who is accessing the secure variable and who is not.
+1864940	1872460	but so those are in our plans yeah so for the early 2018
+1875900	1882700	why not allow the simpler model of just loading opt-t at boot and making the
+1882700	1887660	secure variables of a secure service
+1887660	1896660	That's a good question. So UEFI plus OPT on a server enterprise platform?
+1896660	1904660	Well, I still wonder why we have to differentiate between client and server as much as...
+1904660	1909660	Let's put it this way. We had this infrastructure almost really from the...
+1909660	1913660	well, for implementing the RAS program and the RAS use case.
+1913660	1929120	So you can end up having two secure partitions, one that is handling the error, firmware first error handling for the RAS story, and another one in parallel that is implementing secure parallel story.
+1929120	1943120	So I know that there are other parallel developments in ARM that basically try to do the same with OPT.
+1943120	1951120	We have still to marry the two developments and decide what would be the best choice depending on the market.
+1951120	1961120	So if you're putting this stuff on a server rather than on a mobile client, maybe the solution will be different.
+1965120	1967120	You're over time.
+1967120	1969120	Thank you.
+1969120	1971120	Thank you to all.
+1981120	2011100	Thank you.

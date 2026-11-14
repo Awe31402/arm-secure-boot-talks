@@ -1,0 +1,292 @@
+start	end	text
+0	29980	Thank you.
+30000	39600	oh okay okay so we'll start now uh the topic of this presentation is uh overview of secure boot
+40320	45120	state in the arm-based socks and this is the second edition of this uh presentation
+47520	51840	no mic here i like i'm not it's only for the video
+51840	59240	Okay. So, the first edition was taking place like two years ago.
+59240	62080	So, now we want to present some update from
+62080	66740	the research that we have that two years ago.
+66740	69080	Maybe can you speak up a little bit?
+69080	69500	Okay.
+69500	70880	We can't hear you.
+70880	77080	Okay. Sorry for some.
+77080	82500	mm-hmm a little technical issue
+96080	98880	sorry for that
+98880	113320	Okay, so it is an agenda for this presentation.
+113320	121320	So first, I will tell you who I am and where I work.
+121320	126620	So say a couple of words about our company.
+126620	138680	Next, I will just present shortly what do you mean by Secure Boot in the case of ARM SOX and present how the typical implementation and workflow works.
+139800	144920	Later, we will show the results from the first edition, so from the 2028.
+144920	156080	then we will discuss the two cases that we that we check for this edition so the Mediatek and the
+156080	163040	Rockchip cases next we will summarize the whole presentation so try to look what's the most
+163040	170600	difference between those two editions of the presentation mmm and and with some Q&A session
+170600	180920	So, this is me, I'm Tomasz Żyewski, and I'm an Embedded Systems Team Leader at 3MDEP.
+180920	184740	I work there over three years now.
+184740	189900	Mostly I work on the embedded systems built with the Yoctob project.
+189900	197640	So I try to integrate the update system and the OS creation for the embedded devices.
+197640	199440	Because I work with the embedded devices,
+199440	207300	I try to touch different areas of the whole life of the devices.
+207300	212400	So one of the things I work with is also the system security.
+212400	217400	This is the topic of this presentation.
+217400	222620	So here a couple of words about our company.
+222620	228940	We are from Poland and based in Gdansk.
+228940	234380	We are the core book license service providers since 2016.
+234380	238840	Also, UFI adapters since 2018,
+238840	240380	the YOKTOB participants,
+240380	247120	so this is the area which I work with from 2019.
+247120	252400	Also, the consultants for the FWPD project,
+252400	256140	and IBM OpenPower Foundation members.
+257760	261460	Okay, so now let's explain first what do you mean by
+261460	265580	the secure boot in the context of this presentation.
+265580	269640	So here we are focused on the ARM context,
+269640	274620	which is like the feature of the boot room,
+274620	277800	one of the features that boot room has.
+277800	281360	Maybe we should call it more like
+281360	286000	the verified boot because the case here is that when we
+286000	293460	start the firmware, the next steps of the loaded images
+293460	294820	are verified.
+294820	303080	The signature is verified by the previous part of the firmware.
+303080	306220	So that's why we should call it the verified boot, maybe.
+306220	319220	So, we need to use some private key to find the binary that we put into our machine.
+319220	326220	Then we also need to take the public key from that private key and put it also there.
+326220	334220	So, when we start it, we will be able to verify the signature and decide if it should be loaded or not.
+334220	338700	In ARM context,
+338700	344040	we assume that the boot ROM is our root of trust.
+344280	349360	We need to take that assumption because most of them are closed source.
+349360	352300	Probably it would be better if they will be open sourced,
+352300	355660	but it is what it is.
+356880	360280	Basically, the meaning of the secure boot can be
+360280	361900	different for any given architecture.
+361900	365400	So, if you will be talking about the x86,
+365400	369600	that would be a different scenario.
+370200	374340	Okay, so this is the typical implementation.
+374340	379580	We have the public key that needs to be written inside our SOC.
+379580	387640	Different vendors will have some different way to achieve that.
+387640	389140	So, we can, for example,
+389140	397380	fuse them using electrical fuse so one time write them in our SOC and later use it every time that
+397380	406100	we start our firmware there is also a possibility of for the OTP registers so those are the one-time
+406100	416180	programmable so as the name says also it can be used only one time and those one of those two
+416180	424580	opportunities allow us to make from our boot room a root of trust which we later
+424580	433640	use to expand it to the chain of trust next components can use like different
+433640	443240	keys so in case of secure boot we take we talk about the step between the
+443240	448280	bootrom and the bootloader and here we have some one key that was used to assign
+448280	453320	the binary and that public key that would use to verify it but the later
+453320	457160	steps of starting our machine can use different keys
+459560	461160	and yeah so that would be it
+464760	467880	so typically we have like let's say our host machine
+468760	473640	and that should be some secure location and our target device so on our host machine we
+473640	480360	generate some private keys we build binary and use specific tool to sign them
+481960	488600	and later we need to take the public key part of that keys also define a binary and put it in the
+489240	495880	in the target device and then try to verify it yeah so if the verification will be successful
+495880	497880	then we will just boot another step.
+497880	501880	If not, then specific things can happen,
+501880	506880	depends on the vendor that we are using.
+507200	509880	Also, let's say maybe a couple of
+509880	514220	words about what it is to assign the binary.
+514220	518640	Basically, what is common between all the vendors probably is
+518640	524160	that a sign-in binary means that we take the original binary
+524160	527400	and add some header on top of it.
+527400	535440	This header contain the digital signature and
+535440	540340	also some specific format at the start,
+540340	543900	which can be different across some vendors or can be
+543900	547460	also different within one vendor,
+547460	550700	but when we are using different signing tools.
+550700	554640	So, if we try to sign our binary,
+554640	556320	we can always try to dump
+556320	560800	the first couple of bytes of our signed image
+560800	565620	and check if everything goes as expected.
+565620	570060	This is a quick recap from the last edition.
+570060	574360	So, we look at the 11 cases,
+574360	577180	five of them like the NXP,
+577180	586060	IMX and Layerscape, STSTM, Xylenix, and NVIDIA looks like were fully open-sourced, let's say,
+586860	594140	and there was non-NDA problems with them, so everyone could try to take the documentation,
+594140	600620	the needed fusing and signing tools, and try to implement the Secure Boot on them.
+600620	612060	We have a couple of cases where there are information that there is some secure boot to enable on that given machine, but it is under the NDA.
+612840	621480	So, we're talking here about the Marvel Armada, Texas Instruments, Sitara, Qualcomm, and Microchips.
+621480	635740	And also, we talked about two thoughts from the Chinese vendors like Rockchip and Allwinner, where some documentation was there, another were missing.
+636600	643480	Also, there were some information about tools, but we were not able to find them or maybe use them correctly.
+643480	654240	Okay, so now I will go through three or four vendors that were listed from the last edition
+654240	658540	and to talk about the differences that was between those two years.
+659040	661440	So now let's start from the NXP.
+662500	672700	In these cases, I think this is the easiest way to start with the secure boot on the ARM
+672700	678700	socks, because the full documentation is there. All documentation is probably like,
+681580	690380	all documentation is publicly available, so everyone can use it. We have the HAP4,
+692220	701100	so the high assurance boot mechanism on the platforms that are the IMX 50, 53,
+701100	705940	6, 7, and 8M. The application node is here.
+705940	709460	The only difference between here and there is that
+709460	715720	those applications are under the free registration to the site.
+715720	719860	The same is for the AMX8 and AMX8X,
+719860	722860	which uses the AHIAP mechanism,
+722860	725480	so Advanced High Assurance Boot.
+725480	733560	The same for CoreQ, and as you see here, the signing tool are available after the free registration.
+735880	744680	For Marvel Armada, we can look at the manuals that are available on their sites.
+746040	753560	We saw that for the 38 and 39X families, we have some information that NDA is needed.
+753560	759800	for other families like I believe 8k there is only information that there is
+759800	766100	a secure boot available but nothing else there at the last edition we present
+766100	770620	that in the u-boot repositories we can find some information about how to
+770620	777960	implement the secure boot on the Marvel Armada but now it is not there it is
+777960	785880	only on all the releases, so this is another difficult step that
+785880	790200	needs to be taken to find those informations.
+792660	797340	But yeah, if you will just use this from the 2018 branch, we'll
+797340	800820	see the information how to implement the secure board, but
+801160	805080	yeah, still this is only the theoretical knowledge and there's
+805080	808540	know like step-by-step solution how to achieve that,
+808540	812840	so probably there's room for mistakes.
+813400	820100	In VDategia, another quick update.
+820100	823520	Last time we saw that there are
+823520	827520	some documentations and tools available.
+827520	831680	We checked that within last year and it looks
+831680	838960	like the documentation is some kind of uncertain because it says in one point it tells that
+839760	845760	the security is available and they also provides like the flashing rules the script called flash
+845760	851520	sh but in the other place they just say that the secure boot will be available in the future
+851520	859520	not exactly no nobody exactly know when the future will be but yeah that would be it
+859520	865760	also about fusing there's additional script for that but documentation of it
+865760	870920	is also some kind of updated there is also like one thread in the form of
+870920	878460	Nvidia where someone tried to use it to fuse keys on its platform and it caused
+878460	883280	the platform to break because it looks like not every board can be fused and
+883280	888440	before we execute that we just need to check the serial numbers because some of
+888440	897800	them are supported, so not. Also, update on Alwinner. So, still we think that there is
+897800	903400	no official documentation about the Alwinner SOX which will tell us about the Secure Boot,
+903400	909300	and also no official documentation about the Secure Boot itself. But we found some interesting
+909300	917340	case on the forum where someone was able to use the Nanopi Neo with Alwinner H3. And
+917340	922940	he there provides like all the useful links there's like the 10 or 15 of them or also the
+922940	931980	whole list of the verification process uh with the link to the sanction tools repository which
+931980	938300	contains some tools which which later which need to be used in order to find the binaries and also
+938300	951580	fuse the SOC. The one vulnerability there is that, in any case, when we—oh, sorry,
+951580	959820	yeah, the one vulnerability is here that if we try to start our firmware, which is signed,
+959820	965740	and the verification fails, the platform always goes to the cell mode, which is some kind like
+965740	976060	the debug mode uh-huh and this debug mode can be accessed via the usb port so if the verification
+976060	983740	fails someone would or could always like plug in the usb start from minicom and then read everything
+983740	990620	from the fuses or maybe even wipe them so the solution there for that was just to destroy the
+990620	996540	usb lines data lines on that given port so even if the platform goes into the cell mode
+997340	1005100	no one will be able to just read anything from it okay so now the mediatek case
+1006540	1012620	documentation is provided on the gitlab pages it is based on the yokto project
+1012620	1022220	like project so the steps there needs to be done inside the yorkto project build system to achieve
+1022220	1031180	the signing to achieve the implementing the secure boot but basically as in other arm socks the boot
+1031180	1038940	rounder is like the root of trust and later we just achieve it using other mechanism to
+1038940	1045660	to have the whole chain of trust so after secure boot we have the tfa trusted board boot and then
+1045660	1051500	we can use the u-boot feed verified boot to load our kernel image so if we have all those steps
+1051500	1066460	then we have like whole boot process verified uh yeah and it also was shown in a couple of
+1066460	1079460	in a couple of reports that the Mediatek boot room has some vulnerability which if we like power it in some special scenario
+1079460	1086460	then the boot room may just skip the process of verification the image and still load the firmware
+1086460	1095340	the firmware so it looks like even if we like have the public key in the fuses and also the
+1095340	1102620	firmware signed a public key in the fuses and we provide the unsigned image and like use this
+1102620	1110940	vulnerability we will be still able to to boot our our platform this is a short recap how the
+1110940	1119420	secure boot looks on the mediatek so we have the bl1 step which is like the boot home which load
+1119420	1125740	the hashed based on the root of trust public key so this is the public key that we put in the fuses
+1127740	1134140	and calculates also the sha of the signatures of the bl2 so this is like the next step loaded
+1135020	1141580	After that we compile those two values and if everything is okay, we go next and the same
+1144620	1149960	Yeah, and then we go like with the then we load the signature from the BL2
+1151080	1159600	Mmm, and also calculate the shot of it made the comparison and if everything is once again, it's okay. We boot the the next steps
+1159600	1169160	okay and here's the process of enabling the secure boot it is not clear from the
+1169160	1174480	documentation on which socks the secure boot can be enabled the documentation
+1174480	1185720	mentioned the MT8365 and MT683695 ones different socks may have different FUs
+1185720	1194300	indexes so this it isn't really like we need to check those before we try to
+1194300	1200580	fuse our our fuses in those socks but unfortunately those information is
+1200580	1206020	provided with NDA in the process of enabling the secure boot we need to
+1206020	1212940	create the two keys private keys and provide them to our build system which
+1212940	1219720	signed the bl2 load firmware and also the something called the download agent
+1219720	1227380	which is later used by additional proprietary tools to flush the image
+1227380	1235920	inside our our platform which is also described like here so we have the f
+1235920	1242820	use writer tool this is another tool provided with the NDA only which can be
+1242820	1248660	used to check the Secure Boot state on our platform and check if the download
+1248660	1256900	agent authentication bits are set. If they are not set, we just need to set them
+1256900	1264180	and then provide the public key, which will be fused on the key hash zero field.
+1266700	1271900	And after that, we will just sign our firmware and use this public key to verify it.
+1272820	1279780	Okay, so now let's go to the Rockchip case.
+1279780	1286380	The public key here can be stored in FUSES or in the OTP, and it depends on which SOC
+1286380	1290960	we are using.
+1290960	1298700	If the verification of loaded binary will be successful, then we'll just extend our
+1298700	1306620	rule of trust so the boot rom as in the other arm core socks to the chain of trust and later
+1307340	1313340	in case of log chip you can use the verified boot mechanism a fit verified boot mechanism
+1314300	1320140	from the spl to the u-boot and from the u-boot to kernel to provide the whole chain of trust
+1322060	1327980	so basically to establish it we need to like once again generate some private private and public
+1327980	1334300	keypire, burn the public key into the FUS or OTP registers, depends on which
+1334300	1340780	SOC we are using, then find our firmware called EDBLoaderImage in case of
+1340780	1347900	Rockchip, which is like the uBoot TPL plus SPL merge into one file,
+1348220	1352940	then configure verified boot in SPL and uBoot, which means that we will use the
+1352940	1357420	fit images to verify it from the SPL to uBoot and from the uBoot to kernel,
+1357420	1365260	and just flush our signed images documentation for work chip and as well for our winner is like
+1365260	1374380	hard to find and if any any find if we find any uh probably it will be outdated or really short or
+1374380	1386620	just not not such useful at first so here uh we have a diagram of signing the whole
+1386620	1392920	of enabling the secure boot but I will basically it is something I just
+1392920	1397840	described on the previous slide and sorry for that but because of time we'll
+1397840	1404080	go just need to to skip description of it and now we can talk about signing code
+1404080	1410320	in Rockchip so code can be signed using one of the two tools the erika sign
+1410320	1413980	tool which can be started on Linux or secure boot tool which can be
+1413980	1420860	on Windows. Linux tools can be found on the air cabin repository. Windows tools
+1420860	1429440	was, a couple days ago, some time ago, was on the repository called
+1429440	1436540	Cooltools, but now we are not able to find it. For some reasons, the Rockchip
+1436540	1443580	based repositories are maintained in such way that some things may be missing
+1443580	1449660	after some time. But if you use the ericassign tool we can just generate
+1449660	1454220	the signing keys and those keys can be used later with the Linux or Windows
+1454220	1460580	tools. And if you use it and also the ericassign repository provides the
+1460580	1467180	any files which are the the files that can be used to create the Danish mini
+1467180	1476080	loader used later to fuse our our keys in in the firmware and basically any
+1476080	1481520	given firmware that we want to sign and use in our socks can be also signed with
+1481520	1490020	those two tools mm-hmm there is another tool just to bind the fuses and we have
+1490020	1497920	for the effuse tool, which is only for the Windows machines.
+1497920	1503060	It turns out that when we're burning the effuses on the rockchip socks, we also need
+1503060	1512560	to provide the voltage for one of the pins of the sock, so it is not visible here, but
+1512560	1528720	there should be like VCC, VE, a fuse pin, which needs to be powered up when we want to fuse the
+1529360	1536480	keys in our SOC. So for that we need to find some pin that is there and provide the power by
+1536480	1543240	ourselves or maybe our our platform has some special like circuit just to enable
+1543240	1548700	that. Also this information comes from the another documentation that are hard
+1548700	1555480	to find. This is some summarize of enabling the secure boot so we need to
+1555480	1560000	create loader using the boot merger script that is in the ERCA bin
+1560000	1566460	repository. Next we create the keys with ERCA sign tool. Next we need to sign the
+1566460	1573660	loader with secure boot tool because from what we know now only sign it with
+1573660	1579180	that tool binaries can be later used on our socks. We try to sign with the ERCA
+1579180	1585800	sign tool and it doesn't work and now it like looks like this can be hard to
+1585800	1592460	achieve, because there is no way to download the Securiboot tool, from what we know now.
+1592460	1601300	Then we need to use the fuse tool to fuse our public key in Socks, and use another tool
+1601300	1606540	called the ERCA develop tool, which is in the ERCA bin repository, just to load the
+1606540	1612920	scienet loader into our platform and have Securiboot enabled.
+1612920	1623380	Here's a link for the blog post which describes all of that, what we've done with the ROGchip
+1623380	1625500	platforms.
+1625500	1630760	So this is the summarize of where we are after the second edition.
+1630760	1638360	The changes are here about the NXP platforms where it looks like we now need to register
+1638360	1646280	to get the SOX reference documentation the NVIDIA Tegra looks like the
+1646280	1652900	documentation is not really some is uncertain and may be outdated the rock
+1652900	1657320	chip one we know now that it can be achieved but still the documentation is
+1657320	1662000	not the best quality the same with the all winner and for the media tech we see
+1662000	1668180	that NDA is needed to achieve the Secure Boot.
+1668180	1671880	So, this is the summary of the presentation.
+1671880	1673640	Looks like our knowledge is
+1673640	1675940	expanded over the last two years.
+1675940	1678660	We, for example, know now how
+1678660	1681680	to enable the Secure Boot on the ROG chip.
+1681680	1684440	Still, the general principles
+1684440	1687240	is common for all the vendors,
+1687240	1691720	so we want to authenticate image before we load it.
+1691720	1694300	We have some private key to sign the firmware,
+1694300	1697020	we need to fuse the public key inside the SOC,
+1697020	1701520	and the boot room is still fit on us the root of trust.
+1701520	1704700	All cases use the SHA-2456 as
+1704700	1707580	a hash function for digital signatures.
+1707580	1710300	And we see that more and more cases,
+1710300	1714320	the documentation is under the NDA or
+1714320	1719040	the quality of it is really not the best.
+1719040	1723980	Okay, here's the way of how you can contact us,
+1723980	1727060	and thank you for that presentation.
+1731800	1734440	I think we are a little after time,
+1734440	1738700	or maybe one question if there is any.
+1739400	1742480	Yes? Okay.
+1743440	1748180	The question is about an NXP secure board.
+1748180	1757300	you have a possibility to use ROM in your bootloader to check the fiber blocks.
+1757400	1762280	So you can use the secure boot of NXP for more components, like Fit and Hubot and so on.
+1762280	1767920	Do you know if any of those new or the chips you have analyzed on other platforms have similar things,
+1768100	1772800	that you can call the ROM and use it as a route for trust of everything?
+1772800	1787900	Okay, so the question was that the NXP provides the possibility to use the boot run to verify other parts of the firmware loaded in the whole process, and the question is if other vendors also provide such things.
+1788320	1797020	From what we know, no, this is only like the NXP case, and yeah, basically that's the answer.
+1797960	1798960	And yeah, maybe this one.
+1798960	1819260	How is, given that you analyze so many vendors, how is the support among the vendors for different types of key with different trust boundaries, like, for example, like the delegation key for, like, the production in Asia, and then you would remove that key using rowback levels and use cases like this?
+1819260	1830600	Okay, so the question was, I believe, if we try to somehow, if there are any process
+1830600	1834800	to, in order to change the key used to sign the firmware, yes?
+1835580	1838920	To have multiple keys, like you would hand out one key.
+1839100	1843420	Okay, to have like multiple keys to one person and to another team, to another company maybe
+1843420	1845060	even, and then later revoke it.
+1845060	1857300	I believe that this will be depends on if we have some mechanism in our socks to provide
+1857300	1864500	more than one public key yeah but as we said those are one time only flashed in the socks
+1864500	1869780	so if there is only one place then I think that it will be only one the private key used later
+1869780	1884780	for the verification okay thank you

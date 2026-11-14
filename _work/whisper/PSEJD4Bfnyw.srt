@@ -1,0 +1,868 @@
+1
+00:00:01,000 --> 00:00:11,000
+Hello everyone. My name is Michael and I will tell you how to use secure boot on
+
+2
+00:00:11,000 --> 00:00:18,120
+on the ROC chip RK3588.
+
+3
+00:00:18,120 --> 00:00:20,600
+And I have technical difficulties.
+
+4
+00:00:35,000 --> 00:00:40,980
+For secure boot on RK3588, you have to generate a key.
+
+5
+00:00:40,980 --> 00:00:48,020
+sign your image burn the hash of the key to your hardware and that's it secure boot is enabled
+
+6
+00:00:48,740 --> 00:00:49,940
+thank you for your attention
+
+7
+00:00:56,260 --> 00:01:03,860
+i see that i have some time left so maybe we look a bit closer and i will tell you about how secure
+
+8
+00:01:03,860 --> 00:01:10,800
+Secure Boot works on RK3588, how to actually assign the firmware image, how to enable Secure
+
+9
+00:01:10,800 --> 00:01:17,320
+Boot, and finish with some recommendations and further resources for reading into it.
+
+10
+00:01:17,320 --> 00:01:19,380
+That's me.
+
+11
+00:01:19,380 --> 00:01:24,700
+Secure Boot or Verify Boot is a set of verification processes designed to ensure the integrity
+
+12
+00:01:24,700 --> 00:01:28,420
+and legitimacy of the firmware running on a device.
+
+13
+00:01:28,420 --> 00:01:32,200
+I stole that definition from the Rockchip Secure Boot Developer
+
+14
+00:01:32,200 --> 00:01:33,860
+Guide.
+
+15
+00:01:33,860 --> 00:01:38,560
+So for Secure Boot, we have some image.
+
+16
+00:01:38,560 --> 00:01:43,780
+In this case, I have a Rockchip image with a key in it,
+
+17
+00:01:43,780 --> 00:01:47,180
+a signature on that, and a bootloader inside.
+
+18
+00:01:49,780 --> 00:01:54,560
+The SOC during boot, it runs in boot ROM.
+
+19
+00:01:54,560 --> 00:01:59,320
+For Secure Boot, it reads the hash, we mentioned it before,
+
+20
+00:01:59,320 --> 00:02:01,080
+from Secure OTP.
+
+21
+00:02:01,080 --> 00:02:03,220
+That's eFusers that you burn once,
+
+22
+00:02:03,220 --> 00:02:06,560
+and then you can't change them anymore.
+
+23
+00:02:06,560 --> 00:02:11,560
+On RK3588, these are only accessible from the Secure
+
+24
+00:02:11,560 --> 00:02:13,620
+World or EL3.
+
+25
+00:02:13,620 --> 00:02:17,900
+Details don't matter, but that will be important later on.
+
+26
+00:02:17,900 --> 00:02:22,320
+It compares the hash in the OTP area
+
+27
+00:02:22,320 --> 00:02:27,960
+with a hash over the public key that's contained in the image.
+
+28
+00:02:27,960 --> 00:02:34,080
+Use that public key to verify the signature of the image.
+
+29
+00:02:34,080 --> 00:02:38,440
+Use a hash in the header to verify the bootloader
+
+30
+00:02:38,440 --> 00:02:41,560
+and execute the actual bootloader.
+
+31
+00:02:41,560 --> 00:02:43,440
+We can't do anything about this.
+
+32
+00:02:43,440 --> 00:02:47,880
+So everything we have here is in the boot ROM provided
+
+33
+00:02:47,880 --> 00:02:49,100
+by Robchip.
+
+34
+00:02:49,100 --> 00:02:52,080
+And we don't have a chance to change it.
+
+35
+00:02:52,080 --> 00:02:53,380
+We have to trust the boot ROM.
+
+36
+00:02:53,380 --> 00:02:56,280
+We have to trust the OTP that it's really
+
+37
+00:02:56,280 --> 00:03:01,920
+writable only once and that it's not changeable during boot.
+
+38
+00:03:01,920 --> 00:03:07,380
+What we can change is how we get the key, the signature,
+
+39
+00:03:07,380 --> 00:03:12,720
+and the hash into the OTP area.
+
+40
+00:03:12,720 --> 00:03:17,760
+So in the factory or on your build server,
+
+41
+00:03:17,760 --> 00:03:20,480
+you have a key pair.
+
+42
+00:03:20,480 --> 00:03:23,380
+And from there, you take the public key
+
+43
+00:03:23,380 --> 00:03:26,400
+and put it into the image and use the private key
+
+44
+00:03:26,400 --> 00:03:27,920
+to sign the image.
+
+45
+00:03:27,920 --> 00:03:30,560
+The thing that has to be secret in this case
+
+46
+00:03:30,560 --> 00:03:34,340
+is the private key you see in purple on the slides.
+
+47
+00:03:34,340 --> 00:03:38,940
+And you have to somehow get the hash of the public key
+
+48
+00:03:38,940 --> 00:03:40,820
+into your device.
+
+49
+00:03:40,820 --> 00:03:43,340
+That's also something that you have
+
+50
+00:03:43,340 --> 00:03:44,800
+to do in a secure environment.
+
+51
+00:03:44,800 --> 00:03:47,040
+So it has to happen in your factory.
+
+52
+00:03:47,040 --> 00:03:50,920
+you have to have full control over this step.
+
+53
+00:03:50,920 --> 00:03:53,460
+Otherwise, someone may change and write
+
+54
+00:03:53,460 --> 00:03:55,140
+some different hash into your device,
+
+55
+00:03:55,140 --> 00:03:56,920
+and secure boot is broken.
+
+56
+00:04:00,540 --> 00:04:05,500
+So first, let's look into how image signing works.
+
+57
+00:04:05,500 --> 00:04:09,240
+Of course, ROGchip provides a downstream solution for that.
+
+58
+00:04:09,240 --> 00:04:13,880
+It uses MKImage to generate the firmware image.
+
+59
+00:04:13,880 --> 00:04:17,880
+And then you get the RK sign tool, which
+
+60
+00:04:17,880 --> 00:04:23,340
+generates the key pair and allows you to assign an image.
+
+61
+00:04:23,340 --> 00:04:27,940
+This approach is supported by Rockchip, of course.
+
+62
+00:04:27,940 --> 00:04:31,860
+But this RK sign tool is binary only.
+
+63
+00:04:31,860 --> 00:04:35,560
+So we don't know what's going on in there.
+
+64
+00:04:35,560 --> 00:04:37,200
+We may trust it.
+
+65
+00:04:37,200 --> 00:04:39,400
+We are not sure.
+
+66
+00:04:39,400 --> 00:04:43,840
+The RK-Sign tool is also a bit clumsy to use.
+
+67
+00:04:43,840 --> 00:04:48,280
+So you run it several times, and in the background
+
+68
+00:04:48,280 --> 00:04:50,960
+it generates a configuration file.
+
+69
+00:04:50,960 --> 00:04:54,420
+So that's not something that's easy to integrate
+
+70
+00:04:54,420 --> 00:04:57,380
+into your build tools or your build chain.
+
+71
+00:04:57,380 --> 00:05:01,880
+And I'm personally not sure if the RK-Sign tool supports
+
+72
+00:05:01,880 --> 00:05:02,740
+HSM support.
+
+73
+00:05:02,740 --> 00:05:05,200
+So I saw a few hints, but I never
+
+74
+00:05:05,200 --> 00:05:10,060
+was able to actually work with some HSM.
+
+75
+00:05:10,060 --> 00:05:15,940
+So that's the question.
+
+76
+00:05:15,940 --> 00:05:21,220
+With Bearbox, we use OpenSSL to generate the key pair.
+
+77
+00:05:21,220 --> 00:05:24,340
+I think we can kind of trust OpenSSL
+
+78
+00:05:24,340 --> 00:05:28,240
+to actually provide proper keys.
+
+79
+00:05:28,240 --> 00:05:33,860
+And Bearbox provides an open source tool, RKImage,
+
+80
+00:05:33,860 --> 00:05:35,680
+which generates the image.
+
+81
+00:05:35,680 --> 00:05:38,240
+And in the same step, it also signs the image.
+
+82
+00:05:38,240 --> 00:05:41,360
+So once you build a bare box with a configuration
+
+83
+00:05:41,360 --> 00:05:45,560
+for secure boot, you will get your final image already
+
+84
+00:05:45,560 --> 00:05:47,320
+signed.
+
+85
+00:05:47,320 --> 00:05:50,200
+The advantage here is all the tools are open source.
+
+86
+00:05:50,200 --> 00:05:53,180
+So you can look at the source code, modify it if necessary,
+
+87
+00:05:53,180 --> 00:05:54,880
+and build it yourself.
+
+88
+00:05:54,880 --> 00:06:00,740
+The RK image tool supports PKCS11 for talking
+
+89
+00:06:00,740 --> 00:06:04,240
+to any HSM that provides this interface
+
+90
+00:06:04,240 --> 00:06:05,700
+for retrieving your private key.
+
+91
+00:06:05,700 --> 00:06:10,280
+So you can use that to get better security
+
+92
+00:06:10,280 --> 00:06:13,040
+on your private keys and move it out
+
+93
+00:06:13,040 --> 00:06:15,200
+of a built infrastructure.
+
+94
+00:06:15,200 --> 00:06:20,360
+The disadvantages, it's not supported by ROC chip.
+
+95
+00:06:20,360 --> 00:06:23,400
+If that's a disadvantage or an advantage, I don't know.
+
+96
+00:06:23,400 --> 00:06:24,980
+You have to decide.
+
+97
+00:06:24,980 --> 00:06:29,380
+And it may lack features that are provided by ROC chip.
+
+98
+00:06:29,380 --> 00:06:33,400
+I'm not sure if there is anything missing from RK Image.
+
+99
+00:06:33,400 --> 00:06:37,960
+I implemented what I needed and ignored all the other features.
+
+100
+00:06:37,960 --> 00:06:43,940
+You may need more or something that's provided by Roger.
+
+101
+00:06:43,940 --> 00:06:49,280
+For the board lockdown, the downstream solution,
+
+102
+00:06:49,280 --> 00:06:52,460
+I told you OTP access is only possible
+
+103
+00:06:52,460 --> 00:06:55,140
+from the secure world or EL3.
+
+104
+00:06:55,140 --> 00:07:05,100
+So in UBOT, UBOT needs to write the hash in the early boot.
+
+105
+00:07:05,100 --> 00:07:08,500
+It receives the key from the device tree.
+
+106
+00:07:08,500 --> 00:07:13,000
+So you put your public key into the device tree.
+
+107
+00:07:13,000 --> 00:07:18,480
+And during boot, UBOT calculates the hash on this public key,
+
+108
+00:07:18,480 --> 00:07:23,240
+and it writes the hash into the OTP area.
+
+109
+00:07:23,240 --> 00:07:27,260
+Problem with that is you require a separate image that
+
+110
+00:07:27,260 --> 00:07:31,380
+carries the public key in the device tree
+
+111
+00:07:31,380 --> 00:07:33,860
+for your device bootstrapping.
+
+112
+00:07:33,860 --> 00:07:36,480
+That's something you can do, but in this case,
+
+113
+00:07:36,480 --> 00:07:39,360
+you have a separate image in your factory
+
+114
+00:07:39,360 --> 00:07:42,100
+that you have to manage.
+
+115
+00:07:42,100 --> 00:07:50,300
+And because the OTP is not accessible from the normal world
+
+116
+00:07:50,300 --> 00:07:54,560
+or other exception levels.
+
+117
+00:07:54,560 --> 00:07:57,840
+You can't check if your board has secure boot enabled
+
+118
+00:07:57,840 --> 00:08:01,220
+or which hash is written into the OTP area.
+
+119
+00:08:01,220 --> 00:08:04,640
+So you have no information if secure boot is actually on.
+
+120
+00:08:09,620 --> 00:08:15,380
+In bare box, the lockdown works slightly different.
+
+121
+00:08:15,380 --> 00:08:18,980
+You calculate the hash on your build machine.
+
+122
+00:08:18,980 --> 00:08:23,540
+So the public key hash is something that can be public,
+
+123
+00:08:23,540 --> 00:08:26,300
+so you can carry it around.
+
+124
+00:08:26,300 --> 00:08:28,640
+You have to ensure the integrity of this hash,
+
+125
+00:08:28,640 --> 00:08:32,000
+but that's a different issue.
+
+126
+00:08:32,000 --> 00:08:35,580
+And on the device in Bearbox, you
+
+127
+00:08:35,580 --> 00:08:40,140
+have a separate command that you can run, give it this hash,
+
+128
+00:08:40,140 --> 00:08:42,420
+and it will enable a secure boot.
+
+129
+00:08:42,420 --> 00:08:47,220
+So you can use, at runtime, a command
+
+130
+00:08:47,220 --> 00:08:52,180
+to enable secure boot on your devices.
+
+131
+00:08:52,180 --> 00:08:58,740
+And since the OTP area is not accessible from the normal world,
+
+132
+00:08:58,740 --> 00:09:01,620
+it has to go through Opti.
+
+133
+00:09:01,620 --> 00:09:06,360
+And Opti will actually write the hash to OTP.
+
+134
+00:09:06,360 --> 00:09:08,620
+So there are two parts in that.
+
+135
+00:09:08,620 --> 00:09:12,940
+one in bare box for talking to Opti as a user interface
+
+136
+00:09:12,940 --> 00:09:17,460
+and an Opti PTA to actually enable a secure boot
+
+137
+00:09:17,460 --> 00:09:18,000
+on the device.
+
+138
+00:09:20,740 --> 00:09:26,720
+This approach needs scripts during your manufacturing.
+
+139
+00:09:26,720 --> 00:09:28,960
+So at one step in your manufacturing,
+
+140
+00:09:28,960 --> 00:09:33,900
+you run your system, check secure boot is not enabled,
+
+141
+00:09:33,900 --> 00:09:38,100
+then run the command with your hash, enable secure boot,
+
+142
+00:09:38,100 --> 00:09:41,260
+And after that, only Secure Boot will be enabled.
+
+143
+00:09:41,260 --> 00:09:45,600
+You have the advantage to be able to exactly determine
+
+144
+00:09:45,600 --> 00:09:48,220
+when this will happen during your manufacturing.
+
+145
+00:09:48,220 --> 00:09:51,200
+So you can do stuff before, enable Secure Boot,
+
+146
+00:09:51,200 --> 00:09:53,340
+and do stuff afterwards.
+
+147
+00:09:53,340 --> 00:09:57,480
+That's your responsibility here.
+
+148
+00:09:57,480 --> 00:10:01,240
+And the second part is you need OPTI support
+
+149
+00:10:01,240 --> 00:10:03,540
+with the RK Secure PTA.
+
+150
+00:10:03,540 --> 00:10:06,820
+You need an upstream OPTI for that.
+
+151
+00:10:06,820 --> 00:10:09,620
+So it won't work with the OPTI provided by ROC chip.
+
+152
+00:10:13,240 --> 00:10:16,620
+So to come back to the first slide,
+
+153
+00:10:16,620 --> 00:10:20,140
+you use OpenSSL to generate the key pair.
+
+154
+00:10:20,140 --> 00:10:22,600
+It's an RSA key.
+
+155
+00:10:22,600 --> 00:10:25,780
+You configure your bare box build
+
+156
+00:10:25,780 --> 00:10:28,000
+to assign the image with this key,
+
+157
+00:10:28,000 --> 00:10:32,860
+and you enable the RKA secure command to talk to OPTI.
+
+158
+00:10:32,860 --> 00:10:34,940
+You build your image.
+
+159
+00:10:34,940 --> 00:10:39,640
+You use this RKOTP script to calculate your key hash.
+
+160
+00:10:39,640 --> 00:10:42,920
+You can pass your key there, or you can also
+
+161
+00:10:42,920 --> 00:10:46,080
+pass an image there, and it will extract the public key
+
+162
+00:10:46,080 --> 00:10:48,600
+and give you the hash for that.
+
+163
+00:10:48,600 --> 00:10:52,940
+And you boot barebox and run the RK secure command,
+
+164
+00:10:52,940 --> 00:10:57,000
+and secure boot will be enabled.
+
+165
+00:10:59,680 --> 00:11:01,960
+Some recommendations.
+
+166
+00:11:01,960 --> 00:11:05,980
+Store your private signing keys on HSM.
+
+167
+00:11:05,980 --> 00:11:10,240
+Hardware secure module, no question about that.
+
+168
+00:11:10,240 --> 00:11:13,900
+If you enable secure boot, check your public root key hash
+
+169
+00:11:13,900 --> 00:11:16,000
+before you program it into your device.
+
+170
+00:11:16,000 --> 00:11:19,360
+You will have a brick otherwise.
+
+171
+00:11:19,360 --> 00:11:21,480
+And because of that, you want to test
+
+172
+00:11:21,480 --> 00:11:23,180
+on expandable hardware first.
+
+173
+00:11:23,180 --> 00:11:26,500
+So if you only have one device on your desk,
+
+174
+00:11:26,500 --> 00:11:30,960
+I wouldn't try to enable secure boot there.
+
+175
+00:11:30,960 --> 00:11:33,900
+And after you enable Secure Boot,
+
+176
+00:11:33,900 --> 00:11:37,980
+you would want to test if unsigned images or images
+
+177
+00:11:37,980 --> 00:11:41,460
+that are signed with a different key are rejected,
+
+178
+00:11:41,460 --> 00:11:43,920
+to be really sure that Secure Boot is enabled.
+
+179
+00:11:46,920 --> 00:11:52,220
+A few further resources, the GitHub repository
+
+180
+00:11:52,220 --> 00:11:53,620
+by DualTag.
+
+181
+00:11:53,620 --> 00:11:56,480
+I don't know how to pronounce that.
+
+182
+00:11:56,480 --> 00:11:58,680
+They did a lot of reverse engineering,
+
+183
+00:11:58,680 --> 00:12:02,740
+So everything I know about Secure Boot on RK3588,
+
+184
+00:12:02,740 --> 00:12:04,860
+I know from that repository.
+
+185
+00:12:04,860 --> 00:12:08,960
+And I worked on building it into the upstream projects
+
+186
+00:12:08,960 --> 00:12:13,040
+to make it useful or usable.
+
+187
+00:12:13,040 --> 00:12:17,580
+Another resource is the Rockchip Developer Guide.
+
+188
+00:12:17,580 --> 00:12:21,240
+It will partly document what's happening
+
+189
+00:12:21,240 --> 00:12:23,800
+in the early Secure Boot.
+
+190
+00:12:23,800 --> 00:12:26,400
+And it will also talk about how Rockchip recommends
+
+191
+00:12:26,400 --> 00:12:30,640
+to sign Linux or sign the root FS
+
+192
+00:12:30,640 --> 00:12:32,940
+and have the secure boot continuing
+
+193
+00:12:32,940 --> 00:12:35,160
+after your bootloader loaded.
+
+194
+00:12:35,160 --> 00:12:38,280
+I didn't cover that because that's something you,
+
+195
+00:12:38,280 --> 00:12:40,860
+once you have a trusted bootloader running,
+
+196
+00:12:40,860 --> 00:12:45,460
+you can decide how to continue further in your boot chain
+
+197
+00:12:45,460 --> 00:12:49,500
+and ensure secure boot there.
+
+198
+00:12:49,500 --> 00:12:52,020
+Documentation of barebox documents,
+
+199
+00:12:52,020 --> 00:12:53,700
+the process how to enable secure boot.
+
+200
+00:12:53,700 --> 00:12:55,980
+So what I told you in this talk, you
+
+201
+00:12:55,980 --> 00:12:59,700
+can find in the documentation as well in smaller steps
+
+202
+00:12:59,700 --> 00:13:02,340
+and what to enable and how to enable it.
+
+203
+00:13:02,340 --> 00:13:08,540
+And you can find the RK secure PTA in upstream OptiOS
+
+204
+00:13:08,540 --> 00:13:09,880
+in this repository.
+
+205
+00:13:09,880 --> 00:13:13,040
+So in the latest Opti releases, you already
+
+206
+00:13:13,040 --> 00:13:22,140
+have the PTA that's necessary for secure boot, of course.
+
+207
+00:13:22,140 --> 00:13:25,880
+So now, actually, thank you.
+
+208
+00:13:25,880 --> 00:13:30,740
+If you have any questions, meet me later in the evening
+
+209
+00:13:30,740 --> 00:13:34,000
+because we won't have time for questions here.
+
+210
+00:13:34,000 --> 00:13:36,020
+If you have questions about my design decisions,
+
+211
+00:13:36,020 --> 00:13:38,360
+I'm very welcome to hear about that.
+
+212
+00:13:38,360 --> 00:13:41,220
+If you want to implement that in U-Board, also talk to me.
+
+213
+00:13:41,220 --> 00:13:44,140
+I have an implementation for Bearbox, but not in U-Board.
+
+214
+00:13:44,140 --> 00:13:47,180
+If you want to implement that in U-Board, come to me.
+
+215
+00:13:47,180 --> 00:13:49,720
+And see you today in the evening.
+
+216
+00:13:49,720 --> 00:13:50,720
+Thank you.
+
+217
+00:13:55,880 --> 00:14:25,860
+Thank you.
+

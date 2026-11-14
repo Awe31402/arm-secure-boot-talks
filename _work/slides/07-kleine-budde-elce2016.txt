@@ -1,0 +1,360 @@
+             Verified Boot: From ROM to Userspace
+
+
+               ROM-Code
+
+
+               Bootloader
+
+
+                   Kernel
+
+
+           Root File System
+
+
+
+                                         ELC Europe 2016, 12.10.2016
+
+                             Marc Kleine-Budde <mkl@pengutronix.de>
+
+
+
+
+Slide 1 - http://www.pengutronix.de - 13.10.2016
+Why Verified Boot?
+
+Attractive hacking target:
+
+        ●    Linux systems control critical industrial processes
+        ●    Compared to servers, embedded systems receive
+             poor maintenance
+
+Complex Software:
+
+        ●    Every Linux system has undiscovered vulnerabilities
+        ●    Commercial control software (closed source)
+        ●    Defense in Depth is important!
+
+We can do it ourselves:
+
+        ●    SoC with hardware support are available everywhere
+        ●    Software components are available as FOSS
+
+
+
+
+Slide 3 - http://www.pengutronix.de - 13.10.2016
+What do we want to protect?
+
+ ●    Bootloader
+
+ ●    Kernel
+
+ ●    File system
+       ●   Programs
+       ●   Configuration files
+       ●   Application data
+
+ ●    The attacker can manipulate all stored data
+         → we want to detect any tampering
+
+
+
+
+Slide 4 - http://www.pengutronix.de - 13.10.2016
+Boot Stages
+
+                  ROM-Code
+                                                   vendor dependent
+                                                   (here: Freescale/NXP i.MX6 HABv4, SHA and RSA)
+
+                  Bootloader
+
+                                                   FIT-Image (SHA and RSA)
+
+   Kernel/Device-Tree/InitRAMFS
+
+                                                   IMA & EVM (HMAC and RSA)
+
+              Root File System
+
+
+
+
+Slide 5 - http://www.pengutronix.de - 13.10.2016
+Boot Loader
+
+ ●    Usually on unprotected storage (NAND, eMMC, SD)
+
+ ●    Has full control over the system
+
+ ●    Must be verified by the ROM code
+       ● Hash of the certificate is burned to on-chip fuses
+
+ ●    Contains the public key to verify the Kernel image
+
+
+
+
+Slide 6 - http://www.pengutronix.de - 13.10.2016
+Boot Loader
+                           SoC
+
+              ROM-
+                                     Fuses
+              Code
+
+
+
+                       Pubkey
+                     Signature
+
+                  Boot Loader
+
+                       Pubkey
+
+
+
+Slide 7 - http://www.pengutronix.de - 13.10.2016
+FIT-Image
+
+ ●    In separate partition or on root file system
+
+ ●    Consists of Kernel, Device-Tree and InitRAMFS
+       ● May contain several variants
+       ● Always signs a complete “configuration” of kernel, DT and
+         InitRAMFS to prevent mix-and-match attacks
+
+ ●    Must be verified by the boot loader
+       ● Signature matches the public key in the boot loader
+
+ ●    Contains the public key to check the root file system
+
+
+
+
+Slide 8 - http://www.pengutronix.de - 13.10.2016
+FIT-Image
+                 Boot Loader
+
+                       Pubkey
+
+
+                                                   FIT-Image
+
+
+                 Signature                                Kernel   Pubkey
+
+             Configuration
+                                                          Device-Tree
+                   hashes
+                                                          InitRAMFS
+
+
+
+Slide 9 - http://www.pengutronix.de - 13.10.2016
+Root File System (initial)
+
+ ●    ext4 oder UBIFS
+       ●  File System needs Extended Attributes
+
+ ●    Every file has an IMA hash
+       ●  SHA1 or SHA256 of the file content
+       ●  Extended Attribute: security.ima
+
+ ●    Every file has an EVM signature
+       ●  Secures Security Extended Attribues
+       ●  Is signed on the development computer with a private key
+       ●  RSA signature matches the public key in the kernel
+       ●  Extended Attribute: security.evm
+
+
+
+
+Slide 10 - http://www.pengutronix.de - 13.10.2016
+Root File System (initial)
+
+                                                               Kernel
+
+                                                               Pubkey
+
+
+
+                                            Root File System
+
+                /sbin/init                  IMA hash      EVM Signature
+
+                /bin/sh                     IMA hash      EVM Signature
+
+                /etc/shadow IMA hash                      EVM Signature
+
+
+
+Slide 11 - http://www.pengutronix.de - 13.10.2016
+Root File System (writable)
+
+ ●    No RSA-Signatures
+       ● There is no private key on the system
+       ● RSA is quite slow
+
+ ●    Instead SHA-HMAC
+        ● Requires a different shared Secret for each system
+        ● On first file access the signature is replaced by the HMAC
+
+ ●    Every file has an IMA hash and a EVM HMAC
+       ●  Only a correctly booted system has access to the EVM Secret
+       ●  Attackers cannot manipulate files and calculate a matching HMAC
+
+
+
+
+Slide 12 - http://www.pengutronix.de - 13.10.2016
+Root File System (writable)
+                        SoC
+                                                    Blob        InitRAMFS
+
+                                 Unique
+          Fuses                                                EVM-Secret
+                                  Key
+
+
+                                            Root File System
+
+                /sbin/init                 IMA-Hash        EVM-HMAC
+
+                /bin/sh                    IMA-Hash        EVM-HMAC
+
+                /etc/shadow IMA-Hash                       EVM-HMAC
+
+
+
+Slide 13 - http://www.pengutronix.de - 13.10.2016
+Encrypted File System - eCryptfs
+
+ ●    File system level encyption
+       ●   Works both on NAND and block devices
+       ●   Every file corresponds to an unencrypted file
+       ●   File names and content encrypted
+       ●   Directory layout and permissions are clear text
+
+ ●    Requires a different shared Secret for each system
+
+ ●    IMA/EVM not needed
+       ● Integrity is provided by AES in GCM mode
+
+
+
+
+Slide 14 - http://www.pengutronix.de - 13.10.2016
+Encrypted File System - eCryptfs
+                        SoC
+                                                    Blob    Userspace
+
+                                  Unique
+          Fuses                                            eCryptfs-Secret
+                                   Key
+
+
+                                   Unencrypted File System
+
+                /opt/vendor/bin/app                        eCryptfs/AES
+
+                /opt/vendor/etc/app.cfg                    eCryptfs/AES
+
+                /opt/vendor/lib/data.sql                   eCryptfs/AES
+
+
+
+Slide 15 - http://www.pengutronix.de - 13.10.2016
+Demo Time!
+
+
+
+
+Slide 16 - http://www.pengutronix.de - 13.10.2016
+Do It Yourself!
+
+ ●    Freescale MX28
+       ●  I2SE Duckbill (~100€)
+       ●  MYIR Tech MYD-IMX28X (~100+40€)
+ ●    Freescale MX53
+       ●  USB Armory (~130$)
+ ●    Freescale MX6
+       ●  Cubox-i (~110€)
+       ●  RioT-Board (~85€)
+
+ ●    Without Hardware-Support: Read-Only SPI-NOR or eMMC + TPM
+
+
+
+
+Slide 17 - http://www.pengutronix.de - 13.10.2016
+Used Components
+
+ ●    Supported SoCs:
+       ● MX25
+       ● MX6
+
+ ●    Bootloader: barebox-2016.09
+
+ ●    Kernel: linux-4.0.9 + patches
+
+ ●    offline image signing:
+       ●   e2fsprogs (+patches)
+       ●   ima-evm-utils (+patches)
+
+ ●    integrated everything with ptxdist
+
+
+
+
+Slide 18 - http://www.pengutronix.de - 13.10.2016
+What's Missing?
+
+ ●    Protection of Directories
+       ●  Prevents to move, delete and create files
+       ●  There are already patches "directory integrity protection"
+
+ ●    Mainlining
+       ● Offline image creation via mkfs.ext4 and ima-evm-utils
+       ● blob drivers for imx6 crypto engine (CAAM)
+       ● blob drivers for mx25 crypto engine
+
+ ●    Support for other SoCs:
+       ● MX53
+       ● Other Vendors (Dokumentation?)
+
+
+
+
+Slide 19 - http://www.pengutronix.de - 13.10.2016
+Best Practices / Lessons Learned
+
+ ●    Development Keys in BSP
+
+ ●    Access t0 Production Keys via pkcs#11
+
+ ●    Some packages in two configuration variants (Development/Production):
+       ● bootloader
+       ● Kernel/InitRAMFS
+
+ ●    Regularly turn on more security features during integration
+
+ ●    Once activated, debugging (field returns) becomes a pain
+
+ ●    UBIFS with IMA/EVM doesn't like sudden power cuts
+
+
+
+
+Slide 20 - http://www.pengutronix.de - 13.10.2016
+Q&A
+
+
+
+
+@marckleinebudde
+
+Slide 21 - http://www.pengutronix.de - 13.10.2016
+

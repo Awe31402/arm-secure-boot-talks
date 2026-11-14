@@ -1,0 +1,282 @@
+start	end	text
+0	25000	Hi everyone, today I will show you how I exploited Samsung Secure Boot to retrieve sensitive data in the Galaxy S10.
+25000	31000	My name is Jeff Zhao. I have been playing CTF in Hikon CTF team for 10 years.
+31000	36000	I am also a member of ChangeRoot, Taiwan's private security studying group.
+36000	41000	I now focus on mobile and IoT security.
+41000	51000	This is my agenda. In the beginning, I will play a demo video to show a scenario where the vulnerabilities could be exploited.
+51000	58680	Then, I will introduce how Samsung enhanced the security in Android with their own framework,
+58680	66680	Knox, and a quick guidance to see previous research on Knox framework.
+66680	72120	With the background knowledge, I will explain the vulnerabilities I found and how to exploit
+72120	76800	secure boot by these vulnerabilities.
+76800	84360	And finally, I will discuss how further damage can be caused after exploiting secure boot
+84360	89880	even without the passcode.
+89880	96880	Before we start, let's watch a demo video.
+119880	121880	Like this, I think that's다
+122280	131160	Oh, noか
+149880	159880	I don't want to put adding some things right, I guess.
+159880	167880	This may not be too fun for everyone, by giving up this online company to try not to do fair abilities.
+167880	173880	If you wish, I'd throw something on there and need it there in Rенты,
+173880	203860	Thank you.
+203880	227360	Let me start by giving you a brief introduction of the Samsung Security Framework, NUCS.
+227360	233480	NUCS is a huge, complicated whole system security enhancement based on TrustZone.
+233480	238600	contains TMA Trash Zone-based Integrity Measurement architecture,
+240280	245720	real-time kernel protection, TMA periodic kernel measurement,
+247400	252520	SE Linux enhancement, and many other things to prevent privileged escalation
+252520	259960	and unauthorized access to the phone's data. Since we are attacking the bootloader,
+259960	264040	we will only discuss the most relevant part, secure boot.
+267320	272840	The Android boot procedure starts from the primary boot loader, also called PVL.
+273400	280680	It will load the second stage boot loader. In Samsung devices, it is called Secure Boot,
+281720	288920	also known as S-Boot. Secure Boot will bring up the operating system from the boot image.
+289800	294440	Each boot stage will verify the signature before proceeding to the next stage.
+295800	299480	The verified key is stored in hardware drilling manufacturing.
+301160	305000	Primary bootloader only runs secure boot if the signature is valid.
+306280	313000	We cannot change the primary bootloader. Thus, the phone can only boot the official secure boot image.
+313000	321580	Next, Secure Boot will launch the boot image or the requiring image if its signature is valid.
+321580	329980	If the signature is not valid, Secure Boot will boot the image with an additional action,
+329980	339700	which is blowing the next bit. What will happen if the next bit is set?
+339700	348140	The provision of Samsung's warranty depends on the Nux bit, also called the warranty bit.
+349280	354140	Trying to boot an unofficial boot image will tamper with the Nux bit.
+355780	360660	It is a one-time writable memory. There is no way to recover it.
+361620	366720	Some services in Trostone cannot be launched if the bit is set,
+366720	373720	such as Lux Container, Samsung Pay, and Trusted Key Store.
+376720	382720	After the Galaxy S9, Samsung equipped the storage with default settings.
+382720	388720	Only after the first time unlocking the screen, the storage gets decrypted.
+389720	393720	The encryption key is stored in the TrustLong application.
+394600	402200	We cannot decrypt the storage without unlocking the phone, even if we have root privilege.
+410920	416440	Other than the storage encryption key, there is lots of critical information
+416440	421880	that can only be decrypted by translate. Once the next bit is set,
+422760	424920	most of them will no longer work.
+428120	431720	This is a diagram of untrust zone exception level.
+432600	436680	Traditional root method only gets exception level 1 in non-secure world.
+437320	442440	The data encrypted by trust zone cannot be decrypted if lock speed is set.
+444360	450680	The way to get sensitive data is privileged escalation to exception level 1 in secure world
+450680	457680	or trick the device into thinking that the lag speed is still safe.
+457680	464680	There has been a lot of research into breaking lags protection.
+464680	467680	I will show you some previous work.
+467680	477680	First, at Black Hat USA 2017, ReturnsMe defeated lags real-time kernel protection,
+477680	489680	which is designed to prevent privileged escalation from non-secure wall exception level 0 to non-secure wall exception level 1.
+489680	495680	And second, at Black Hat Europe 2017,
+495680	500960	Tenshun Lab demoed a vulnerability to exploit a Samsung pair trustlet in trust zone,
+502240	508240	resulting in an escalated privilege level from non-secure wall exception level 0
+508240	510480	to secure wall exception level 1.
+513920	520320	Last year, Quarks Lab demoed some amazing work that shattered the trust zone protection,
+521200	526880	resulting in privileged escalation all the way from non-secure wall exception level 0
+526880	528960	to secure wall exception level 3.
+533520	540400	But all of this work needs at least non-secure wall exception level 0 privilege.
+542400	546720	So what if the device is turned off and we don't know the passcode?
+550320	562320	In this talk, we are discussing the scenario in which we can exploit the locked phone and keep sensitive data reachable.
+566320	577320	In general, Samsung Secure Boot will verify the boot image and boot into kernel after setting up Secure Monitor and initializing hardware.
+577320	586320	But, secure boot will enter audit mode if we push the button down and power buttons during the booting process.
+589320	596320	The audit mode allows user to flash stock firmware to manually update the phone.
+596320	602320	It not only verifies the signature, but also checks the version number.
+602320	612020	Audit mode does not allow the user to flash previous versions or unofficial firmware.
+612020	619700	This exposes a channel for interacting with secure boot.
+619700	627340	In Audit mode, we found several vulnerabilities which can achieve arbitrary co-execution.
+627340	644160	The first one can only get code execution on older models, like the Galaxy S8.
+644160	646700	Odin request is very simple.
+646700	649740	We send an integer as operation code.
+649740	656100	The operation code specifies the function we want to use in Odin.
+656100	662660	And then, we follow that with another integer, sub-operation, to tell Odin whether we are
+662660	667380	going to set, get, or initialize something.
+667380	675780	And finally, we can have some argument.
+675780	682660	In Odin Flash Image command, the image size is provided by the user, and there is no check
+682660	685980	for it.
+685980	692620	Even if Odin decides the buffer location by the size, it has an integer overflow bug,
+692620	699460	so we can choose which buffer location we want.
+699460	703720	What data is stored behind the buffer?
+703720	711300	They are the secure boot code segment, VSS, stack and heap.
+711300	720300	Due to the lack of size check, we can override everything and control the call segment, stack, and heap.
+723300	731300	Since the Galaxy S8, Samsung has tightened the NNU table and set the call segment to read-only.
+731300	743300	Fortunately, USB devices have directory memory access, we are not restricted by MNU control.
+743300	751300	And next, we must deal with the cache incohesence problem.
+751300	758300	Since USB manipulates memory directly, we cannot affect the cache data.
+758300	768300	Unfortunately, while receiving data, the CPU keeps tracking the USB event, which is in a while loop.
+768300	777300	Obviously, this code is cached by the CPU. Therefore, we cannot affect the code data.
+777300	785300	But there are some memory segments which are not set to be cached, and those segments are the heap.
+788300	793300	In the wire loop, it will access a heap pointer.
+793300	799300	Since the heap is not cached, once we overwrite heap data with all new bytes,
+799300	805300	it will access address 0 and trigger data abort.
+805300	811300	Once data abort is triggered, it will jump to the arrow handler immediately.
+811300	817300	The arrow handler function has never been executed, thus it is not cached.
+817300	825820	We can just put jump-slid on the arrow handle, and we put the share code in front of the
+825820	835860	code segment to ensure it will not be affected by the CPU cache.
+835860	841220	In conclusion, we overflow the memory according to the layout.
+841220	847460	then we can achieve arbitrary code execution in SecureBoot.
+851460	856020	But we are not able to exploit S9 any later,
+856020	859780	because the buffer location is changed to another address,
+859780	865220	which is far from the SecureBoot code segment.
+865220	870220	we had to figure out a potential exploit path to exploit the newer Marble door.
+873220	880220	In S9 and later, Odin changed the buffer location to a big address, which is behind the call segment.
+882220	888220	That is because Odin added the parallel download feature to make the transfer speed faster.
+888220	895220	To use this feature, Secure Boot needs to boot up another two CPU cores.
+895220	903220	If the cores boot fails, Secure Boot will fall back to normal download mode,
+903220	908220	which changes the buffer to the original location.
+908220	915220	So, we try to find a way to make the CPU boot fails.
+918220	930620	In secure boot, the CPU boot function will not boot the call if there are more than three
+930620	932620	calls activated.
+932620	941300	Thus, if we can boot another call before enter audit mode, we can make the secure boot fall
+941300	947660	back to normal download mode.
+947660	952140	That is amazing, there is really a way to achieve it.
+952140	958080	Secureboot has another mode, which called ur-debug mode.
+958080	963500	The mode has a command that can boot another call for testing.
+963500	970220	Most importantly, when it's done, it will not decrease the count of booted calls.
+970220	977940	We can keep increase the count of booted calls until it exceeds the limit.
+977940	987600	And the UART mode has another command, download, can enter into OD mode.
+987600	995520	So if we can enter UART mode, we can exploit S10 with the vulnerability.
+995520	1000600	We found that SecureBoot will track the resistor in the USB cable.
+1000600	1008620	If the resistor matches a specific value, it will enter UART mode.
+1008620	1015260	But even some researchers successfully entered UART mode in Galaxy S7.
+1015260	1022340	The method was no longer working in Galaxy S8 and later, because the cable was changed
+1022340	1031340	to type C. We have tried many other methods, such as making a type C cable connected with
+1031340	1040460	a pull-down and pull-up resistor, or making the type C cable in accessory mode, or trying
+1040460	1049860	communicate with S10 by the vendor-defined message. All of this work all failed. Secure
+1049860	1061440	cannot detect the resistor so six months later we stopped trying and reported the
+1061440	1076800	bug to Samsung on August 2019 and a several days later Samsung got back to
+1076800	1083700	me and told me that this issue was duplicated. This was a real blow to me,
+1083700	1089520	and I changed my research target to other areas.
+1092000	1100400	Several months later, Samsung released the patch. The title is Potential Integer
+1100400	1106520	Overflow. After reading the description, I guess the reporter did not notice that
+1106520	1113120	that the bug can lead to arbitrary co-execution.
+1113120	1119900	The patch description said it fixed the unsigned comparison issue.
+1119900	1126640	But actually, Samsung did not only make the comparison unsigned, but also added a size
+1126640	1131960	check to prevent buffer overflow.
+1131960	1141500	After looking at the patch, I was wondering if there was any way to bypass the track.
+1141500	1152740	Several days later, I found another vulnerability that can bypass the track.
+1152740	1159380	After looking more deeply into the function related to USB receive, I found that the provided
+1159380	1167320	The size is calculated as a line size with a stringy value.
+1167320	1173940	After cross-referencing the list value with all the areas of the system, we found that
+1173940	1178880	it can be changed by Odin request.
+1178880	1185940	According to the debug message, we know it is used to specify the size of data packets.
+1185940	1189940	the value doesn't have any checks.
+1193940	1199940	Therefore, if we set the size of data packet to a larger amount,
+1199940	1205940	we can bypass the check last Samsung edit in October 2019
+1205940	1209940	and exploit the same buffer again.
+1209940	1217940	This time, I reported the bug immediately.
+1217940	1226940	Several months later, Samsung released the patch in January 2020.
+1226940	1237940	They added a check to ensure the size of data packets cannot be larger than 100,000 in HEX.
+1237940	1245940	The patch gave me an idea, and three hours later, I figure out another exploit.
+1245940	1249940	So, let's discuss the third vulnerability.
+1249940	1256940	This time, we can exploit the Galaxy S10.
+1256940	1262940	Odin has another operation command, can flush the partition information table.
+1262940	1272940	The table is small. Let's only allocate a heap buffer to store it instead of using the big buffer in front of core segment.
+1274940	1285940	We cannot directly overflow it, because there is a check to make sure that the size is smaller than the heap buffer to prevent buffer overflow.
+1285940	1293360	Remember the second vulnerability I just mentioned?
+1293360	1298620	We can use the size of peci data to enlarge the receive size.
+1298620	1306840	Although the page added an additional check to the size of peci data, the limit is 6f
+1306840	1309900	in hex.
+1309900	1317820	But the heap buffer size for the partition information table has only 2000 in hex, which
+1317820	1324980	could lead to heap overflow.
+1324980	1333140	This is the pseudocode that shows what happens when Odin tries to receive data.
+1333140	1339060	Looking to the pseudocode, we can see the USB receive will receive the packet data size
+1339060	1348920	variable only if the request size is bigger than 6F in hex, or if the first receive attempt
+1348920	1353340	cannot get enough data.
+1353340	1357700	This is what we need to achieve.
+1357700	1366420	But the USB receive function will keep receiving data until the past size is reached.
+1366420	1374520	Even if we send data in huge intervals, the device will still be waiting for data.
+1374520	1385740	Actually, we found the bug at the very beginning, but we thought it was an unexploitable vulnerability.
+1385740	1391860	We cannot make the USB receive function get insufficient data.
+1391860	1399420	So we wasted our time on vulnerability 1.
+1399420	1405520	But after seeing the patch of vulnerability 2, I was struck by lightning.
+1405520	1411000	I had a light bulb moment.
+1411000	1419920	This time, I came up with an idea, which was to send only a very small amount of data,
+1419920	1426240	and then remove and reinsert the USB cable.
+1426240	1432680	The first USB receive returned in sufficient size, which allowed us to reach the second
+1432680	1434900	USB receive.
+1434900	1445280	This time, it's received with the size of PEGI data, allow us to overflow the heap buffer.
+1445280	1449940	It's turned into a heap overflow challenge.
+1449940	1463220	We use the traditional heap exploitation technique, house of spirit, to achieve arbitrary co-execution.
+1463220	1468920	There is no check for the double linking list for the heap, so we can fake the chunks and
+1468920	1477840	overwrite the heap's metadata to insert our faked chunk into the heap.
+1477840	1484460	Once we can insert the fake chunk into the heap and free it, we can overwrite arbitrary
+1484460	1496040	address. But there is a limitation. The unused bit must not be zero. Since secure
+1496040	1503540	boot is 64-bit, we cannot overwrite the GOT entry function pointers in data
+1503540	1512300	segment. Because the unused bit is in the higher part of the address, which always
+1512300	1520100	be 0 when the data is a pointer.
+1520100	1526300	The only chance is to override the return address on stack, if we can control the first
+1526300	1530540	local variable in the functions.
+1530540	1536260	But there are only three function calls after we free our fake heap chunk.
+1536260	1543460	Luckily, one of those is the Odding command handler.
+1543460	1548160	The Odding command buffer is the first local variable in the handler.
+1548160	1555160	The command buffer is in our control, which means we can fulfill the limitation and set
+1555160	1561440	the unused bit to non-zero.
+1561440	1566620	Now we can execute arbitrary call in Secure Boot.
+1566620	1570780	What's the next step?
+1570780	1577280	Since we overwrite the BSS stack and heap with all neural bytes, it's hard to recover
+1577280	1578280	the data.
+1578280	1588800	Thus, we restart the booting process in Secure Boot to recover this data.
+1588800	1597540	But we only get exception level 1 in non-secure world, some data in TrustZone already initialized.
+1597540	1609680	We cannot init it twice, therefore we must skip the TrustZone related code to keep TrustZone stable.
+1609680	1614840	And we continue the booting process until loading kernel to memory.
+1614840	1621280	In this step, we replace the kernel image with a custom one.
+1621280	1625720	So, this is our exploit step.
+1625720	1631400	First, we set the size of the packet data to a big number.
+1631400	1639840	Second, we send the Odin PIT Flash command to trigger USB data received.
+1639840	1647840	Third, we remove and reinsert the USB cable, trigger the second USB receive.
+1647840	1652840	This time, we overwrite the metadata of heap trunk.
+1652840	1660840	Fourth, we send another Odding command to trigger mainlock and free a heap buffer.
+1660840	1668840	Finally, the free action overwrite the return address on stack, then we can jump to our
+1668840	1677280	The share code will boot custom kernel to get root privilege.
+1677280	1682100	Now we got the exception level 1 in normal world.
+1682100	1690960	The data in secure world is still reachable, since the nut speed is safe.
+1690960	1694980	But we don't have the screen passcode.
+1694980	1700000	The phone is still locked.
+1700000	1702620	We cannot read sensitive data.
+1702620	1705960	The storage is still encrypted.
+1705960	1711100	The encryption key for storage is stored in the gatekeeper translate.
+1711100	1713480	Some data also cannot be reached.
+1713480	1718960	For example, credit card information in Samsung Pay translate.
+1718960	1723600	There are many ways to reach the data.
+1723600	1730680	We can wait for the user to unlock their phone, as shown in the demo video.
+1730680	1736720	Since we are in non-secure kernel mode, we also can destroy the request from non-secure
+1736720	1744960	user mode to secure world.
+1744960	1754220	Furthermore, it exposes an attacking service for us.
+1754220	1761060	Since the last bit is safe, the data stored in secure world still existed.
+1761060	1767460	There are many more vulnerabilities that we can exploit to get into the secure world.
+1767460	1775820	Our team found more than 10 vulnerabilities in 2019 and still find others in 2020.
+1775820	1783100	Outside of our team, there are 10 times more vulnerabilities found by other researchers.
+1783100	1791980	All of these vulnerabilities need at least economic privilege in non-secure world.
+1791980	1798860	For example, we can attack the gatekeeper translate to decrypt the storage.
+1798860	1805720	In May 2019, we reported a vulnerability in gatekeeper translate, which allows us to
+1805720	1809420	brute force the screen passcode.
+1809420	1817780	According to our test, it takes only a few hours to try all possible pattern calls.
+1817780	1822980	Combined with the vulnerability in gatekeep translate, we can unlock the phone and reach
+1822980	1827920	the sensitive data.
+1827920	1835080	In conclusion, even if the data is stored in the secure world, it still doesn't mean
+1835080	1845080	is 100 percent secure. But it actually made exploiting harder. We need multiple vulnerabilities
+1845080	1853720	to retrieve the protected data. We need a landing exploit, maybe remote call execution,
+1854280	1860280	or local secure boot exploit, followed by a kernel exploit to achieve privileged
+1860280	1865320	escalation to non-secure wall kernel mode.
+1865320	1871320	After getting the root privilege, we still need a vulnerability in trusset to break into
+1871320	1875440	secure wall exception level 0.
+1875440	1883720	If we want to get all sensitive data instead of one specific piece, we need a secure OS
+1883720	1889280	vulnerability to control the full device.
+1889280	1898920	Without all of this, the data in the phone is still safe.
+1898920	1910720	This is a timeline for all the report times and page dates.
+1910720	1912720	Thanks everyone.
+1912720	1914460	Thank you for listening.
+1914460	1923020	And if you have any questions, please don't hesitate to ask me or reach out to me by email
+1923020	1924020	in the future.
+1924020	1925140	Thank you.
+1944460	1951460	What's the base for you say the model?
+1959460	1963460	Let me see the other questions.
+1963460	1970460	If a user reboot their device, will the device properly reboot the original framework?
+1970460	1980460	We don't change the firmware, so if the device reboots, it will reboot the original firmware.
+1989460	1995460	What were the two SVs on the next two slides?
+1996460	1999460	Let me check the slides.
+2000460	2018960	Sorry, I cannot find which SVE you mentioned.
+2018960	2024960	John, can you ask again?
+2024960	2049960	Oh, for Kelly's questions, Samsung builds multiple versions of their phones with different
+2049960	2051360	hardware.
+2051360	2056360	we exploit the hardware with in USA.
+2058640	2063640	I think for, yeah, the S10, S9, S8,
+2069720	2073920	with Xenose models, all affected by the vulnerabilities.
+2077500	2080440	And for the TICOS question,
+2080440	2083440	How were you able to view the boot information?
+2084460	2086580	Just reverse the boot image.
+2088940	2093560	Yeah, just reverse the boot image as secure boot.
+2104400	2105820	In demo video.
+2110440	2124940	In demo video, we just enter the audio mode and we can view the booting mode information.
+2124940	2139880	And for John's questions, let me check.
+2139880	2142940	Oh, I will answer you in the test box.
+2162820	2164160	Any other questions?
+2169880	2194360	Okay, thank you, thanks everyone.

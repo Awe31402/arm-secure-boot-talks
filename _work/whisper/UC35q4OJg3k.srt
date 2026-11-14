@@ -1,0 +1,2416 @@
+1
+00:00:00,000 --> 00:00:10,320
+welcome back everyone I hope you had a great coffee break so we're going to
+
+2
+00:00:10,320 --> 00:00:17,280
+hear more about arm so Julius that's your stage and let's hear about trusted
+
+3
+00:00:17,280 --> 00:00:25,560
+firmware okay thanks is this thing on okay great so hi everyone I'm Julius
+
+4
+00:00:25,560 --> 00:00:31,560
+and I work for Google on Chrome OS firmware I'm also the core boot
+
+5
+00:00:31,560 --> 00:00:36,060
+maintainer for ARM architectures and I also wanted to talk about trusted
+
+6
+00:00:36,060 --> 00:00:39,600
+firmware today so when I signed up for this talk I actually didn't know that
+
+7
+00:00:39,600 --> 00:00:42,960
+arm would also be here and talk about trusted firm as one of this some of this
+
+8
+00:00:42,960 --> 00:00:49,080
+may be a little duplicate but my main focus for this talk is a broad
+
+9
+00:00:49,080 --> 00:00:52,440
+introduction to people who have no idea what trusted firmwares who maybe know
+
+10
+00:00:52,440 --> 00:00:58,520
+core boot and don't really know why the two have been like why core boot is using trusted firmware
+
+11
+00:00:58,520 --> 00:01:06,840
+these days on arm64 systems actually when i thought about this talk first my intention was to do
+
+12
+00:01:07,640 --> 00:01:13,480
+just a general core boot on arm64 talk two years ago in san francisco i already gave a talk about
+
+13
+00:01:13,480 --> 00:01:19,560
+core boot on arm32 and this was supposed to be kind of the next situation of that but when i
+
+14
+00:01:19,560 --> 00:01:24,520
+looked into this more closely i realized that in on the core boot side there's really not a lot of
+
+15
+00:01:24,520 --> 00:01:29,320
+difference between 32 and 64-bit arm there's of course the isa is a little different there are
+
+16
+00:01:29,320 --> 00:01:34,120
+some differences in the details but for the general core boot framework at all pretty much works the
+
+17
+00:01:34,120 --> 00:01:40,440
+same and the differences compared to x86 core boot are also pretty much all the same so if you
+
+18
+00:01:41,000 --> 00:01:47,640
+look at that old talk most of these things are still true for 64-bit um platforms the one real
+
+19
+00:01:47,640 --> 00:01:51,880
+difference in how core boot works to stay on these platforms is the trusted firmware part so that's
+
+20
+00:01:51,880 --> 00:01:58,360
+why i chose to focus on that and to start the motivation of what we why we even need this
+
+21
+00:01:58,360 --> 00:02:04,600
+trusted firmware it actually has to do with the expectations that linux has to the firmware
+
+22
+00:02:04,600 --> 00:02:11,400
+environment so this is a little excerpt from the device tree documentation in linux the device tree
+
+23
+00:02:11,400 --> 00:02:16,520
+is this thing which is essentially a big table of hardware description that the firmware passes
+
+24
+00:02:16,520 --> 00:02:23,940
+to the kernel so that the kernel knows how that particular hardware is laid out.
+
+25
+00:02:23,940 --> 00:02:28,760
+As you can see here, this part talks about CPU runtime power management, so turning CPUs
+
+26
+00:02:28,760 --> 00:02:32,080
+off and on to save power.
+
+27
+00:02:32,080 --> 00:02:34,040
+On ARM32, that part was still optional.
+
+28
+00:02:34,040 --> 00:02:40,560
+On ARM64, it's now required that we have this weird PSCI thing.
+
+29
+00:02:40,560 --> 00:02:44,340
+In order to figure out what that is and how we get there, how we can support that with
+
+30
+00:02:44,340 --> 00:02:52,600
+our firmware. You have to follow me on a journey through the trust zone. I mostly put this
+
+31
+00:02:52,600 --> 00:02:56,380
+up because I sometimes get the impression that people who don't know the ARM architecture
+
+32
+00:02:56,380 --> 00:03:01,300
+that well just have heard this term trust zone somewhere but don't really know what
+
+33
+00:03:01,300 --> 00:03:06,260
+it means and think it's this kind of scary thing that runs the evil code that spies on
+
+34
+00:03:06,260 --> 00:03:13,600
+you or the DRM stuff or something. So trying to take some of that fear away, it's really
+
+35
+00:03:13,600 --> 00:03:17,600
+not that complicated because if so if you're running open source firmware essentially you can
+
+36
+00:03:17,600 --> 00:03:23,440
+also run an open source trust zone it's really just uh an architectural feature to run code
+
+37
+00:03:23,440 --> 00:03:29,040
+outside of the context of the kernel so whoever seen the previous talk this is a very similar
+
+38
+00:03:29,040 --> 00:03:34,880
+slide essentially uh just telling you what this trust zone stuff is it's essentially
+
+39
+00:03:35,840 --> 00:03:40,720
+comparable to system management mode on x86 with the difference that system management mode is a
+
+40
+00:03:40,720 --> 00:03:47,040
+really ugly legacy thing. This is a much nicer and cleaner extension of the existing architecture.
+
+41
+00:03:47,040 --> 00:03:53,120
+So you essentially just take the existing concept of kernel and user land and expand it to another
+
+42
+00:03:53,120 --> 00:04:00,000
+level. In the same way user land makes system calls, the kernel can make these secure monitor
+
+43
+00:04:00,000 --> 00:04:08,080
+calls to the next exception level up there. The whole trust zone isn't just the part down there,
+
+44
+00:04:08,080 --> 00:04:12,640
+but it's the whole part on the right side so it's like a whole separate operating system and user
+
+45
+00:04:12,640 --> 00:04:18,320
+land that can run these trusted applications that are secured from the uh from the rest of
+
+46
+00:04:18,320 --> 00:04:24,880
+the operating system and this is this barrier is sort of a one-way street so the secure stuff can
+
+47
+00:04:24,880 --> 00:04:30,400
+still access the non-secure stuff but not the other way around and there's also no true uh
+
+48
+00:04:30,400 --> 00:04:36,260
+no true memory virtualization on this right side over here.
+
+49
+00:04:36,260 --> 00:04:40,680
+So the SecureOS can actually access the SecureMonitor
+
+50
+00:04:40,680 --> 00:04:42,980
+memory and thus attack the SecureMonitor,
+
+51
+00:04:42,980 --> 00:04:44,680
+essentially, unless, of course, you
+
+52
+00:04:44,680 --> 00:04:46,120
+have those new architectural features,
+
+53
+00:04:46,120 --> 00:04:48,640
+which we just heard about in the previous talk.
+
+54
+00:04:48,640 --> 00:04:53,440
+And the reason of that SecureMonitor down there
+
+55
+00:04:53,440 --> 00:04:56,340
+is essentially to arbitrate between these trusted
+
+56
+00:04:56,340 --> 00:04:58,760
+applications that run your DRM stuff or whatever
+
+57
+00:04:58,760 --> 00:05:04,360
+want them to run and the main operating system that's why it's at the highest it's called exception
+
+58
+00:05:04,360 --> 00:05:10,040
+level in arm 64 but that essentially also means privilege level so user land is level zero kernels
+
+59
+00:05:10,040 --> 00:05:15,240
+level one hypervisors level two and then the secure monitor is the most privileged thing at level three
+
+60
+00:05:16,200 --> 00:05:22,440
+and this the definition of this memory barrier is actually very completely soc specific so there's
+
+61
+00:05:22,440 --> 00:05:26,100
+There's no architectural way in the ARM architecture
+
+62
+00:05:26,100 --> 00:05:28,840
+to say which parts are secure memory
+
+63
+00:05:28,840 --> 00:05:30,600
+and which parts are non-secure memory.
+
+64
+00:05:30,600 --> 00:05:32,640
+Every SOC has its own thing for that.
+
+65
+00:05:32,640 --> 00:05:34,980
+And usually, it's just some sort of range register
+
+66
+00:05:34,980 --> 00:05:38,060
+where you say, OK, starting from this offset for this size,
+
+67
+00:05:38,060 --> 00:05:40,680
+that memory area is part of secure memory.
+
+68
+00:05:40,680 --> 00:05:42,280
+And it's not just memory.
+
+69
+00:05:42,280 --> 00:05:43,860
+It's the whole physical address space, actually.
+
+70
+00:05:43,860 --> 00:05:46,020
+So also, all the MMIO peripherals,
+
+71
+00:05:46,020 --> 00:05:48,560
+you can say that they only belong to the secure world
+
+72
+00:05:48,560 --> 00:05:51,080
+and then the non-secure world cannot access that particular
+
+73
+00:05:51,080 --> 00:05:55,180
+I2C controller or something like that.
+
+74
+00:05:55,180 --> 00:06:01,900
+If we want to figure out why we need this to support Linux,
+
+75
+00:06:01,900 --> 00:06:04,460
+we've got to, again, go to the CPU power management stuff.
+
+76
+00:06:04,460 --> 00:06:08,000
+So in case you know, in Linux, CPU power management
+
+77
+00:06:08,000 --> 00:06:10,500
+called CPU idles, essentially turning off the CPU
+
+78
+00:06:10,500 --> 00:06:12,180
+and you don't need it to save power.
+
+79
+00:06:12,180 --> 00:06:15,140
+And if you ignore the slide for a second on ARM32,
+
+80
+00:06:15,140 --> 00:06:17,020
+this was completely handled within Linux.
+
+81
+00:06:17,020 --> 00:06:19,940
+So when Linux decides it doesn't want to use the CPU,
+
+82
+00:06:19,940 --> 00:06:23,440
+then it turns the CPU off, turns all the power
+
+83
+00:06:23,440 --> 00:06:26,300
+rails off that go to it, and runs the wait for interrupt
+
+84
+00:06:26,300 --> 00:06:27,800
+instruction on that CPU.
+
+85
+00:06:27,800 --> 00:06:29,600
+And then when the CPU wakes back up,
+
+86
+00:06:29,600 --> 00:06:31,040
+it comes back right into Linux.
+
+87
+00:06:31,040 --> 00:06:34,100
+And Linux does all the re-initialization for that.
+
+88
+00:06:34,100 --> 00:06:36,940
+The problem is, if you have this trust zone on the side,
+
+89
+00:06:36,940 --> 00:06:39,620
+you can't really do that, because the trust zone also
+
+90
+00:06:39,620 --> 00:06:40,700
+needs the CPU.
+
+91
+00:06:40,700 --> 00:06:42,620
+So first of all, you need something.
+
+92
+00:06:42,620 --> 00:06:45,560
+When Linux decides, I don't want the CPU right now,
+
+93
+00:06:45,560 --> 00:06:48,860
+then you need something else to ask the secure part
+
+94
+00:06:48,860 --> 00:06:52,860
+it also doesn't need the CPU right now. Maybe you need to keep the CPU alive because the secure
+
+95
+00:06:52,860 --> 00:06:59,500
+parts needs it. And the other thing is, if you turn the CPU completely off and then turn it back
+
+96
+00:06:59,500 --> 00:07:04,620
+on, then it has lost all its state, of course. And some of that state is not accessible to the
+
+97
+00:07:04,620 --> 00:07:09,340
+kernel. For example, the page table base address register, there's one for the kernel, but there's
+
+98
+00:07:09,340 --> 00:07:14,540
+a separate one for the secure monitor. And of course, the kernel cannot write the page table
+
+99
+00:07:14,540 --> 00:07:19,980
+base address of the secure monitor because that would violate the security model so in order to
+
+100
+00:07:19,980 --> 00:07:26,540
+re-initialize the cpu after it was completely off those parts that belong to the secure monitor also
+
+101
+00:07:26,540 --> 00:07:32,380
+have to be re-initialized by the secure monitor and that's why every cpu on off and on cycle
+
+102
+00:07:32,380 --> 00:07:35,820
+essentially has to go all the way through the secure monitor and back down to the kernel
+
+103
+00:07:36,460 --> 00:07:42,700
+and um has defined an interface a standardized interface for this called psci power state
+
+104
+00:07:42,700 --> 00:07:48,540
+coordination interface which builds upon these secure monitor calls which are essentially
+
+105
+00:07:48,540 --> 00:07:56,380
+like system calls just going to the secure monitor exception level and now you could ask so one
+
+106
+00:07:56,380 --> 00:08:01,820
+one interesting thing is that this trust zone architecture already existed on arm 32 it was sort
+
+107
+00:08:01,820 --> 00:08:07,580
+of bolted on in some of the later stages of the iterations of the architecture but you could also
+
+108
+00:08:07,580 --> 00:08:13,820
+have it there and you would already have the same problems there but the thing is since this evolved
+
+109
+00:08:13,820 --> 00:08:20,780
+alongside linux linux always supported systems that just didn't choose to use it and in core boot
+
+110
+00:08:20,780 --> 00:08:25,500
+we just never really had a need for secure so secure applications and that's why we just ignored
+
+111
+00:08:25,500 --> 00:08:32,140
+it and used linux ability to work without that but for arm 64 linux essentially decided to have a
+
+112
+00:08:32,140 --> 00:08:37,580
+a clean break and now they say all the systems are going to have this trust on stuff anyway so
+
+113
+00:08:37,580 --> 00:08:42,700
+we can just rely on it being there and we don't need to implement all this cpu power management
+
+114
+00:08:42,700 --> 00:08:49,740
+ourselves anymore so the real reason why arm 64 devices need to provide this psci stuff now is
+
+115
+00:08:49,740 --> 00:08:53,820
+essentially because linux just got lazy and they just decided they don't want to implement the cpu
+
+116
+00:08:53,820 --> 00:08:58,620
+power management themselves anymore so now we got to give this to them in order to host a full
+
+117
+00:08:59,260 --> 00:09:01,820
+linux platform even if we don't want to use the secure part
+
+118
+00:09:04,140 --> 00:09:08,220
+now we could implement all of this ourselves in co-boot but before we do all that's where
+
+119
+00:09:08,220 --> 00:09:13,420
+that work let's maybe look around to see what other options there are so what is this trusted
+
+120
+00:09:13,420 --> 00:09:17,500
+firmware thing anyway for those of you who've been in the previous talk already most of this
+
+121
+00:09:17,500 --> 00:09:22,860
+is the same it's a full firmware stack it's sort of a reference implementation by arm for the
+
+122
+00:09:22,860 --> 00:09:29,660
+all the firmware you need both booting and runtime firmware and if we look from the core boot point
+
+123
+00:09:29,660 --> 00:09:33,740
+of view core boot is already the boot firmware essentially so we don't need that part but we
+
+124
+00:09:33,740 --> 00:09:38,060
+are really interested in this runtime part thankfully trusted firmware is already split
+
+125
+00:09:38,060 --> 00:09:43,500
+out into these separate stages and the one called b031 is the one that really interests us because
+
+126
+00:09:43,500 --> 00:09:48,220
+that is the part where all this runtime power management stuff is hosted that is the secure
+
+127
+00:09:48,220 --> 00:09:55,500
+monitor that needs to stay resident across the whole lifetime of the system and if we compare it
+
+128
+00:09:55,500 --> 00:09:59,820
+with what core boot already has it has a bunch of these nice features that core boot traditionally
+
+129
+00:09:59,820 --> 00:10:05,500
+didn't provide for example right now on core boot in the arm architectures we have no multi-processing
+
+130
+00:10:05,500 --> 00:10:09,820
+support at all we just use the one cpu core we boot with and do everything with that which makes
+
+131
+00:10:09,820 --> 00:10:14,940
+it really nice and easy for us but of course if you want to provide these services that turn cpus
+
+132
+00:10:14,940 --> 00:10:19,820
+off and on you need to do some multiprocessing you need to handle coherency and mutexing and all
+
+133
+00:10:19,820 --> 00:10:26,460
+that sort of stuff it also has a lot of nice cpu core support so for every cpu core that arm releases
+
+134
+00:10:26,460 --> 00:10:33,660
+a53 a57 a70 whatever they're called um all of these have a lot of their own little quirks and
+
+135
+00:10:33,660 --> 00:10:38,380
+they have the little erratas that you need to support so it's really nice to have a code base
+
+136
+00:10:38,380 --> 00:10:43,740
+where the cpu vendor itself already programmed all of that stuff so you can just use it for them you
+
+137
+00:10:43,740 --> 00:10:46,580
+and you don't have to keep up with all the new Iwata
+
+138
+00:10:46,580 --> 00:10:48,680
+as they come out, essentially.
+
+139
+00:10:48,680 --> 00:10:52,000
+Actually, more than once on one of our existing ARM systems,
+
+140
+00:10:52,000 --> 00:10:54,180
+I've just booted up a new version of Trusted Firmware,
+
+141
+00:10:54,180 --> 00:10:56,340
+and then it told me in some log message,
+
+142
+00:10:56,340 --> 00:10:57,860
+hey, there's this new Iwata I found
+
+143
+00:10:57,860 --> 00:10:59,640
+that your CPU is susceptible to.
+
+144
+00:10:59,640 --> 00:11:02,740
+So it's kind of nice to get this thing from the CPU vendors
+
+145
+00:11:02,740 --> 00:11:07,500
+who know what they're doing and don't have to do it yourself.
+
+146
+00:11:07,500 --> 00:11:09,980
+If we compare this Trusted Firmware architecture
+
+147
+00:11:09,980 --> 00:11:12,540
+with Core Boot more closely, we can
+
+148
+00:11:12,540 --> 00:11:18,460
+that it's matching up pretty well so the bl1 and bl2 part are the pure boot firmware part of
+
+149
+00:11:18,460 --> 00:11:22,700
+trusted firmware which is essentially equivalent to the three stages of core boot that we know
+
+150
+00:11:23,260 --> 00:11:29,500
+and then the bl32 and bl33 are actually not part of trusted firmware it's just names trusted
+
+151
+00:11:29,500 --> 00:11:33,740
+firmware gives to the other stuff that it loads and it's therefore equivalent to the core boot
+
+152
+00:11:33,740 --> 00:11:38,540
+payload which is also not part of core boot but it's a boot loader that is run after core boot
+
+153
+00:11:38,540 --> 00:11:43,660
+is finished essentially so if we want a secure monitor and core boot we really don't need to
+
+154
+00:11:43,660 --> 00:11:47,980
+care about all this other stuff we can throw all that away all we want is the secure monitor part
+
+155
+00:11:47,980 --> 00:11:52,700
+it would be really nice if we could just yank it out of there and smash it in over here which is
+
+156
+00:11:52,700 --> 00:12:00,460
+essentially exactly what we did so um we integrate trusted firmware as a git sub module into core
+
+157
+00:12:00,460 --> 00:12:04,220
+boot so when you check out this core boot source we automatically have the trusted firmware source
+
+158
+00:12:04,220 --> 00:12:10,140
+three there as well and can develop in it and when you build core boot it also builds trusted
+
+159
+00:12:10,140 --> 00:12:14,540
+firmware and then picks the right part that b3 run out of it and integrates it into core wood at the
+
+160
+00:12:14,540 --> 00:12:20,700
+right place so it all works out pretty nicely and if you're curious about the details of how this is
+
+161
+00:12:20,700 --> 00:12:26,140
+implemented in core boot um the nice part of what core wood is that most of it is architecture
+
+162
+00:12:26,140 --> 00:12:31,020
+independent right so all this logic about figuring out for example where this payload is and how to
+
+163
+00:12:31,020 --> 00:12:36,220
+load it and put it in place that's all independent of the architecture and we don't need to touch
+
+164
+00:12:36,220 --> 00:12:40,540
+that the only thing we are touching is really the very last part of the ram stage where it jumps to
+
+165
+00:12:40,540 --> 00:12:44,780
+the payload that's an architecture specific callback and all we do for trusted firmware
+
+166
+00:12:44,780 --> 00:12:49,580
+there is essentially we're saying if we're running trusted firmware then instead of jumping to the
+
+167
+00:12:49,580 --> 00:12:55,180
+payload wait a second let's load this other thing over here first and run it and then we pass trusted
+
+168
+00:12:55,180 --> 00:12:59,420
+firmware the information of how to jump to the payload and the payload is already noted so the
+
+169
+00:12:59,420 --> 00:13:01,760
+The nice thing is, Trusted Firmware doesn't really
+
+170
+00:13:01,760 --> 00:13:03,760
+need to know anything about how to access the flash
+
+171
+00:13:03,760 --> 00:13:06,820
+or something like that in these architectures.
+
+172
+00:13:06,820 --> 00:13:08,200
+The next stage is already loaded,
+
+173
+00:13:08,200 --> 00:13:10,240
+and we just tell it how to move on after it's
+
+174
+00:13:10,240 --> 00:13:13,880
+done its thing, essentially.
+
+175
+00:13:13,880 --> 00:13:16,380
+This is a quick overview about how
+
+176
+00:13:16,380 --> 00:13:18,940
+the Trusted Firmware repository is laid out.
+
+177
+00:13:18,940 --> 00:13:21,280
+So my goal here is essentially to give you a rough idea of where
+
+178
+00:13:21,280 --> 00:13:25,480
+to look if you have to implement your own SOC for,
+
+179
+00:13:25,480 --> 00:13:27,220
+like if you're implementing an SOC in core boot
+
+180
+00:13:27,220 --> 00:13:34,180
+want the trusted firmware support to get it working on ARM64. This is just a small excerpt
+
+181
+00:13:34,180 --> 00:13:38,100
+of the directories. There are a lot of these. I left the ones out that you don't need to
+
+182
+00:13:38,100 --> 00:13:42,100
+care about, essentially, if you only care about core boot. Next to the BL3.1 directory,
+
+183
+00:13:42,100 --> 00:13:46,180
+there's also a BL2 and a BL1. You can just ignore those because we are not using those.
+
+184
+00:13:46,740 --> 00:13:50,980
+There's a lot of really good documentation. If you're trying to work on trusted firmware,
+
+185
+00:13:50,980 --> 00:13:55,220
+my recommendation is really to look at those because they are great, especially this
+
+186
+00:13:55,220 --> 00:14:02,940
+This porting guide is essentially your one-stop stop for implementing a new platform.
+
+187
+00:14:02,940 --> 00:14:07,280
+It tells you all the macros you need to define, all the functions you need to implement, and
+
+188
+00:14:07,280 --> 00:14:08,280
+so on.
+
+189
+00:14:08,280 --> 00:14:12,700
+If you're looking for drivers, they're all sorted by vendor.
+
+190
+00:14:12,700 --> 00:14:15,880
+If you're looking for the generic interrupt controller, for example, that most SOCs use,
+
+191
+00:14:15,880 --> 00:14:17,380
+that is under ARM.
+
+192
+00:14:17,380 --> 00:14:22,260
+If you're looking for a standard 16550 UART, which most SOCs use, that is under TI in this
+
+193
+00:14:22,260 --> 00:14:23,960
+case.
+
+194
+00:14:23,960 --> 00:14:27,360
+And most of the drivers that cannot be reused between SOCs
+
+195
+00:14:27,360 --> 00:14:28,860
+are just in the platform part over here.
+
+196
+00:14:28,860 --> 00:14:32,940
+So actually, a lot of the framework is pretty lean,
+
+197
+00:14:32,940 --> 00:14:35,200
+and a lot of the stuff is just implemented in the platform.
+
+198
+00:14:35,200 --> 00:14:38,360
+And every platform does it however it thinks it wants to.
+
+199
+00:14:38,360 --> 00:14:39,920
+One of the few things that you still
+
+200
+00:14:39,920 --> 00:14:44,120
+have generic for all platforms to use, the CPU stuff
+
+201
+00:14:44,120 --> 00:14:44,900
+is pretty great.
+
+202
+00:14:44,900 --> 00:14:47,760
+So as I said, they have all the CPUs already implemented.
+
+203
+00:14:47,760 --> 00:14:50,340
+And you essentially just need to add the right CPUs
+
+204
+00:14:50,340 --> 00:14:52,540
+that your SOC has in the make file.
+
+205
+00:14:52,540 --> 00:14:53,420
+And then it builds them.
+
+206
+00:14:53,420 --> 00:14:55,980
+And then it can automatically detect which CPU is which.
+
+207
+00:14:55,980 --> 00:14:58,720
+So when it brings up a CPU, it reads the identification
+
+208
+00:14:58,720 --> 00:15:01,460
+register and searches for all the CPUs you compiled
+
+209
+00:15:01,460 --> 00:15:05,200
+and which one this is and which code to use for that.
+
+210
+00:15:05,200 --> 00:15:08,320
+And as I said, in the platform, first of all,
+
+211
+00:15:08,320 --> 00:15:09,840
+there's a common platform directory.
+
+212
+00:15:09,840 --> 00:15:12,420
+So there's a lot of callbacks for things
+
+213
+00:15:12,420 --> 00:15:14,880
+which the platform can change if it wants to.
+
+214
+00:15:14,880 --> 00:15:16,540
+But usually, most platforms just want
+
+215
+00:15:16,540 --> 00:15:19,060
+to do the one thing that makes sense to most of them.
+
+216
+00:15:19,060 --> 00:15:20,820
+So there's a bunch of stuff implemented in common
+
+217
+00:15:20,820 --> 00:15:22,640
+that you can just link in because it will probably
+
+218
+00:15:22,640 --> 00:15:24,820
+work for you.
+
+219
+00:15:24,820 --> 00:15:26,580
+Then every platform does its own thing.
+
+220
+00:15:26,580 --> 00:15:29,300
+There's usually a plat setup thing that
+
+221
+00:15:29,300 --> 00:15:30,980
+is the first thing that runs during boot
+
+222
+00:15:30,980 --> 00:15:32,840
+and does all the boot initialization.
+
+223
+00:15:32,840 --> 00:15:36,020
+There's a PM thing usually that implements those pesky
+
+224
+00:15:36,020 --> 00:15:36,680
+callbacks.
+
+225
+00:15:36,680 --> 00:15:40,660
+And a lot of vendors sort of factor out
+
+226
+00:15:40,660 --> 00:15:43,220
+some of the common stuff and then the per-SAC stuff.
+
+227
+00:15:43,220 --> 00:15:45,720
+And in the end, each platform has a make
+
+228
+00:15:45,720 --> 00:15:47,360
+file that defines all it does, essentially.
+
+229
+00:15:47,360 --> 00:15:52,380
+So there's no complicated configuration framework here.
+
+230
+00:15:52,380 --> 00:15:53,960
+It's not using kconfig or anything.
+
+231
+00:15:53,960 --> 00:15:56,700
+All the compile time configuration options you have
+
+232
+00:15:56,700 --> 00:15:58,280
+are just options in the make file,
+
+233
+00:15:58,280 --> 00:15:59,860
+and then, essentially, which drivers
+
+234
+00:15:59,860 --> 00:16:02,640
+you link in the make file.
+
+235
+00:16:02,640 --> 00:16:05,280
+So if you want to support a new platform for Corvoo,
+
+236
+00:16:05,280 --> 00:16:08,200
+the one thing you really need to implement is this pesky stuff.
+
+237
+00:16:08,200 --> 00:16:11,140
+So let's look into that for a bit.
+
+238
+00:16:11,140 --> 00:16:14,820
+And the main message here is, essentially, it's very flexible.
+
+239
+00:16:14,820 --> 00:16:18,700
+You can do whatever you want, whatever is best for your SOC.
+
+240
+00:16:18,700 --> 00:16:22,600
+So each of the things that you can turn on and off,
+
+241
+00:16:22,600 --> 00:16:26,040
+essentially, for runtime power management,
+
+242
+00:16:26,040 --> 00:16:30,340
+you have these nodes which are in a hierarchy of power levels.
+
+243
+00:16:30,340 --> 00:16:32,840
+And then the bottom level, you always have the CPU.
+
+244
+00:16:32,840 --> 00:16:34,780
+Or in case of multi-threading, that would be the threads,
+
+245
+00:16:34,780 --> 00:16:35,620
+actually.
+
+246
+00:16:35,620 --> 00:16:37,880
+And then you can have as many layers above that as you want.
+
+247
+00:16:37,880 --> 00:16:39,160
+You don't need to have any layers.
+
+248
+00:16:39,160 --> 00:16:43,720
+But most SOCs have their CPUs in some sort of cluster.
+
+249
+00:16:43,720 --> 00:16:45,820
+And when you turn off all the CPU in a cluster,
+
+250
+00:16:45,820 --> 00:16:47,860
+then you can turn off some extra stuff for the cluster.
+
+251
+00:16:47,860 --> 00:16:50,280
+So this power level stuff allows you
+
+252
+00:16:50,280 --> 00:16:54,020
+to build the topology of your SOC in the framework,
+
+253
+00:16:54,020 --> 00:16:54,520
+essentially.
+
+254
+00:16:54,520 --> 00:16:57,340
+And you just tell it which maximum power level you want
+
+255
+00:16:57,340 --> 00:16:59,660
+to have, and then it handles all the stuff
+
+256
+00:16:59,660 --> 00:17:01,860
+of calling the right functions for each power level
+
+257
+00:17:01,860 --> 00:17:03,760
+to turn them on and off, for example.
+
+258
+00:17:03,760 --> 00:17:06,940
+And orthogonal to that, you also have power states.
+
+259
+00:17:06,940 --> 00:17:08,720
+So there's not just on and off.
+
+260
+00:17:08,720 --> 00:17:10,820
+There can be as many as you want in between
+
+261
+00:17:10,820 --> 00:17:15,360
+to have a trade-off between exit latency, usually,
+
+262
+00:17:15,360 --> 00:17:16,100
+and power draw.
+
+263
+00:17:16,100 --> 00:17:18,560
+So rather than just turning it off,
+
+264
+00:17:18,560 --> 00:17:20,860
+you can maybe put it into a retention state
+
+265
+00:17:20,860 --> 00:17:22,340
+that you can wake up from quickly.
+
+266
+00:17:22,340 --> 00:17:24,460
+And there again, you can have as many states as you want.
+
+267
+00:17:24,460 --> 00:17:27,420
+You can define all of that inside your platform.
+
+268
+00:17:27,420 --> 00:17:29,100
+The only thing you tell the outside framework
+
+269
+00:17:29,100 --> 00:17:32,160
+is whether this is an off state or a retention state.
+
+270
+00:17:32,160 --> 00:17:34,600
+The difference there is that in the off state,
+
+271
+00:17:34,600 --> 00:17:36,980
+it loses all its state.
+
+272
+00:17:36,980 --> 00:17:38,300
+And you have to, like the framework
+
+273
+00:17:38,300 --> 00:17:39,940
+will reinitialize all of the state for you
+
+274
+00:17:39,940 --> 00:17:40,720
+when it comes back up.
+
+275
+00:17:40,720 --> 00:17:43,820
+And the retention state, it's expected to keep that.
+
+276
+00:17:43,820 --> 00:17:46,500
+And then the only thing you really need to implement
+
+277
+00:17:46,500 --> 00:17:48,500
+once you've decided how this hierarchy looks
+
+278
+00:17:48,500 --> 00:17:52,060
+is a structure full of function pointers, essentially,
+
+279
+00:17:52,060 --> 00:17:55,400
+with all the callbacks for how do I turn off the CPU,
+
+280
+00:17:55,400 --> 00:17:57,620
+any of these nodes, actually not just CPUs,
+
+281
+00:17:57,620 --> 00:17:59,280
+how do I turn it back on?
+
+282
+00:17:59,280 --> 00:18:01,440
+What do I do with it after it's turned back on?
+
+283
+00:18:01,440 --> 00:18:03,700
+So that is this finished callback down here.
+
+284
+00:18:03,700 --> 00:18:04,880
+And there's a bunch more.
+
+285
+00:18:04,880 --> 00:18:07,360
+But the general gist of it is that you just
+
+286
+00:18:07,360 --> 00:18:09,600
+have this bunch of functions you need to implement,
+
+287
+00:18:09,600 --> 00:18:13,800
+and then the framework knows how to call you correctly.
+
+288
+00:18:13,800 --> 00:18:19,640
+That's really all you need for the pesky stuff. Once again, the documents are really great to
+
+289
+00:18:19,640 --> 00:18:24,520
+look into how this works in specifics. Also, of course, just look at existing platforms.
+
+290
+00:18:24,520 --> 00:18:28,440
+My favorite is always the Rockchip one because the SSCs tend to be really simple. They don't have
+
+291
+00:18:28,440 --> 00:18:34,280
+any of the weird hooks and crannies that some of the other more complicated SSCs have, so they
+
+292
+00:18:34,280 --> 00:18:39,880
+usually make a good example. Once you have that, you're essentially done supporting Corewood,
+
+293
+00:18:39,880 --> 00:18:43,560
+but you can do some more stuff if you want to. One of the common things you might want to do
+
+294
+00:18:43,560 --> 00:18:49,320
+is custom smcs of course this pesky also uses smcs and all of those are already implemented
+
+295
+00:18:49,320 --> 00:18:52,600
+in the framework so you don't need to worry about those but you can add your own if you want to
+
+296
+00:18:53,880 --> 00:18:59,640
+common thing that we need find that we need is one time ddr frequency scaling for example because
+
+297
+00:18:59,640 --> 00:19:04,360
+if you do anything that involves memory since memory is used by the whole platform usually
+
+298
+00:19:04,360 --> 00:19:09,080
+it needs to go through the highest privilege level to allow that and it's also pretty simple
+
+299
+00:19:09,640 --> 00:19:13,960
+they essentially have a macro that you can use to define a handler for a given range of smc
+
+300
+00:19:13,960 --> 00:19:19,400
+function ids there's actually this whole big specification from arm that tells you which
+
+301
+00:19:19,400 --> 00:19:25,080
+smc function id ranges are allowed to be used by whom usually the one you want to use is called
+
+302
+00:19:25,080 --> 00:19:29,960
+the sip range i always forget what it stands for but it's essentially the soc vendor range so if
+
+303
+00:19:29,960 --> 00:19:36,360
+you're implementing an soc port that's usually the one you want to use and last but not least
+
+304
+00:19:36,360 --> 00:19:43,240
+we have some fun core boot support in there now um one of the problems if with integrating
+
+305
+00:19:43,240 --> 00:19:48,840
+core wood is that there's not yet a great way to pass parameters in a generic way from core boot
+
+306
+00:19:48,840 --> 00:19:53,160
+into trusted firmware this is something that i think the trusted firmware team is interested in
+
+307
+00:19:53,160 --> 00:20:00,280
+making better in the future but right now all that they have is uh essentially you can have one
+
+308
+00:20:00,280 --> 00:20:05,080
+pointer of platform specific information and then the platform has to figure out how to deal with
+
+309
+00:20:05,080 --> 00:20:11,640
+that so when you the first piece of platform code that's called when you are in trusted firmware is
+
+310
+00:20:11,640 --> 00:20:16,600
+usually the function over there which gets that one pointer and then you have to figure out what
+
+311
+00:20:16,600 --> 00:20:21,560
+to do with that usually we find that we have to pass a bunch of things from core boot into trusted
+
+312
+00:20:21,560 --> 00:20:26,040
+firmware so what we do is we build a sort of primitive linked list with that and then parse it
+
+313
+00:20:27,160 --> 00:20:33,080
+when like at the very first thing in trusted firmware um and one of the things you should
+
+314
+00:20:33,080 --> 00:20:37,720
+passes the core boot table base address because then you can use this core boot table setup
+
+315
+00:20:37,720 --> 00:20:42,600
+function which we have in trusted firmware which gives you all the core boot the generic core boot
+
+316
+00:20:42,600 --> 00:20:47,880
+support that we implemented which is right now mostly console support so for example after that
+
+317
+00:20:47,880 --> 00:20:54,600
+you have access to the console the uart information over there so you don't have to hard code the uart
+
+318
+00:20:54,600 --> 00:20:59,720
+base address anymore you can use the one from core boot and more importantly you essentially
+
+319
+00:20:59,720 --> 00:21:03,720
+take over coreboots configuration with that so if you disable the uart and coreboot kconfig then
+
+320
+00:21:03,720 --> 00:21:07,640
+it would just not pass that and then trusted firmware will also not use it which is nicer than
+
+321
+00:21:07,640 --> 00:21:12,920
+having to disable stuff in every uh every different repository your firmware is made of
+
+322
+00:21:13,560 --> 00:21:17,720
+um the other nice thing you get with this automatically is cbmem console support so as
+
+323
+00:21:17,720 --> 00:21:22,600
+soon as you like if you have a cbmem console in coreboot then information about that is passed
+
+324
+00:21:22,600 --> 00:21:27,160
+in the coreboot table and then trusted firmware automatically register console driver for that
+
+325
+00:21:27,160 --> 00:21:32,120
+and then once you boot into user land, you can dump the CBMIM console and see all the
+
+326
+00:21:32,120 --> 00:21:38,840
+trusted firmware logs right after the core boot logs. I think this is pretty much all
+
+327
+00:21:38,840 --> 00:21:44,360
+I want to talk about about the basic trusted firmware architecture. The one thing I want
+
+328
+00:21:44,360 --> 00:21:51,320
+to leave you with is a little anecdote about some of the practical problems we had when implementing
+
+329
+00:21:51,320 --> 00:21:57,960
+one of these socs and trusted firmware this is about the rock chip 3399 and um well we essentially
+
+330
+00:21:57,960 --> 00:22:03,800
+had some trouble fitting everything there um this story starts very simple with bringing up the chip
+
+331
+00:22:03,800 --> 00:22:09,400
+and trying to get suspend resume support working so of course the whole system suspend resume also
+
+332
+00:22:09,400 --> 00:22:13,400
+needs to go through the secure monitor because it turns off the whole system so the highest
+
+333
+00:22:13,400 --> 00:22:19,400
+privileged never needs to know about it and um you usually turn out like the ddr controller usually
+
+334
+00:22:19,400 --> 00:22:22,840
+uses a state during that, so you have to reinitialize it somehow when you come back up.
+
+335
+00:22:22,840 --> 00:22:27,880
+And, of course, the code for that can't be in DRAM. So thankfully, we are an ARM SOC. We
+
+336
+00:22:27,880 --> 00:22:35,080
+usually have a bunch of SRAMs, so we can put it in there. And we have quite a lot of SRAM
+
+337
+00:22:35,080 --> 00:22:40,360
+on this platform, so that's pretty easy to fit. Then we had some other issues about
+
+338
+00:22:41,960 --> 00:22:47,240
+we want to do some DDR frequency scaling at runtime. Depending on the SOC, this is sometimes
+
+339
+00:22:47,240 --> 00:22:51,720
+pretty easy and sometimes a real chore on this one it was thankfully not that hard because we
+
+340
+00:22:51,720 --> 00:22:57,640
+have this little separate microcontroller in the soc like a cortex m0 essentially on the side of
+
+341
+00:22:57,640 --> 00:23:03,960
+the normal cpus which had the ability to just stop the cpus in place retrain ddr to a different
+
+342
+00:23:03,960 --> 00:23:08,760
+frequency and then kick them off again the main cpus never really knew what did them so this was
+
+343
+00:23:08,760 --> 00:23:14,200
+pretty easy to implement but we still needed uh to put some code in like we needed to host that
+
+344
+00:23:14,200 --> 00:23:18,920
+code for this M0 in SRAM, of course, because DDR is inaccessible while we're changing frequencies.
+
+345
+00:23:20,680 --> 00:23:25,240
+And we had some more fun with trying to work around hardware bugs. So this is a particular
+
+346
+00:23:25,240 --> 00:23:30,840
+thing where when it goes into system suspend and it gets a wake interrupt at just the right time,
+
+347
+00:23:30,840 --> 00:23:35,640
+like just after you turned off the main CPU, then sometimes it wouldn't wake up again.
+
+348
+00:23:35,640 --> 00:23:40,040
+So to work around that, you essentially needed something to sit around and wait until after all
+
+349
+00:23:40,040 --> 00:23:42,940
+All the CPUs have been turned off and checked
+
+350
+00:23:42,940 --> 00:23:44,700
+for this condition and then cleared.
+
+351
+00:23:44,700 --> 00:23:46,740
+So here comes our M0 to the rescue again,
+
+352
+00:23:46,740 --> 00:23:48,860
+and we had to implement some code for that.
+
+353
+00:23:48,860 --> 00:23:51,440
+All of this still fit pretty nicely into SRAM.
+
+354
+00:23:51,440 --> 00:23:56,260
+But then we had a great idea on how to save some more power.
+
+355
+00:23:56,260 --> 00:23:59,340
+This is where I wanted to be, which is essentially
+
+356
+00:23:59,340 --> 00:24:01,700
+there was one more power rail we could turn off,
+
+357
+00:24:01,700 --> 00:24:03,920
+which powered most of the chip.
+
+358
+00:24:03,920 --> 00:24:07,140
+And turning it off would have saved us really a bunch of power.
+
+359
+00:24:07,140 --> 00:24:09,400
+Unfortunately, it also powered the SRAM.
+
+360
+00:24:09,400 --> 00:24:12,360
+So, at that point, we sort of have a problem,
+
+361
+00:24:12,360 --> 00:24:13,500
+because we can turn the system off,
+
+362
+00:24:13,500 --> 00:24:14,580
+but when we turn it back on,
+
+363
+00:24:14,580 --> 00:24:17,260
+we don't have anything to resume from.
+
+364
+00:24:17,260 --> 00:24:19,220
+So, the one good thing we had was
+
+365
+00:24:19,220 --> 00:24:21,980
+we have this little amount of PMU SRAM,
+
+366
+00:24:21,980 --> 00:24:25,100
+which is sort of a separate amount of SRAM
+
+367
+00:24:25,100 --> 00:24:28,020
+that's implemented, that's powered by a different power rail,
+
+368
+00:24:28,020 --> 00:24:30,460
+and would stay alive even if we turn this off.
+
+369
+00:24:30,460 --> 00:24:32,640
+But now we have to start fitting all of this stuff in there,
+
+370
+00:24:32,640 --> 00:24:34,360
+which is kind of awful.
+
+371
+00:24:35,360 --> 00:24:37,480
+The DDR in it stuff, so it kind of fits.
+
+372
+00:24:38,360 --> 00:24:42,680
+one of the problems that we also have here is that the entry point of the cpu when it comes
+
+373
+00:24:42,680 --> 00:24:48,120
+back from resume you can essentially only give the soc the top 60 bits so it has to be 64k aligned
+
+374
+00:24:48,120 --> 00:24:51,880
+thankfully the pm usrm is 64k aligned but it needs to sit at the very top for that
+
+375
+00:24:52,600 --> 00:24:57,000
+and the m0 code also needs to be 4k aligned because that's how the m0 works so
+
+376
+00:24:57,720 --> 00:25:01,560
+first of all putting the whole m0 code that we have right now in there doesn't fit at all there's
+
+377
+00:25:01,560 --> 00:25:08,120
+no way. Our idea was rather than having one M0 image and giving it an argument of which
+
+378
+00:25:08,120 --> 00:25:12,440
+of the two functions it's supposed to do, we could split it up and have two M0 images
+
+379
+00:25:12,440 --> 00:25:17,320
+and then just always give the M0 base address for the one we want to use when we kick it
+
+380
+00:25:17,320 --> 00:25:21,320
+off. This sort of works, but if you can see between
+
+381
+00:25:21,320 --> 00:25:26,080
+these two, it overlaps part of the DDR and its stuff, so it doesn't quite fit, and it
+
+382
+00:25:26,080 --> 00:25:29,240
+needs to be in the middle there because it needs to be 4K aligned, so this also didn't
+
+383
+00:25:29,240 --> 00:25:36,500
+quite work. But then we realized the DDR on it has to start at 64k. But after that, it's
+
+384
+00:25:36,500 --> 00:25:41,260
+really just normal code. So we can really sort of rip it apart and sandwich it carefully
+
+385
+00:25:41,260 --> 00:25:51,760
+around the M0 code. And come on. With a lot of, you know, juggling bits and counting instructions,
+
+386
+00:25:51,760 --> 00:25:57,800
+we managed to get this all in 8k. You have one problem left if you do all this, which
+
+387
+00:25:57,800 --> 00:26:01,320
+which is that since you lose SRAM in S3,
+
+388
+00:26:01,320 --> 00:26:03,760
+of course, you lose that DDR frequency scanning stuff,
+
+389
+00:26:03,760 --> 00:26:06,400
+so it would be not that great
+
+390
+00:26:06,400 --> 00:26:09,240
+if DDR frequency scanning worked after you boot it,
+
+391
+00:26:09,240 --> 00:26:11,000
+but then once you suspend resume once,
+
+392
+00:26:11,000 --> 00:26:12,360
+it doesn't work anymore.
+
+393
+00:26:12,360 --> 00:26:16,120
+So the ugly but obvious solution is to cache it in DRAM.
+
+394
+00:26:18,240 --> 00:26:20,520
+I think this thing is dying there.
+
+395
+00:26:22,040 --> 00:26:26,360
+And then just copy it back every time we resume, essentially.
+
+396
+00:26:26,360 --> 00:26:28,100
+So if you want to look how this madness
+
+397
+00:26:28,100 --> 00:26:32,980
+looks in the link to script, I've got it over here.
+
+398
+00:26:32,980 --> 00:26:35,100
+Can we switch the slides manually?
+
+399
+00:26:35,100 --> 00:26:37,520
+Thanks.
+
+400
+00:26:37,520 --> 00:26:40,600
+So the ink bin stuff is essentially the M0 code.
+
+401
+00:26:40,600 --> 00:26:43,060
+So you see it needs to be 64K aligned.
+
+402
+00:26:43,060 --> 00:26:46,920
+And then even though the other stuff is the same program,
+
+403
+00:26:46,920 --> 00:26:48,680
+if we put the data section beyond that,
+
+404
+00:26:48,680 --> 00:26:50,580
+it just happens to magically work out.
+
+405
+00:26:50,580 --> 00:26:52,700
+And we're just hoping that we never
+
+406
+00:26:52,700 --> 00:26:54,100
+have a compiler change or anything
+
+407
+00:26:54,100 --> 00:26:55,280
+that messes all of this up again,
+
+408
+00:26:55,280 --> 00:26:57,040
+because it's going to be the most awful thing.
+
+409
+00:26:59,820 --> 00:27:03,680
+If you want to see some details about how
+
+410
+00:27:03,680 --> 00:27:05,180
+you do this sort of thing where you
+
+411
+00:27:05,180 --> 00:27:07,640
+build the binary for a completely different chip
+
+412
+00:27:07,640 --> 00:27:10,220
+inside the same software as the main,
+
+413
+00:27:10,220 --> 00:27:12,060
+inside your main software package,
+
+414
+00:27:12,060 --> 00:27:14,760
+and link it all together, it's somehow done like this.
+
+415
+00:27:14,760 --> 00:27:16,360
+First of all, you essentially first
+
+416
+00:27:16,360 --> 00:27:20,300
+build that M0 code completely separate into a strip binary.
+
+417
+00:27:20,300 --> 00:27:22,200
+And then you would define a makefile rule
+
+418
+00:27:22,200 --> 00:27:24,520
+for the main software, where that binary
+
+419
+00:27:24,520 --> 00:27:28,600
+is another dependency for one of the C files.
+
+420
+00:27:28,600 --> 00:27:30,340
+And you also pass the name of that binary
+
+421
+00:27:30,340 --> 00:27:34,140
+in as a preprocessor macro.
+
+422
+00:27:34,140 --> 00:27:36,780
+And then you can use this weird assembly instruction
+
+423
+00:27:36,780 --> 00:27:39,120
+called inkbin, which essentially just tells the assembler
+
+424
+00:27:39,120 --> 00:27:42,280
+to, at this point, include a whole other file completely
+
+425
+00:27:42,280 --> 00:27:44,140
+and then continue assembling.
+
+426
+00:27:44,140 --> 00:27:45,640
+And then you put a label around of it,
+
+427
+00:27:45,640 --> 00:27:47,800
+and then you can access it from C code
+
+428
+00:27:47,800 --> 00:27:52,600
+and tell the M0-based address, which is to put the address
+
+429
+00:27:52,600 --> 00:27:54,440
+in there and then sort of work out.
+
+430
+00:27:54,440 --> 00:27:58,160
+And this is the M0 code we run on suspend in the end.
+
+431
+00:27:58,160 --> 00:28:00,500
+As you can see, it's really simple and really stupid.
+
+432
+00:28:00,500 --> 00:28:03,780
+There's essentially this suspend state,
+
+433
+00:28:03,780 --> 00:28:07,340
+which keeps counting upwards as you go through the suspend
+
+434
+00:28:07,340 --> 00:28:09,480
+and then again as you go through the resume later.
+
+435
+00:28:09,480 --> 00:28:11,180
+As you can see, we had some other issues we also
+
+436
+00:28:11,180 --> 00:28:12,740
+had to work around in the end.
+
+437
+00:28:12,740 --> 00:28:14,840
+Like as you keep testing more and more on the platform,
+
+438
+00:28:14,840 --> 00:28:16,700
+you keep finding more things.
+
+439
+00:28:16,700 --> 00:28:19,360
+This is actually where the system is suspended in here.
+
+440
+00:28:19,360 --> 00:28:22,160
+So if you take one of these Chromebooks today
+
+441
+00:28:22,160 --> 00:28:25,540
+and you close the lid, then even though it's supposed
+
+442
+00:28:25,540 --> 00:28:27,880
+to save power, the whole time where the lid is closed,
+
+443
+00:28:27,880 --> 00:28:31,060
+you have this little codex M0 saying in a tight loop,
+
+444
+00:28:31,060 --> 00:28:32,160
+am I already resumed?
+
+445
+00:28:32,160 --> 00:28:33,160
+Am I already resumed?
+
+446
+00:28:33,160 --> 00:28:34,700
+Am I already resumed?
+
+447
+00:28:34,700 --> 00:28:36,840
+But it turns out that M0s don't eat a lot of power.
+
+448
+00:28:36,840 --> 00:28:38,980
+And if you do that on a 32 kilohertz clock,
+
+449
+00:28:38,980 --> 00:28:41,080
+it's actually not as crazy as it sounds.
+
+450
+00:28:41,080 --> 00:28:45,940
+You just shouldn't know how the sausage is made in that case.
+
+451
+00:28:45,940 --> 00:28:46,900
+Yeah, that's all I have.
+
+452
+00:28:46,900 --> 00:28:48,540
+So thanks for listening.
+
+453
+00:28:48,540 --> 00:28:50,640
+Anyone have any questions?
+
+454
+00:28:52,160 --> 00:29:00,560
+All right, thanks so far.
+
+455
+00:29:00,560 --> 00:29:07,560
+Questions?
+
+456
+00:29:07,560 --> 00:29:14,560
+Why does the DDR3 controller need to be re-initialized after S3 resume?
+
+457
+00:29:14,560 --> 00:29:22,560
+Why, for instance, can the hardware put that in self-refresh and that boot, it works basically?
+
+458
+00:29:22,560 --> 00:29:28,960
+Right, so this is not the DDR itself, right, so the DDR chip on the board is put into self-refresh,
+
+459
+00:29:28,960 --> 00:29:35,520
+but the DDR controller on the SOC needs to know how to talk to the DDR, and that part isn't
+
+460
+00:29:35,520 --> 00:29:40,640
+maintained mostly to save power, so we shut off most parts of the SOC when we go into S3 and that's
+
+461
+00:29:40,640 --> 00:29:42,020
+That's one of the parts we shut off.
+
+462
+00:29:42,020 --> 00:29:44,720
+So after the boot, you need something
+
+463
+00:29:44,720 --> 00:29:47,700
+to tell the DDR controller how the DDR chip,
+
+464
+00:29:47,700 --> 00:29:50,960
+like how many rows, banks, and columns, and so on,
+
+465
+00:29:50,960 --> 00:29:53,360
+you have, and to tell it to take the DDR out
+
+466
+00:29:53,360 --> 00:29:55,080
+of self-refresh, and all that kind of code
+
+467
+00:29:55,080 --> 00:29:56,820
+needs to live somewhere.
+
+468
+00:29:56,820 --> 00:30:00,040
+And second question.
+
+469
+00:30:00,040 --> 00:30:05,000
+Why don't you do the initialization part
+
+470
+00:30:05,000 --> 00:30:10,100
+like a normal boot, like in core boots on x86?
+
+471
+00:30:10,100 --> 00:30:12,980
+Are you asking why we're not reading it from Flash?
+
+472
+00:30:12,980 --> 00:30:16,940
+Yes, why aren't you doing it dynamically
+
+473
+00:30:16,940 --> 00:30:18,920
+from code that is in Flash?
+
+474
+00:30:18,920 --> 00:30:22,460
+Not necessarily saving that on Flash, but.
+
+475
+00:30:22,460 --> 00:30:23,800
+You can do that.
+
+476
+00:30:23,800 --> 00:30:25,460
+It sort of depends on the SoC.
+
+477
+00:30:25,460 --> 00:30:27,860
+So this SoC in particular, I think,
+
+478
+00:30:27,860 --> 00:30:30,000
+was designed to resume from SRAM.
+
+479
+00:30:30,000 --> 00:30:32,600
+So I'm not sure if starting the boot
+
+480
+00:30:32,600 --> 00:30:34,940
+ROM again from Flash would even be possible.
+
+481
+00:30:34,940 --> 00:30:36,720
+The other reason you might not want that
+
+482
+00:30:36,720 --> 00:30:40,000
+is it sort of depends on how your system is designed.
+
+483
+00:30:40,000 --> 00:30:42,340
+In our case, this is a Chromebook.
+
+484
+00:30:42,340 --> 00:30:44,080
+So Chromebooks are always designed in a way
+
+485
+00:30:44,080 --> 00:30:46,020
+to boot from a read-only partition
+
+486
+00:30:46,020 --> 00:30:49,380
+and then do some crypto magic before we jump into the partition
+
+487
+00:30:49,380 --> 00:30:51,760
+we can actually update on the flash.
+
+488
+00:30:51,760 --> 00:30:56,440
+And we found out in the past that tying the resume path
+
+489
+00:30:56,440 --> 00:30:59,000
+to this read-only flash is a very bad idea,
+
+490
+00:30:59,000 --> 00:31:02,760
+because that means that if you ever have a problem in your resume
+
+491
+00:31:02,760 --> 00:31:05,320
+path, in your early resume path, you can't really fix it.
+
+492
+00:31:05,320 --> 00:31:07,480
+So resuming from SOM is very nice,
+
+493
+00:31:07,480 --> 00:31:09,020
+because then you can always update it.
+
+494
+00:31:09,020 --> 00:31:13,240
+And you're not bound to the stuff you have put on Flash, essentially.
+
+495
+00:31:17,980 --> 00:31:18,960
+More questions?
+
+496
+00:31:22,900 --> 00:31:23,460
+Sorry.
+
+497
+00:31:23,860 --> 00:31:30,240
+Going back to one of your earlier slides,
+
+498
+00:31:30,960 --> 00:31:36,160
+you've replaced the early stages of trusted firmware with co-boot code.
+
+499
+00:31:36,160 --> 00:31:44,080
+i'm not a trusted firmware architect or expert but i'm sure it would alarm those who are
+
+500
+00:31:44,080 --> 00:31:50,960
+because the the whole route of trust derives from the early stages of the trusted firmware
+
+501
+00:31:50,960 --> 00:31:56,140
+right i mean so it always depends on what you want to do with the system right so
+
+502
+00:31:56,140 --> 00:32:03,600
+trusted firmware has many uh many things it does and many use cases um they do have a system of
+
+503
+00:32:03,600 --> 00:32:07,600
+trusted boot where every stage verifies the next but of course you don't have to use that
+
+504
+00:32:07,600 --> 00:32:13,360
+um in this case the goal was essentially to get core boot working on arm64 and what we needed was
+
+505
+00:32:13,360 --> 00:32:17,440
+a secure monitor so we just took the secure monitor that existed and didn't really care
+
+506
+00:32:17,440 --> 00:32:23,520
+about the other things um if you want trusted boot core boot has its own way of trusted boot
+
+507
+00:32:23,520 --> 00:32:28,800
+which is derived from the way that chrome os initially did it which is called verified boot
+
+508
+00:32:28,800 --> 00:32:35,840
+reboot and um the trusted the b3 one in this case is part of that so the way the core would work uh
+
+509
+00:32:35,840 --> 00:32:39,600
+way works is you you boot from a read-only partition of the flash you verify the read-write
+
+510
+00:32:39,600 --> 00:32:43,920
+partition of the flash and then you boot from there and trusted firmware is just one of the
+
+511
+00:32:43,920 --> 00:32:48,400
+different components that are stored in this read-write partition so we have our own trusted
+
+512
+00:32:48,400 --> 00:32:53,120
+boot mechanism essentially and we're just using a component of trusted firmware in there thank you
+
+513
+00:32:58,800 --> 00:33:12,840
+So, if you had, like, the ability to tell the SOC guys here how to redesign their SRAM,
+
+514
+00:33:12,840 --> 00:33:17,280
+would you just say, don't turn off the SRAM, or did you like having the two partitions
+
+515
+00:33:17,280 --> 00:33:20,420
+for power reasons, or what's your feeling on that?
+
+516
+00:33:20,420 --> 00:33:24,540
+I'm not a power guy, so I don't know how much SRAM itself actually takes.
+
+517
+00:33:24,540 --> 00:33:26,840
+I think in this case, there was sort of a design problem
+
+518
+00:33:26,840 --> 00:33:30,960
+of just tying everything to this one big power rail.
+
+519
+00:33:31,040 --> 00:33:31,900
+So if you turn that off,
+
+520
+00:33:32,300 --> 00:33:34,480
+it was really other components that we wanted to turn off,
+
+521
+00:33:34,540 --> 00:33:36,500
+but the SRAM just happened to also hang on there.
+
+522
+00:33:36,940 --> 00:33:39,040
+So it would probably be better to put SRAM
+
+523
+00:33:39,040 --> 00:33:43,880
+on a separate rail or put it on an always-on rail,
+
+524
+00:33:43,980 --> 00:33:45,460
+essentially, that's supposed to stay alive.
+
+525
+00:33:45,660 --> 00:33:48,200
+But the problem is what we did on this chip
+
+526
+00:33:48,200 --> 00:33:49,440
+is essentially something that the chip
+
+527
+00:33:49,440 --> 00:33:50,520
+wasn't really designed for.
+
+528
+00:33:50,600 --> 00:33:51,720
+We just figured out afterwards,
+
+529
+00:33:51,860 --> 00:33:53,800
+hey, this is something we could, in theory, turn off.
+
+530
+00:33:53,800 --> 00:33:59,880
+maybe if we just do it right um i also think the idea of having split sram is not that bad so
+
+531
+00:33:59,880 --> 00:34:05,320
+8k is unfortunately not that much so having something like 16k 32k would be much easier
+
+532
+00:34:05,320 --> 00:34:09,480
+to work with and then then maybe that's good enough and you can turn off the main sram
+
+533
+00:34:13,400 --> 00:34:19,320
+what kind of information are you passing from corvo to the firmware um so the car
+
+534
+00:34:19,320 --> 00:34:24,280
+core root table base address for one the other things that we usually pass is
+
+535
+00:34:25,320 --> 00:34:30,920
+some information specific to the board so we had this design philosophy when doing this to try to
+
+536
+00:34:30,920 --> 00:34:36,360
+not pull board specific information into trusted firmware because most of the stuff trusted firmware
+
+537
+00:34:36,360 --> 00:34:41,640
+deals with is only specific to the soc so how to turn off cpus on and off it doesn't really care
+
+538
+00:34:41,640 --> 00:34:46,760
+about the rest of the components on the board and if we had a notion of the board in trusted
+
+539
+00:34:46,760 --> 00:34:50,600
+firmware essentially would make the whole thing way more complicated because every board that we
+
+540
+00:34:50,600 --> 00:34:55,640
+implement with that soc would have its own code in there and it would just become more complicated
+
+541
+00:34:55,640 --> 00:35:00,760
+so what we decided to do is in those few cases where trusted firmware needs to know something
+
+542
+00:35:00,760 --> 00:35:06,040
+about the board this is for example when it wants to reboot it like it needs a way to reboot and
+
+543
+00:35:06,040 --> 00:35:11,720
+on some systems we reboot to through an external gpio on others we use some soc internal mechanism
+
+544
+00:35:11,720 --> 00:35:15,720
+so in that case we would have a parameter that tells trusted firmware which
+
+545
+00:35:15,720 --> 00:35:20,680
+reboot mechanism to use and that way we can tell it bought specific information and don't need to
+
+546
+00:35:20,680 --> 00:35:25,800
+hard code bought specific code in there okay i'm just telling you because uh now in the firmware
+
+547
+00:35:25,800 --> 00:35:32,840
+we support uh dynamic configuration which basically consists on passing a device tree between images
+
+548
+00:35:32,840 --> 00:35:38,200
+so maybe this is something that you could use in the future right um yeah i've heard about that i
+
+549
+00:35:38,200 --> 00:35:42,440
+wasn't sure that if it's finished yet or not but it's definitely something we look into i'm not
+
+550
+00:35:42,440 --> 00:35:48,280
+sure how it would work in your case with skipping the first stages of the firmware but yeah i'm
+
+551
+00:35:48,280 --> 00:35:53,240
+sure it it could work and we are already using it in some reference code for passing arguments
+
+552
+00:35:53,240 --> 00:35:59,000
+between images to for example share memory between different images so yeah i'm pretty
+
+553
+00:35:59,000 --> 00:36:04,440
+sure it could work as to pass addresses for a peripheral or something so is it an interface
+
+554
+00:36:04,440 --> 00:36:11,960
+between b02 and b031 or right now as far as i know we are using it between bl1 and bl2 but
+
+555
+00:36:11,960 --> 00:36:16,120
+there's no reason why we couldn't use it in bl3 one right so i think that is the extension
+
+556
+00:36:16,120 --> 00:36:19,800
+essentially that we are still waiting on before we can skip to a better mechanism
+
+557
+00:36:28,680 --> 00:36:34,600
+hi what's the boot time penalty now that you have to use um on trusted firmware um it's usually not
+
+558
+00:36:34,600 --> 00:36:40,680
+that bad because uh it doesn't do a lot during boot it just sets up so um trusted firmware is
+
+559
+00:36:40,680 --> 00:36:43,380
+It's not supposed to do any SOC initialization.
+
+560
+00:36:43,380 --> 00:36:44,480
+We have all of that in core boot.
+
+561
+00:36:44,480 --> 00:36:47,580
+So really all it does on boot is setting up its own stuff
+
+562
+00:36:47,580 --> 00:36:49,260
+and then passing on to the next part.
+
+563
+00:36:49,260 --> 00:36:52,200
+And it's really only meant to do these runtime services.
+
+564
+00:36:52,200 --> 00:36:55,620
+So it's usually below 15 milliseconds
+
+565
+00:36:55,620 --> 00:36:59,800
+to go through the processor for my part.
+
+566
+00:36:59,800 --> 00:37:01,800
+Yep, just out of curiosity, I think
+
+567
+00:37:01,800 --> 00:37:03,300
+on that Rackchip platform, there was
+
+568
+00:37:03,300 --> 00:37:07,860
+a dedicated microcontroller for the DRAM suspend stuff.
+
+569
+00:37:07,860 --> 00:37:09,880
+The DCF, can you tell us the story about that
+
+570
+00:37:09,880 --> 00:37:12,440
+and why it was replaced by the M0?
+
+571
+00:37:12,440 --> 00:37:16,900
+Yeah, I don't think I can remember all the details.
+
+572
+00:37:16,900 --> 00:37:20,360
+The DCF was this thing that they implemented specifically
+
+573
+00:37:20,360 --> 00:37:22,480
+to do the frequency switching.
+
+574
+00:37:22,480 --> 00:37:25,000
+And it was like their own little microcontroller
+
+575
+00:37:25,000 --> 00:37:26,380
+with only a couple of instructions
+
+576
+00:37:26,380 --> 00:37:28,900
+and really crazy thing, essentially.
+
+577
+00:37:28,900 --> 00:37:30,520
+We didn't have an assembler for that.
+
+578
+00:37:30,520 --> 00:37:32,120
+We had to ask them for code for it.
+
+579
+00:37:32,120 --> 00:37:34,640
+And I don't really remember the details.
+
+580
+00:37:34,640 --> 00:37:35,980
+But at some point, essentially, we
+
+581
+00:37:35,980 --> 00:37:37,640
+found something that we needed to do
+
+582
+00:37:37,640 --> 00:37:39,400
+during the frequency scaling that we couldn't
+
+583
+00:37:39,400 --> 00:37:40,520
+with the DCF.
+
+584
+00:37:40,520 --> 00:37:42,160
+And then we thought, why are we doing this
+
+585
+00:37:42,160 --> 00:37:44,300
+if we just have a full ARM core there that
+
+586
+00:37:44,300 --> 00:37:46,840
+can do everything, and it's fully general purpose.
+
+587
+00:37:46,840 --> 00:37:48,100
+So we switched to using that.
+
+588
+00:37:55,240 --> 00:37:58,280
+Oh, is there room for another two questions, maybe?
+
+589
+00:38:09,400 --> 00:38:16,440
+In terms of whether to use the, like, you know, you pulled the one part out, and then
+
+590
+00:38:16,440 --> 00:38:18,700
+the question was, you know, what about those earlier parts?
+
+591
+00:38:18,700 --> 00:38:23,580
+Do you know their policy on, you know, booting versus bricking?
+
+592
+00:38:23,700 --> 00:38:26,840
+In other words, the core boot thing is it'll always come up, and it'll just tell you things
+
+593
+00:38:26,840 --> 00:38:29,240
+didn't go well, but do you know what the ARM stuff does?
+
+594
+00:38:29,380 --> 00:38:30,460
+In that case, I'm just curious.
+
+595
+00:38:32,080 --> 00:38:34,540
+I'm not really familiar, honestly, with those other two parts.
+
+596
+00:38:34,880 --> 00:38:35,100
+Okay.
+
+597
+00:38:35,100 --> 00:38:39,760
+But the thing is that I think it's a very thin framework,
+
+598
+00:38:39,960 --> 00:38:41,780
+so a lot of the stuff is left to the platform,
+
+599
+00:38:41,900 --> 00:38:44,560
+and the platform is supposed to figure those kinds of things out,
+
+600
+00:38:44,620 --> 00:38:46,100
+like what happens if it fails or something.
+
+601
+00:38:46,500 --> 00:38:50,280
+I think the actual generic framework parts for BL1 and BL2
+
+602
+00:38:50,280 --> 00:38:53,360
+are very lightweight and don't really do that much.
+
+603
+00:38:53,360 --> 00:39:07,240
+All right, if there are no more questions,
+
+604
+00:39:07,240 --> 00:39:09,420
+then thanks again very much, Julius.
+

@@ -1,0 +1,1124 @@
+1
+00:00:00,000 --> 00:00:28,000
+I have quite a bunch of slides that have only 25 minutes so I will go quite quickly and I will leave any questions if any at the end of the presentation
+
+2
+00:00:28,000 --> 00:00:33,000
+or we can follow up offline if you are interested in specific topics
+
+3
+00:00:33,000 --> 00:00:37,000
+so let me need a strike first of all
+
+4
+00:00:58,000 --> 00:01:08,000
+Okay, so I'm Matteo Cardini, I'm the software technology manager within ARM for the firmware,
+
+5
+00:01:08,000 --> 00:01:13,000
+boot, UEFI and recently system guidance software.
+
+6
+00:01:13,000 --> 00:01:22,000
+So what I'm going to present today is a quick journey about the secure boot story within
+
+7
+00:01:22,000 --> 00:01:30,000
+ARM, so talking about specifically the ARM Trusted Goal Boot, its public infrastructure,
+
+8
+00:01:30,000 --> 00:01:36,000
+its chain of trust, and how the ARM Trusted Firmware implements this specification.
+
+9
+00:01:36,000 --> 00:01:43,000
+And then I will move to combine this spec with the UEFI Secure Boot, so explaining which
+
+10
+00:01:43,000 --> 00:01:50,000
+are the differences and how to combine these two spec with open source software implementations
+
+11
+00:01:50,000 --> 00:01:57,200
+actually basically a complete chain of trust then i will also mention very briefly some other
+
+12
+00:01:57,200 --> 00:02:06,480
+solutions like android base or view boot base and i will share the next plans and future steps
+
+13
+00:02:06,480 --> 00:02:14,560
+from an hour perspective so very quick introduction what is secure boot well it's all about trust
+
+14
+00:02:14,560 --> 00:02:21,080
+It's all about creating and maintaining a chain of trust among the different software
+
+15
+00:02:21,080 --> 00:02:24,160
+layers that are executed on a system.
+
+16
+00:02:24,160 --> 00:02:30,860
+So as George pointed out yesterday during the keynote, if we implement a secure boot
+
+17
+00:02:30,860 --> 00:02:36,940
+based on industry standards, existing specs, and specifically open source software, we
+
+18
+00:02:36,940 --> 00:02:44,000
+can achieve basically full interoperability, a faster integration on time to market, and
+
+19
+00:02:44,000 --> 00:02:51,760
+improved open source security leveraging the community effort so all the concepts
+
+20
+00:02:51,760 --> 00:02:59,280
+that i'm going to explain especially for the armed trusted board boot and partially for the uefi boot
+
+21
+00:02:59,920 --> 00:03:07,760
+are applicable on different market segments the first obvious one is the enterprise server networking
+
+22
+00:03:07,760 --> 00:03:15,280
+where UEFI is the number one choice then we can also make some thoughts about the embedded and
+
+23
+00:03:15,280 --> 00:03:23,360
+mobile client where trusted board boot can be married with some other concepts like verified
+
+24
+00:03:23,360 --> 00:03:32,400
+boot or u-boot basically but in general i will talk about on the 8a ecosystem this
+
+25
+00:03:32,400 --> 00:03:42,120
+The focus of this presentation is not about M or R-class devices, it's just about A.
+
+26
+00:03:42,120 --> 00:03:49,080
+And a couple of well-known pictures from our website, just to point out which is the focus
+
+27
+00:03:49,080 --> 00:03:50,580
+of this presentation.
+
+28
+00:03:50,580 --> 00:03:58,520
+So the trusted firmware layer with the PBR spec, that's the software side spec, and the
+
+29
+00:03:58,520 --> 00:04:02,160
+UEFI layer, so having a UEFI compliant firmware.
+
+30
+00:04:02,160 --> 00:04:09,200
+i'm not going to talk about hardware i'm not going to talk about how to create and have
+
+31
+00:04:09,760 --> 00:04:13,600
+a tamper-proof protected root of trust there is a separate session
+
+32
+00:04:14,160 --> 00:04:18,800
+and other are representatives that will talk about hardware part
+
+33
+00:04:21,120 --> 00:04:30,560
+so what are untrusted boot pdb for friends and the uefi secure boot so those are two distinct
+
+34
+00:04:30,560 --> 00:04:38,560
+specifications uh that have that defines different keys different certificates but basically they
+
+35
+00:04:38,560 --> 00:04:45,280
+have the same goal so verifying the authenticity of the software images so building the chain of trust
+
+36
+00:04:45,920 --> 00:04:52,880
+the only point is that they target different bootloader images at different layers so on the
+
+37
+00:04:52,880 --> 00:04:59,280
+right you can see a high level picture that we will go into detail about this picture but so
+
+38
+00:04:59,280 --> 00:05:07,280
+So RTPB basically spans from the so-called BL1, so the very first firmware executed after
+
+39
+00:05:07,280 --> 00:05:15,600
+power on reset, up to the BL33, so the normal world bootloader, while the UEFI Secure Boot
+
+40
+00:05:15,600 --> 00:05:21,140
+starts from there and it arrives to validate in the open source image.
+
+41
+00:05:21,140 --> 00:05:25,780
+So these are the boundaries basically of the two specs and implementations.
+
+42
+00:05:25,780 --> 00:05:30,500
+So if we try to combine them together, we will then achieve a full chain of trust from
+
+43
+00:05:30,500 --> 00:05:36,560
+the very first firmware up to the OS.
+
+44
+00:05:36,560 --> 00:05:38,100
+So what is ARM TBD?
+
+45
+00:05:38,100 --> 00:05:47,340
+So ARM TBD is based on a couple of specs, TPSA and DBBR, that are part of the VSA,
+
+46
+00:05:47,340 --> 00:05:54,460
+DBBR test spec suite from ARM, so the base system architecture for the hardware requirements
+
+47
+00:05:54,460 --> 00:05:59,260
+and the board boot requirements for the software firmware requirements
+
+48
+00:05:59,260 --> 00:06:03,740
+they are available still under ndh but we are working on it
+
+49
+00:06:06,140 --> 00:06:10,860
+the trusted firmware implementation is specifically based on the dbdr client spec
+
+50
+00:06:11,900 --> 00:06:19,180
+and again we are working internally to revive the spec and maybe provide a server-side
+
+51
+00:06:19,180 --> 00:06:27,580
+specification if you are interested in we can catch up later on so our dbd is all about creating
+
+52
+00:06:27,580 --> 00:06:33,900
+a chain of trust from the very first rom firmware bl1 up to dbl33 so the normal world here one
+
+53
+00:06:34,940 --> 00:06:42,300
+a quick news we are discussing on arm server i see a new change of request to the new 1.1
+
+54
+00:06:42,300 --> 00:06:51,660
+sbdr spec that will basically extend the concept of secure boot mandating at least the presence
+
+55
+00:06:51,660 --> 00:06:57,900
+of a complete cascading chain of trust we will not mandate any specific implementation that's
+
+56
+00:06:57,900 --> 00:07:04,860
+not the purpose we are discussing at least to have a complete chain of trust from the very first
+
+57
+00:07:04,860 --> 00:07:12,540
+firmware up to the normal world bootloader tdb and arm plus the pure implementation provide
+
+58
+00:07:12,540 --> 00:07:19,900
+a reference example and reference software for achieving this goal but as i said other
+
+59
+00:07:19,900 --> 00:07:24,860
+third-party solution will be anyway allowed from for the sddr
+
+60
+00:07:24,860 --> 00:07:36,380
+so quick details on how the tbb defines the public infrastructure so it starts with defining two
+
+61
+00:07:36,380 --> 00:07:44,700
+implicitly trusted components and hardware protected root of trust was public part the
+
+62
+00:07:44,700 --> 00:07:53,340
+public keys stored on some trusted registers and the bl1 that is supposed to be trusted because
+
+63
+00:07:53,340 --> 00:08:00,780
+again protected by hardware then every subsequent yellow image we have 3x image
+
+64
+00:08:01,500 --> 00:08:07,580
+will come with two certificates a key certificate and the content certificate
+
+65
+00:08:08,460 --> 00:08:17,100
+the key certificate basically holds the public key corresponding of to that specific bl3x image
+
+66
+00:08:17,740 --> 00:08:24,060
+that will be used to validate the content certificate and the content certificate
+
+67
+00:08:24,060 --> 00:08:33,020
+will hold instead the hash of the bl3x image that is then checked against the hash of the
+
+68
+00:08:33,020 --> 00:08:39,740
+provided image to verify the authenticity of the image then there are two key pairs
+
+69
+00:08:39,740 --> 00:08:44,940
+that are defined we will see them more in detail in the next slides a trusted word key
+
+70
+00:08:45,820 --> 00:08:53,260
+and the normal world key pair all these keys and hashes are included as extensions to the standard
+
+71
+00:08:53,260 --> 00:09:00,300
+x509 certificates certificates are self-signed there is no need at all for a proper ca here
+
+72
+00:09:00,940 --> 00:09:08,300
+because basically we are building the we are establishing the chain of trust by verifying
+
+73
+00:09:08,300 --> 00:09:14,780
+the content of the certificates and not by verifying the validity of the issuer of a
+
+74
+00:09:14,780 --> 00:09:18,940
+specific certificate. So there is no need for a valid CA.
+
+75
+00:09:21,340 --> 00:09:25,180
+This is just an explanation for offline reading. I'm going to skip this one.
+
+76
+00:09:26,700 --> 00:09:32,620
+So the big picture of the different bootloader stages. On the left we see the implicitly trusted
+
+77
+00:09:32,620 --> 00:09:38,460
+components in the middle the secular world images and on the right the normal
+
+78
+00:09:38,460 --> 00:09:48,380
+world bootloader stage bf3 from a key ownership perspective the dpbr spec
+
+79
+00:09:48,380 --> 00:09:53,120
+foresees basically that the root of trust public key and the trusted key
+
+80
+00:09:53,120 --> 00:09:59,320
+certificates are owned by the oem while the other key certificates are there
+
+81
+00:09:59,320 --> 00:10:05,480
+because they allow for delegating the signing authority to other parties for
+
+82
+00:10:05,480 --> 00:10:11,920
+example the SOC vendor, the trusted OS vendor or the rich operating system vendors.
+
+83
+00:10:11,920 --> 00:10:20,100
+So that's why there are all these kinds of different key certificates. So now
+
+84
+00:10:20,100 --> 00:10:26,500
+let's see from a high level point of view but which are the basic steps for
+
+85
+00:10:26,500 --> 00:10:34,340
+providing the authentication from bl1 up to bl33 every mage has a color there is an agenda that
+
+86
+00:10:34,340 --> 00:10:41,220
+explains the execution level in which this bootloader stage executes so at power on bl1
+
+87
+00:10:41,220 --> 00:10:50,740
+is executed the first thing that it does is uh it checks the blue light blue certificate that
+
+88
+00:10:50,740 --> 00:10:58,020
+is the bl2 content certificate and it checks the validity of the root of trust public key
+
+89
+00:10:58,020 --> 00:11:04,740
+that is enclosed in that certificate and then using this root of trust public key
+
+90
+00:11:04,740 --> 00:11:10,980
+it basically verifies the authenticity of this content certificate it extracts the hash of the
+
+91
+00:11:10,980 --> 00:11:21,140
+bf2 image and it verifies the bf2 authenticity by checking its edge
+
+92
+00:11:23,140 --> 00:11:32,260
+so this is the only code that is executed at el3 up to now then the execution is passed to bf2
+
+93
+00:11:33,300 --> 00:11:39,860
+that does not execute anymore at el3 it executes at secure year one so this is done for minimizing
+
+94
+00:11:39,860 --> 00:11:43,780
+the code that is executed at year 3 from an authentication point of view
+
+95
+00:11:46,020 --> 00:11:54,100
+so now VHQ executes and its job is to verify the authenticity of all the subsequent images
+
+96
+00:11:55,140 --> 00:12:01,620
+and how it does it is again it verifies the validity of the root of trust party key that
+
+97
+00:12:01,620 --> 00:12:09,300
+is enclosed in that top level gray key certificate that is called by the spec trusted key certificate
+
+98
+00:12:10,660 --> 00:12:16,340
+so using this root of trust public key it basically verifies the certificate and
+
+99
+00:12:16,340 --> 00:12:22,260
+extracts the two enclosed public keys that are trusted world public key and normal world public
+
+100
+00:12:22,260 --> 00:12:29,460
+key as i said these are still owned by the oem from spec point of view
+
+101
+00:12:29,460 --> 00:12:41,860
+so then for each bl3x image bl2 first of all verifies the authenticity of the key certificate
+
+102
+00:12:41,860 --> 00:12:52,660
+that is corresponding to that bl3x image using the trusted word public key that it has stored before
+
+103
+00:12:52,660 --> 00:13:05,980
+then it reads the enclosed bl3x public key that is used to verify the authenticity of
+
+104
+00:13:05,980 --> 00:13:18,180
+the underlying light blue content certificate and the content certificate holds the corresponding
+
+105
+00:13:18,180 --> 00:13:25,780
+bl3x hash of the bl3x image so then the final step is performing the hash check
+
+106
+00:13:27,940 --> 00:13:33,700
+between bl3x provided image and bl3x into the certificate
+
+107
+00:13:37,540 --> 00:13:46,660
+so by doing so all the bl3x images are verified and then it's again bl2 responsibility
+
+108
+00:13:46,660 --> 00:13:55,900
+running at C3L1 to verify the final BL33 normal world image there are separate
+
+109
+00:13:55,900 --> 00:14:03,280
+set of certificates also in this case again for allowing a separation of the
+
+110
+00:14:03,280 --> 00:14:09,520
+of the signing authority in this case to an operating system vendor so in this
+
+111
+00:14:09,520 --> 00:14:21,520
+case we use the normal word key that is used to verify bl33 key certificate that holds the bl33
+
+112
+00:14:21,520 --> 00:14:32,720
+public key used to verify the content certificate and then very final step bl33 image is validated
+
+113
+00:14:32,720 --> 00:14:46,220
+against its hash. That's it from a DBV perspective. The execution is then passed through the various
+
+114
+00:14:46,220 --> 00:15:00,220
+stages, BL3-1, BL3-2, and so forth, till BL3-3. This is the big picture of the spec. Now let's
+
+115
+00:15:00,220 --> 00:15:05,420
+a look at the trusted firmware implementation trusted firmware implements everything of the
+
+116
+00:15:05,420 --> 00:15:13,100
+tpbr spec including the no volatile counters that i didn't mention but these are used for
+
+117
+00:15:13,100 --> 00:15:18,380
+protecting against rollback attacks the only thing that this doesn't implement yet are the
+
+118
+00:15:18,380 --> 00:15:25,740
+trusted debug certificates that are used basically to put the system in a debug mode but if someone
+
+119
+00:15:25,740 --> 00:15:33,100
+is interested in please shout and we will push it into our roadmap the trusted board boot works
+
+120
+00:15:33,100 --> 00:15:41,900
+perfectly on both ar64 and ar32 on the upstream github code and we have reference example on
+
+121
+00:15:41,900 --> 00:15:51,180
+juno and fbp platforms of the tvvb running at ar32 as well i'm not going through all the
+
+122
+00:15:51,180 --> 00:16:00,140
+build flags you can go have a look at the user guide on github another big news below involved
+
+123
+00:16:01,020 --> 00:16:08,140
+so in the last release well upstream since few months there is an integration of the trusted
+
+124
+00:16:08,140 --> 00:16:13,900
+board boot with the arm trust zone crypto cell product specifically the cc712 product
+
+125
+00:16:13,900 --> 00:16:21,460
+in order to take advantage of the hardware root of trust and the hardware acceleration
+
+126
+00:16:21,460 --> 00:16:28,000
+engines for verifying the images.
+
+127
+00:16:28,000 --> 00:16:29,900
+So this is all about DBB.
+
+128
+00:16:29,900 --> 00:16:34,060
+Now a quick look at UEFI Secure Boot.
+
+129
+00:16:34,060 --> 00:16:42,660
+So UEFI defines basically an ownership model for the platforms based on three main actors,
+
+130
+00:16:42,660 --> 00:16:50,340
+platform owner that is usually the odn the oen or the end user the platform firmware it is whatever
+
+131
+00:16:50,340 --> 00:16:58,180
+uefi compliant firmware and the os or third-party software vendors in brief software vendors as
+
+132
+00:16:59,220 --> 00:17:10,020
+so uh it defines a known set of key certificates uh and so forth and a signature database so a
+
+133
+00:17:10,020 --> 00:17:17,540
+database of white and blacklist signatures of allowed and forbidden images so using this framework
+
+134
+00:17:17,540 --> 00:17:24,580
+the firmware the UEFI firmware running at PL33 is able to authenticate all the UEFI acceptable
+
+135
+00:17:25,540 --> 00:17:32,980
+and there is also a way through the ownership model to update the signature database from trusted
+
+136
+00:17:32,980 --> 00:17:42,900
+sources uh we will see that in the next slides very quickly again so uefi secure boot defines
+
+137
+00:17:42,900 --> 00:17:48,660
+two different keys platform key owned by the platform owner and key exchange keys
+
+138
+00:17:50,340 --> 00:17:57,780
+the main point of this slide is that the platform key owned by the platform owner is the real root
+
+139
+00:17:57,780 --> 00:18:05,300
+on trust of the UEFI secure boot because using the private part of the platform key you can
+
+140
+00:18:05,300 --> 00:18:12,180
+enroll and deploy to the firmware all the public keys either the platform key and the key exchange
+
+141
+00:18:12,180 --> 00:18:22,500
+keys obviously all those keys based on the UEFI spec must be on tamper-proof storage hardware protected
+
+142
+00:18:22,500 --> 00:18:34,260
+and as i said the ownership model allows them the platform owner and the software vendors to
+
+143
+00:18:34,260 --> 00:18:42,180
+update this the database of the signatures uh with white or blacklist through the uefi runtimes
+
+144
+00:18:42,180 --> 00:18:50,260
+of variable api from trusted sources so using the public part the public portions of the key that
+
+145
+00:18:50,260 --> 00:19:04,580
+have been deployed into the firmware and then very obviously as one could expect these signatures
+
+146
+00:19:04,580 --> 00:19:13,220
+are used to verify and to run or prevent execution of specific ufi acceptables so
+
+147
+00:19:13,940 --> 00:19:19,380
+all the images that comes with a forbidden signature or with an unknown signature in
+
+148
+00:19:19,380 --> 00:19:27,940
+light gray are not allowed to be executed while the all the images that comes with
+
+149
+00:19:27,940 --> 00:19:35,140
+the green signatures are obviously executed so what is the status on arm what the status
+
+150
+00:19:35,140 --> 00:19:41,060
+on arm is exactly the same at the moment as r explained one and a half year ago in i think
+
+151
+00:19:41,060 --> 00:19:50,980
+last vegas 2016. so the outstanding problem was okay how can we update the variables through the
+
+152
+00:19:50,980 --> 00:19:59,860
+secure world so now one and a half year later we can provide a mechanism for doing that so we have
+
+153
+00:19:59,860 --> 00:20:07,540
+and we will i will show you in the next couple slides a way to uh from a spec perspective
+
+154
+00:20:07,540 --> 00:20:10,680
+implement a secure variable access
+
+155
+00:20:10,680 --> 00:20:12,660
+and update the UEFI variables.
+
+156
+00:20:17,220 --> 00:20:20,380
+So, this is a picture that basically puts all together
+
+157
+00:20:20,380 --> 00:20:21,840
+the pieces that we saw before.
+
+158
+00:20:22,120 --> 00:20:23,680
+I'm not going to spend too much time,
+
+159
+00:20:24,140 --> 00:20:25,820
+so all the different bootloader stages
+
+160
+00:20:25,820 --> 00:20:30,320
+are verified either by the TBD spec and implementation
+
+161
+00:20:30,320 --> 00:20:33,820
+and subsequently from the UEFI firmware spec.
+
+162
+00:20:34,760 --> 00:20:37,180
+But here is the picture that I would like to land
+
+163
+00:20:37,180 --> 00:20:44,460
+two so how to access secure variable through the secure world so as promised i'm not going
+
+164
+00:20:44,460 --> 00:20:51,420
+to talk about hardware so i suppose just that the keys are stored in some sort of secure storage
+
+165
+00:20:51,420 --> 00:20:59,580
+hardware protected uh but how can we access those keys and update them from the normal world
+
+166
+00:20:59,580 --> 00:21:07,120
+so that the OS running in the normal world will call as usual the runtime set variable API
+
+167
+00:21:07,120 --> 00:21:14,840
+that we go into the firmware and then with the implementation in the firmware of the RMM interface
+
+168
+00:21:14,840 --> 00:21:20,260
+we can go down into the trusted firmware running a PL3.1
+
+169
+00:21:20,260 --> 00:21:22,840
+and here is the new part
+
+170
+00:21:22,840 --> 00:21:26,160
+so in orange you will see the secure partition manager
+
+171
+00:21:26,160 --> 00:21:28,820
+that is a functional block
+
+172
+00:21:28,820 --> 00:21:32,740
+that basically instantiates, manages and deletes
+
+173
+00:21:32,740 --> 00:21:36,560
+secure partitions running in secure EL0
+
+174
+00:21:36,560 --> 00:21:40,140
+please note that this is a framework
+
+175
+00:21:40,140 --> 00:21:43,540
+that is in common with the RAS story
+
+176
+00:21:43,540 --> 00:21:46,480
+that someone else will explain during this connect
+
+177
+00:21:46,480 --> 00:21:49,240
+so this is the very same exact framework
+
+178
+00:21:49,240 --> 00:21:51,360
+RAS is one use case
+
+179
+00:21:51,360 --> 00:21:54,260
+secure variable access is another use case
+
+180
+00:21:54,260 --> 00:21:56,940
+using the same functional pieces altogether.
+
+181
+00:21:58,540 --> 00:22:02,980
+So the secure partition manager in BL3.1 will route this request
+
+182
+00:22:02,980 --> 00:22:05,940
+and will instantiate a secure partition
+
+183
+00:22:05,940 --> 00:22:09,020
+that then will handle and will have a driver
+
+184
+00:22:09,020 --> 00:22:13,780
+to access the variable storage somewhere on hardware tamper proof.
+
+185
+00:22:16,540 --> 00:22:22,400
+So the various pieces are currently in development within ARM
+
+186
+00:22:22,400 --> 00:22:28,840
+and they will be upstream very soon and we will also work internally to provide
+
+187
+00:22:28,840 --> 00:22:33,980
+a reference example of all the boot flow, the secure boot flow including secure
+
+188
+00:22:33,980 --> 00:22:39,980
+variable access on one of our system guidance platform and we are going to
+
+189
+00:22:39,980 --> 00:22:45,440
+upstream also the support for this specific system guidance platform with
+
+190
+00:22:45,440 --> 00:22:49,960
+all the surrounding patches to EDK2, EDK2 platform, untrusted firmware and so
+
+191
+00:22:49,960 --> 00:23:03,520
+support for implementing all this story here very very quickly just to mention other possible
+
+192
+00:23:03,520 --> 00:23:13,960
+solution to implement verified boot well on the mobile client side UEFI is kind of nonsense
+
+193
+00:23:13,960 --> 00:23:19,880
+to some extent so android has its own concept of verified boot uboot has its own concept
+
+194
+00:23:19,880 --> 00:23:25,560
+all of them have concepts of uh channel trust hardware root of trust and so on
+
+195
+00:23:26,680 --> 00:23:34,600
+uh a provocation the last bullet point so what if we think of extending the work that has been
+
+196
+00:23:34,600 --> 00:23:43,400
+done by the suzer guys so putting ufi on top of uboot what if we extend it trying to implement
+
+197
+00:23:43,400 --> 00:23:48,520
+the set variable and get variable apis on uboot
+
+198
+00:23:48,520 --> 00:23:54,040
+and maybe what if we try to plug shim over a uefi enabled uboot for handling
+
+199
+00:23:54,040 --> 00:23:58,600
+the key management so this will introduce a lot of problems
+
+200
+00:23:58,600 --> 00:24:04,760
+that we will have to address especially on the embedded devices
+
+201
+00:24:04,760 --> 00:24:09,560
+but the end goal could be ideally to have a convergence of the embedded and
+
+202
+00:24:09,560 --> 00:24:16,120
+enterprise secure boot flows and secure boot apis and these are some folks that we are doing internally
+
+203
+00:24:19,720 --> 00:24:24,760
+last slide which are the plans so as i said we are working internally
+
+204
+00:24:25,400 --> 00:24:28,840
+to implement and then open source a reference platform software
+
+205
+00:24:30,600 --> 00:24:35,240
+well apart of the different pieces in our firmware and vdk2
+
+206
+00:24:35,960 --> 00:24:39,640
+also to provide the complete boot path on the system guidance platform
+
+207
+00:24:40,760 --> 00:24:45,320
+actually it should be brooks that the enterprise server platform
+
+208
+00:24:47,400 --> 00:24:54,360
+in the future we are thinking of uh okay as i said investigating a new boot based solution
+
+209
+00:24:54,360 --> 00:25:01,320
+but also how to combine the firmware update story so arm trust the firmware has its own
+
+210
+00:25:01,320 --> 00:25:08,360
+firmware upgrade uefi has recently defined the sign capsule update for secure update so how to
+
+211
+00:25:08,360 --> 00:25:14,840
+combine the tools and have also a proper secure firmware update mechanism so these are all thoughts
+
+212
+00:25:14,840 --> 00:25:20,840
+for the future on a specification perspective i'm not specification guy there are different
+
+213
+00:25:20,840 --> 00:25:28,040
+our representatives here talking about spec but we are talking about reviving the tbbr
+
+214
+00:25:28,040 --> 00:25:35,060
+and putting some mentions in the SBBR and as I said the possibility for having a
+
+215
+00:25:35,060 --> 00:25:40,200
+server-side TPSA-TBBR that will take care of so other concepts like the TPM,
+
+216
+00:25:40,200 --> 00:25:48,140
+DCRs and measure boot that are currently not covered by ARM specs in general and
+
+217
+00:25:48,140 --> 00:25:54,260
+there is one outstanding question on the table so what is the proper level of
+
+218
+00:25:54,260 --> 00:26:00,700
+standardization required by ARM on the pre UEFI environment for the trusted
+
+219
+00:26:00,700 --> 00:26:07,660
+board would solution so we want still to allow for differentiation on that level
+
+220
+00:26:07,660 --> 00:26:15,480
+but we also see a lot of security reports that sadly demonstrate how some
+
+221
+00:26:15,480 --> 00:26:22,160
+flows implementation on commercial products allows for running arbitrary
+
+222
+00:26:22,160 --> 00:26:28,320
+code at year three so compromising the entire trusted execution environment so and that's
+
+223
+00:26:28,880 --> 00:26:33,760
+probably something we would like to avoid at least providing some guidance on the
+
+224
+00:26:34,800 --> 00:26:40,960
+apis that could be implemented and where to implement those apis in which at which execution
+
+225
+00:26:40,960 --> 00:26:46,640
+levels but these are all open thoughts so if you are interested in get in touch
+
+226
+00:26:46,640 --> 00:26:54,640
+And that's it. So I am just referring to that specific session for how you are root of trust.
+
+227
+00:26:54,640 --> 00:27:07,640
+That should be on Thursday, I think. That's it. That's all that I have. Any questions?
+
+228
+00:27:07,640 --> 00:27:23,640
+Yeah, right now your checks for validating images only has one kind of hash, it doesn't
+
+229
+00:27:23,640 --> 00:27:24,640
+have to allow for it.
+
+230
+00:27:24,640 --> 00:27:27,640
+I don't think it allowed for a Shopify 12 or HMAC.
+
+231
+00:27:27,640 --> 00:27:32,640
+I was wondering if you guys were thinking of adding one to HMAC, having more types of
+
+232
+00:27:32,640 --> 00:27:36,640
+validations that you support.
+
+233
+00:27:36,640 --> 00:27:43,100
+Okay. I don't have the answer for it, so we can follow up later on. Maybe Dan can answer.
+
+234
+00:27:43,680 --> 00:27:47,500
+Can we wrap the microphone to Dan? That's the tech lead for our first firmware. Thank you.
+
+235
+00:27:48,960 --> 00:27:55,180
+Hi. The answer to firm by reference implementation is just kind of following what the TBBR spec says.
+
+236
+00:27:55,180 --> 00:28:02,080
+So if the TBBR spec was updated to include other stronger crypto, then we'd certainly follow.
+
+237
+00:28:02,200 --> 00:28:05,340
+But there's no reason why we couldn't add that or someone couldn't contribute that.
+
+238
+00:28:05,340 --> 00:28:12,340
+But anyway, we're not motivated to do that because it's not expected.
+
+239
+00:28:12,340 --> 00:28:19,340
+A related question. I noticed you guys use a lot of the x509 extensions. Why not use them?
+
+240
+00:28:19,340 --> 00:28:32,340
+In some of the cases it seems like the same rigor 509 rigor fields. Why add all these extensions to the existing fields?
+
+241
+00:28:32,340 --> 00:28:41,340
+That again comes to the specification does talk about that. I guess the specification
+
+242
+00:28:41,340 --> 00:28:47,340
+had a lot of design information as well as specification information so it could have
+
+243
+00:28:47,340 --> 00:28:54,340
+a bit more freedom perhaps to do things in a different way there but it works.
+
+244
+00:28:54,340 --> 00:29:00,340
+Well that's anyway a good moment for discussing any updates on that spec if you want
+
+245
+00:29:00,340 --> 00:29:08,100
+because as i said so we are thinking of reviving and updating that spec that's becoming quite old
+
+246
+00:29:08,100 --> 00:29:14,580
+and also providing a server-side equivalent so if you have any specific needs to target
+
+247
+00:29:16,260 --> 00:29:18,820
+we can discuss it and try to push it into the spec afterwards
+
+248
+00:29:20,580 --> 00:29:25,940
+the latest is 2013 is there any more spec than that sorry the latest spec i see is from 2013.
+
+249
+00:29:25,940 --> 00:29:28,940
+No, it should be 2015 or...
+
+250
+00:29:28,940 --> 00:29:30,940
+That's client spec, it's 2015.
+
+251
+00:29:30,940 --> 00:29:31,940
+Yeah.
+
+252
+00:29:31,940 --> 00:29:34,940
+And the server spec hasn't been updated since 2015.
+
+253
+00:29:34,940 --> 00:29:38,940
+Oh no, but the server spec basically, it was just an experiment.
+
+254
+00:29:38,940 --> 00:29:42,940
+It has never been finalized properly.
+
+255
+00:29:42,940 --> 00:29:47,940
+So it would be basically to rewrite it from scratch, from the beginning.
+
+256
+00:29:47,940 --> 00:29:52,940
+And we are working with the architecture guys to start the discussion around it.
+
+257
+00:29:52,940 --> 00:30:01,940
+Any other questions?
+
+258
+00:30:01,940 --> 00:30:05,940
+Sorry, one more.
+
+259
+00:30:05,940 --> 00:30:09,940
+I know it's your slide on secure partition variable access.
+
+260
+00:30:09,940 --> 00:30:14,940
+You didn't have anything like Opti or secure OS in that picture.
+
+261
+00:30:14,940 --> 00:30:20,940
+Is there your plans to actually do it without having all that other infrastructure?
+
+262
+00:30:20,940 --> 00:30:32,940
+Good question, thank you. So currently this model does not allow for a combination of different
+
+263
+00:30:32,940 --> 00:30:42,940
+applications, secure applications to be run in the secular world, but so you cannot have in parallel running a trusted OS together with a secure partition at the moment.
+
+264
+00:30:42,940 --> 00:30:49,940
+But we are working for extending this model, allowing for multiple secure partition to be run
+
+265
+00:30:49,940 --> 00:30:58,940
+and depending on the use case you can have as well as OPT running in parallel with a secure partition
+
+266
+00:30:58,940 --> 00:31:04,940
+and then you will have to decide who is doing what, so who is accessing the secure variable and who is not.
+
+267
+00:31:04,940 --> 00:31:12,460
+but so those are in our plans yeah so for the early 2018
+
+268
+00:31:15,900 --> 00:31:22,700
+why not allow the simpler model of just loading opt-t at boot and making the
+
+269
+00:31:22,700 --> 00:31:27,660
+secure variables of a secure service
+
+270
+00:31:27,660 --> 00:31:36,660
+That's a good question. So UEFI plus OPT on a server enterprise platform?
+
+271
+00:31:36,660 --> 00:31:44,660
+Well, I still wonder why we have to differentiate between client and server as much as...
+
+272
+00:31:44,660 --> 00:31:49,660
+Let's put it this way. We had this infrastructure almost really from the...
+
+273
+00:31:49,660 --> 00:31:53,660
+well, for implementing the RAS program and the RAS use case.
+
+274
+00:31:53,660 --> 00:32:09,120
+So you can end up having two secure partitions, one that is handling the error, firmware first error handling for the RAS story, and another one in parallel that is implementing secure parallel story.
+
+275
+00:32:09,120 --> 00:32:23,120
+So I know that there are other parallel developments in ARM that basically try to do the same with OPT.
+
+276
+00:32:23,120 --> 00:32:31,120
+We have still to marry the two developments and decide what would be the best choice depending on the market.
+
+277
+00:32:31,120 --> 00:32:41,120
+So if you're putting this stuff on a server rather than on a mobile client, maybe the solution will be different.
+
+278
+00:32:45,120 --> 00:32:47,120
+You're over time.
+
+279
+00:32:47,120 --> 00:32:49,120
+Thank you.
+
+280
+00:32:49,120 --> 00:32:51,120
+Thank you to all.
+
+281
+00:33:01,120 --> 00:33:31,100
+Thank you.
+

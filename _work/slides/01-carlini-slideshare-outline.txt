@@ -1,0 +1,27 @@
+SFO17-201 slides — Linaro SlideShare (account linaroorg), 26 slides.
+NOT verbatim: per-slide paraphrase by a fetch agent (2026-11-13), page could not be downloaded as PDF.
+1 Title: Secure Boot on Arm systems, Matteo Carlini (Arm)
+2 Agenda: scope; Arm TBB; Arm Trusted Firmware; UEFI Secure Boot; EDK2 recap; complete CoT; secure variable storage; other OSS (Android, U-Boot); next steps
+3 Intro: secure boot = build and maintain complete chain of trust; existing specs, industry standards, open source
+4 Scope diagram (TrustZone, TBBR/TBSA, UEFI, ATF, CryptoCell-style iRoT)
+5 Scope diagram variant (Trusted OS, UEFI placement)
+6 TBB vs UEFI Secure Boot: two mechanisms, different keys/PKI, same goal, combined = full chain
+7 TBB basis: TBSA/TBBR (under NDA); TBBR-Client DEN0006C reference; SBBR implications for servers
+8 TBB PKI: 2 implicitly trusted components (ROTPK hash in HW, BL1 in ROM); key cert + content cert per image; trusted-world and normal-world key pairs; self-signed certs
+9 TBB auth flow: BL1 auth BL2; BL2 auth BL31, BL32, BL33
+10 how it works BL1 (diagram)
+11-12 how it works BL2 (diagrams)
+13 how it works BL3x (diagram)
+14 how it works BL33 (diagram)
+15 ATF impl: TBB on BL1/BL2 AArch64+AArch32 (Juno, FVP); TRUSTED_BOARD_BOOT=1, GENERATE_COT=1, XXX_KEYS; tools cert_create, fiptool; CryptoCell CC-712 pre-integration
+16 UEFI SB model: platform owner / platform firmware / OS-software vendors; X.509 + Authenticode PE signatures; signature DB update
+17 UEFI PKI: PK, KEK per vendor; NV variables hold keys and db/dbx
+18 UEFI PKI (2): db/dbx updated from trusted sources via SetVariable() runtime service
+19 UEFI how it works: images verified against signature DBs
+20 EDK2 recap: refs to LCA14 and LAS16 talks by Ard Biesheuvel
+21 Complete CoT diagram BL1 -> BL2 -> UEFI(BL33) -> Linux kernels / secure apps
+22 Secure variable access: SetVariable() via Secure Partition Manager in BL31 to secure storage
+23 Other OSS: Android Verified Boot (OEM key, lock state, rollback protection Android 8.0); U-Boot verified boot (BL33 pubkey); open question UEFI-on-U-Boot + shim
+24 Plans: TBB+UEFI SB reference SW with secure variable storage; U-Boot for embedded/mobile; FWU vs UEFI capsule; TBBR/SBBR updates; TPM, measured boot; HW RoT (SFO17-304)
+25 References: ATF TBB docs; LCA14-105, LAS16-200; AVB; U-Boot vboot; UEFI on top of U-Boot; UCSB mobile bootloader paper
+26 Thank you #SFO17

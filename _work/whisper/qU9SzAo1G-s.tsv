@@ -1,0 +1,374 @@
+start	end	text
+0	8440	Hello everyone. Good to see so many of you today attending our talk. We are very excited
+8440	13960	to be here at Black Hat and to present our research on how we attacked the boot chain
+13960	20060	of some Samsung devices from the Galaxy A family. So today we will show you a chain
+20060	25720	of bugs that allow us to take control over the device through the USB ports and ultimately
+25720	31880	to leak secrets that are stored in the secure world on the device and this research started
+31880	38600	last year at quarks lab and so yeah today on stage you have rafael and myself maxim but we
+38600	43320	will we want also to thank our colleagues damiano and gabrielle who helped us on this project
+45480	52840	so um last year at recon represented this research we asked ourselves how android protects the user
+52840	60040	data through its encryption scheme and for that we bought a device called the one you see here
+60040	67960	samsung galaxy a22 and this device is known to have a boot run vulnerability that can be exploited
+67960	73240	with an open source tool called mck client so using this tool we were able to bypass the first
+73240	77800	stage of the secure boots and from there we patched the rest of the system so that we could
+78680	82440	extract all the ingredients required to brute force the credentials of the user
+83800	88600	so this is the device i'm talking about as you can see it's a rather cheap device and
+89320	94760	it is based on a mediatek system on chip so it runs under it but you will also find a mix of
+94760	100840	close close source components from mediatek and samsung for example the trazon os here is tigris
+101480	106040	which is designed by samsung and as i said we have this boot run vulnerability that we can
+106040	113560	exploit using mtk client and it was quite quite nice to have it in order to debug the exploit
+113560	119400	that we will present today so we focused on this device because we had it so all the bugs we will
+119400	124040	present today works on this device but they also apply to other devices from the same family of
+124040	129240	device even some of them for which the the vulnerability in the boot rom has been fixed
+130600	135480	so before we get to the actual bugs we need a bit of background on how the the secure boot
+135480	140920	works on mediatek system on chips so when the cpu starts it will run a read-only piece of code that
+140920	146760	is called the boot run and it will run with the highest privileges in the secure world with the
+146760	152520	el3 privilege level then the boot run will start a second state boot loader called the preloader
+153480	159480	and the preloader will then start the arm trusted firmware that is also called the secure monitor
+160280	165400	and it is the piece of software that will run with the highest privileges on the device once
+165400	171000	it's fully booted the pre-order will then start the threshold environment which is degrees and
+171000	178360	finally a third stage bootloader called little kernel here we call it lk so this bootloader is
+178360	182200	in charge of booting android and it's actually the component we will look into right now
+183480	188520	so little kernel is open source originally and it's very common in the android ecosystem as a
+188520	194680	bootloader and as i said it will start android and for that it will verify the android images
+194680	200040	using a feature called android verified boots which is the standard that you will find implemented
+200040	206120	in a similar way in other devices now the little kernel bootloader we have here is a cluster
+206120	211400	version that was modified by samsung they added a couple of features such as odin which is a
+211400	218280	recovery protocol that allows to flash partitions through usb we also have the nox security bits
+218280	223160	it's a way to avoid the warranty of the device when the bootloader is unlocked so it's security
+223160	228520	for samsung rather than for the the actual user and yeah you have a bunch of little features like
+228520	233000	this and one that was particularly interesting for us is a jpeg parser that is used to show
+233000	240040	logos on screen of the device and error messages as the one you see here and it raised our interest
+240040	244840	because these jpegs are placed into a tar archive that you will find in the upper arm partition
+245400	250920	and this archive is signed but is never checked at boot so anyone capable of modifying the
+250920	256200	internal memory of the device can actually change these jpegs and as we all know parsing jpegs can
+256200	261480	be a difficult task here we are citing logo fail research by bannerly they presented it
+261480	266200	last year and they basically found many vulnerabilities impacting various image
+266200	273240	parsers and in many boot chains so it's a good reminder of that so to target this jpeg loader
+273240	279080	we first need to understand how it is loaded in little kernel and this is the code responsible
+279080	285480	for that so the first part of the code actually allocates a constant size buffer on the heap
+286200	290600	then we have a function that we call the read jpeg file it's the name we gave but you get the
+290600	296040	id this function takes a file name as a first argument it will look in the archive using this
+296040	300920	file name and it will read the jpeg and place the content in the buffer we previously allocated
+300920	306280	and finally we have this p image function that will pass and render the jpeg on screen
+306280	310440	now some of you might wonder why do we have a zero as a third argument
+310440	317320	this function and the third argument here is supposed to be a maximum size so when the system
+317320	323860	before it reads the the file it will look in the tar header for the the size of the file and it
+323860	328200	will compare it to the size provided so if it's bigger it will trigger an error and it will stop
+328200	336640	reading the file. Unless the size provided is zero, which in this case, the test is ignored and the
+336640	341380	file is read anyway. So we have a first vulnerability, a heap overflow here. It was rather
+341380	347780	quick. And the question we ask ourselves now is, is it exploitable? So to answer that question,
+347780	352120	we need to understand a bit how the heap algorithm works. In this case, it is called
+352120	358760	mini heap and it relies on a doubly linked list you have three chunks that's all members of this
+358760	363160	list they are all placed in the same memory pool and they all start with the same header that you
+363160	369080	see on the right so you have a first pointer pointing to the next the previous the previous
+369080	373320	chunk followed by another pointer pointing to the next chunk followed by the size and followed by
+373320	380440	the actual content of the chunk so if another flow happens we may overwrite the metadata of
+380440	385080	the header of the next chunk and there is a way to turn another flow into an arbitrary write
+385640	393240	and this is because how the allocation algorithm works so after an allocation a chunk is removed
+393240	398600	from the free list and to do so the system will dereference the next and prep pointers of the
+398600	405160	chunk being allocated in order to access the next and previous chunks and in turn modify the next
+405160	409080	and breadth pointers so that they point to each other and not to the trunk being allocated.
+409960	415240	So long story short, if we control the header of a trunk that is being allocated,
+415240	420840	we have a write what were primitive with the only constraint that both values must be writeable
+420840	428200	addresses. Now a few words about the mitigations in iter-kernel. As you can see, there are not many,
+428200	434080	none, we can say, no ESL or no canaries and more importantly the heap is
+434080	438880	executable, which makes the exploit strategy rather simple. We use a
+438880	443260	primitive to overwrite the pointer that the code will jump to, in this case it's
+443260	449360	the return address in the stack, and we will make its points to a shell code
+449360	454520	that we place in our JPEG buffer. So here is a representation of the free list
+454520	460340	and in purple you see the jpeg buffer that was just allocated so the system will read the file
+460340	465300	and it will fill the buffer with it until it overflows and overwrites the next free chunk
+465300	471100	and we will replace this next free chunk with a fake chunk where the next pointer points to the
+471100	476320	return address in the stack and the previous pointer points to the shell code inside our jpeg
+476320	481860	buffer and so that when the next allocation happens the system will dereference the next
+481860	487560	pointer of the fake chunk, and we'll replace the return address with the one of the shellcode,
+487620	493780	so the one that was present in the next, in the prev pointer. And when the function returns,
+494120	498960	we have our shellcode being executed. So, we have a first vulnerability here
+498960	507300	that leads to a code execution in little kernel. It's persistent. It will survive both reboots
+507300	513460	and factory reset and this is because the the partition containing the JPEGs on is never wiped
+514100	520420	even when you factory reset the device so we have code execution in little kernel but since little
+520420	526580	kernel loads android and with a little bit of work and patching the system the firmware the
+526580	531620	code of the little kernel we can take control over android so basically we control the full
+531620	538740	normal world both el1 and el0 regarding the impacts um all the samsung devices based on
+538740	544420	mediatek system on chips or at least all of those we looked into are vulnerable and which includes
+544420	549220	the the ones where uh the boot run vulnerability i presented at the beginning has been fixed
+550180	555380	so that's that's nice we have a code execution in little kernel but now we need a way to flash
+555380	561620	the the malicious jpegs on the on the flash memory without being already privileged and that is the
+561620	567380	question we will try to answer now and for that we will take a look at odin the recovery protocol
+567380	573300	that is implemented by samsung that allows to flash partition through usb and it's also
+573300	578260	implemented in little kernel and we have two uh clients that are available one that is the
+578260	582820	official one not super practical and close source and there is an open source client called amdell
+582820	589820	model that we actually use in our proof of concept.
+589820	594640	So internally, Odin, before flashing an image, it will authenticate it.
+594640	598860	So you need to have a signature as a footer in every image.
+598860	601380	You have an example of a signature here.
+601380	604080	And for that, it will rely on two internal structures.
+604080	608180	The first one being the partition information table that we will call the pit.
+608180	613380	second one being a global structure that's a global array that indicates how the partitions
+613380	620180	should be authenticated and the pit is actually stored in a fixed address in the emmc it indicates
+622180	626260	how i mean it gives information about the the partitions you have an example of entry on the
+626260	630900	right so you have a couple of fields such as the block counts the name of the partition and so on
+630900	636740	and it's interesting to note that a partition not present in the pits cannot be flashed through odin
+636740	641780	the pit can be updated though but it requires a signed image. Now regarding
+641780	646640	the authentication we have this global array that indicates how an image should
+646640	651300	be authenticated and in this case if an image is not present in this array it
+651300	655620	will not be authenticated. So if we compare the pits and this global array
+655620	661060	we get a list of partitions that can be flashed without authentication and this
+661060	664760	is the list you see here. The first thing we can say is that a param is not part
+664760	668760	of the images we can flash, because it is actually authenticated.
+668760	671560	But there are other interesting partitions that we can play with.
+671560	674000	And it's the case of PGPT and SGPT.
+674000	679800	They're both points to the header of the GPT, so the GYD partition table.
+679800	684500	And this GPT is similar to the PIT in a sense that it describes the partition.
+684500	687000	So we have quite an interesting primitive here.
+687000	689020	Without authentication through the USB cable,
+689020	693860	we can reshape the partition table of this device.
+693860	697520	Now, a few words about GPT and PITs because they are doing more or less the same things.
+697640	699520	Why do we need these two structures?
+700100	705420	So, the PIT is actually used for Samsung features such as Odin and such as the JPEG loading.
+705420	711080	So, the upparam partition containing the JPEGs is actually retrieved from the PIT, I mean, using the PIT.
+711960	715720	So, we can simply mess with it through the GPT table.
+716360	719160	And the GPT table, on the other hand, is used the rest of the time.
+719260	721420	For example, when loading the Android images.
+721420	727940	so we have a nice primitive but what we can what can we do with it and first let's take a look at
+727940	735080	how the pit is loaded so this piece of code is running when this the bootloader starts and as
+735080	741700	i said already the the system will try to retrieve the pit when it starts from a default address but
+741700	746940	we also have this routine that is quite interesting the system will look for a partition called pit
+746940	752740	in a partition table and if it exists it will load it from there and what is good for us is that
+752740	758420	these two functions relies on the gpt table and we can change the gpt table so basically we can
+758420	763000	add an entry called pit and the system should load the pit not from the original location but
+763000	767980	from the new one so we came up with the following strategy here you have a representation of the
+767980	773280	flash memory and you have the gpt and the pits pointing to more or less the same partitions
+773280	779220	and the first partition here is called md5 hdn hdr i'm not sure if you recall but it's one of those
+779220	784280	we can flash without authentication so we will replace it with a new uparam partition that
+784280	789900	contains the malicious jpegs the next partition is called vbimita vendor it's also one that we
+789900	795460	can flash without authentication and here we will replace it with a new pit that is a copy of the
+795460	803500	original one. Sorry. Except that we will rename FD5HDR into upParam and we do the other way around
+803500	809960	with upParam. And the final step is that we modify the GPT table and we will rename the PIT,
+810420	819320	the VB metaVendor partition into PIT, such that at next boot, the new PIT is taken into account
+819320	823820	and not the original one. And when the system is asked to load a JPEG, it will load it from the
+823820	828740	new upper RAM partition and it actually works as you see here we see on the
+828740	832460	screen dodge showing up it means the exploit worked so yeah so we have a
+832460	837980	second vulnerability that is a authentication bypass is Odin that we
+837980	842420	allows us to from the USB to flash anything on the eMMC including the JPEGs
+842420	848000	in the upper RAM partition and similarly to the previous one this this
+848000	852680	vulnerability impacts Samsung devices based on MediaTek system and chips so we
+852680	863160	a little demo. Let's try it. So, we have here a device that is a Samsung A22 5F.
+864920	869720	And what I want to show you first is that I'm connecting to a 3DB to the device
+870360	875480	and the SU binary is not there. That's the expected behavior for the standard Android device.
+875480	877840	all right
+877840	886120	so what i'm going to do now is that i will shut down the device
+886120	893120	here i'm unlocking the the interface but it can be shut down by pressing all the buttons
+893120	900180	all together for a couple of seconds so then i'm booting the device in the odin mode
+900180	911220	And once it's done, we are ready to launch the exploit
+911220	915560	So basically, we are going to flash the partitions as I explained
+915560	919300	There is a little trick happening right now
+919300	921520	The device is rebooting again in the download mode
+921520	923860	And it's because we want to take control over Android
+923860	925460	So we are flashing another partition
+925460	929980	The boot partition that we modified with Magisk to get root privileges
+929980	937900	so the image quality is a bit poor but i'm not sure if you can recognize the
+937900	943300	dodge that is showing up on screen so it's a good sign it means that probably the exploit worked
+943300	947700	now we have to wait for the device to boot to to get the proof and
+947700	953300	that's one of the things samsung can improve on this device is the the boot time
+953300	964580	okay so normally Raphael is gonna tell a joke
+968180	974500	okay so the device seems to have booted and i'm connected to adb can we see yes
+975300	979460	let's try essu oh it works we are roots
+983300	990740	okay so
+990740	1000380	yes okay so to conclude on the first part of this presentation we have shown a chain of two
+1000380	1006880	bugs that leads to code execution in little kernel it is persistent and um and yeah it's
+1006880	1012840	in fact many samsung devices based on media tech system on chips and we can trigger these
+1012840	1017100	vulnerability through USB and it will give full control over the normal world
+1017100	1021460	so we have full control over Android we are roots we can do we can already do
+1021460	1025720	many things we can read the messages look at the pictures and so on but there
+1025720	1031080	are some some secrets that are protected by Android by design they are stored in
+1031080	1035160	the secure world and we still don't have access to these secrets so I'm gonna let
+1035160	1039960	Raphael tell you how to retrieve the secrets that are still hidden from us
+1039960	1041960	Thank you, Max.
+1043960	1047960	Alright, so now that we have full control over the normal world,
+1047960	1051960	with both little kernel and Android being compromised,
+1051960	1054960	we are ready to step into the secure world.
+1054960	1060960	And our next target to do that will be the ARM Trusted Firmware, or ATF.
+1060960	1062960	So what is ATF?
+1062960	1068960	ATF is the secure monitor used to reach the secure world from the normal world.
+1068960	1072000	So as you can see on this picture, it stands right in the middle.
+1072860	1083740	When you are in, let's say, a regular Android application and that you want to use the secure world to perform maybe crypto operations,
+1084400	1089880	you ask for ATF to transfer your request to the secure world.
+1089880	1098520	And to do that, we use a special ARM instruction called SMC, which stands for Secure Monitor Call.
+1098960	1110800	And what this instruction does is that it triggers an exception handled by the EL3 monitor, which is ATF in our case.
+1111480	1121360	Then the monitor decides what to do based on the ID of the SMC and also the parameters that are passed through the registers.
+1122480	1125380	So why do vulnerability research on ATF?
+1125380	1131020	well as you have seen before it runs in EL3 which is the highest privileged
+1131020	1136740	level on the device so finding a bug here can definitely be devastating we
+1136740	1140800	can reach it from normal world through the SMCs we need to have kernel access
+1140800	1145060	but we were roots on the device so that's not a problem the code is fairly
+1145060	1152520	simple so reversing is gonna be simple yes however it interacts a lot with
+1152520	1158520	hardware through unknown registers so maybe doing fuzzing might not be the
+1158520	1165080	right idea as we won't be able to properly emulate these behaviors so we
+1165080	1172380	will just focus on static analysis for now so the first step is extracting ATF
+1172380	1179040	so inside a regular Android ROM image you have several partitions and one of
+1179040	1186240	them is named teeverified.img it contains a lot of interesting things such as the tigris kernel
+1186240	1193360	but also the atf which is what we want so if we open this file using an hex editor this is what we
+1193360	1201840	get so the way this file is structured it is it has several entries and each entry has its own
+1201840	1208720	header so at offset zero you have the first header of the first entry in red you have a magic byte
+1208720	1214720	in green you have the size of the entry and in blue you have the name of the entry and as you
+1214720	1221120	can see the first entry at offset zero is atf so we are lucky we won't have to search for it
+1222320	1229360	the header is 0x200 byte long so we just skip to this offset and highlighted in purple you can see
+1229360	1236800	the magic string mtkt but in reverse this is the start of atf so we have the offset and we have
+1236800	1244160	the size we can extract it and load it into our favorite disassembler or in this case the compiler
+1244800	1252320	and look for the different smc handlers so here we have two handlers one for the secure world and
+1252320	1260560	one for the normal world the second one and this is uh what we're gonna dive into as you can see
+1260560	1267520	here are the arguments of the smc they directly come from the normal world so we control them
+1267520	1273600	the first one is the smc id and then the rest is depending on the smc
+1276800	1284320	one interesting smc that we found was this one as you can see it uses a global array which is
+1284320	1292480	is initialized to a hard-coded memory address and then we retrieve in the out
+1292480	1299740	value variable a value from this global array using the first argument that we
+1299740	1304180	control because it comes from the normal world the problem here is that we never
+1304180	1309820	check this argument so it can be whatever index that we want so basically
+1309820	1316860	this is an out-of-bound read bug and we are able to read any address that we want in atf
+1318620	1325020	so we are able to leak four bytes from the atf virtual address space which means that we can
+1325020	1332940	dump all atf data but we can't leak anything from other software components such as chigris for
+1332940	1338780	example or a trusted applications so at this point it could be really great if you could
+1338780	1347340	and map any address we want right so let's for let's search for a mean to do that a second smc
+1347340	1352460	that we found interesting is this one it calls a function that we named spm actions we don't
+1352460	1359900	really know what it does but as you can see eventually we reach an mmap function so this
+1359900	1367100	looks interesting right we could maybe use it to map a memory range from the secure world
+1367100	1375380	so to reach this function we need to set the command id to 1 which is not difficult
+1375380	1384160	we need to have a size less than 1 megabyte we can do that and the last parameter is the address
+1384160	1391260	and once again we have no checks whatsoever on this parameter so this means that we are able to
+1391260	1399420	mmap any address that we want and if we further dive in the mmapwrap function we discover that
+1399420	1406220	it is actually a physical address so thanks to this bug we are now able to
+1407820	1415180	map any physical address into the atf virtual virtual address space and if we combine this
+1415180	1423180	to our bug and the leak bug we are able to leak anything from the secure world including the
+1423180	1430860	tigris kernel including trusted applications the only limit to this is that we are limited
+1430860	1437660	to eight consecutive end maps if we do let's say nine the device crashes so this means that
+1437660	1447580	because one end map is one megabyte of one megabyte of memory we are able to leak up to eight megabytes
+1447580	1454860	of data but we will see that it's more than enough for what we are going to do so the important
+1454860	1461260	question here is can we use this vulnerability to leak keystore keys for example first we need
+1461260	1468300	to understand what is the android key store system and this system is used is used for key storage
+1468300	1475340	and provide crypto services to the normal world the keys are stored as encrypted key blobs inside
+1475340	1485020	the android file system so android has no mean to process the raw key material only the secure world
+1485020	1491820	is able to decrypt this there are three protection levels and the one that is interesting for us is
+1491820	1498460	the TEE one which is also the default one and yeah raw key material should never leave the protected
+1498460	1505660	environment provided by the trust zone so those are the different steps that are performed under
+1505660	1513900	the hood first from the normal world we send a begin operation request including our key blob
+1514780	1520460	then in the secure world here it's the key master trusted application in charge
+1520460	1525660	it will be able to decrypt this key blob and extract the raw key into secure memory
+1526700	1534700	and then we are able to send several update operations so let's say for example choose the
+1534700	1544540	algorithm the different options and so on here we need the key to be in memory so
+1547180	1553820	this is very important because if we are to use our bugs we need to to use them only after the
+1553820	1560860	begin operation to be sure that the key is still in memory after that the trust application returns
+1560860	1567740	the output and then the key is flushed from memory so our proof of concept will be simple
+1567740	1573980	we will import a key into the android key store then we will encrypt something using using that
+1573980	1581260	key then we stop the execution after the begin operation is called and the key is in secure
+1581260	1590540	memory and we use our bugs our two bugs to leak the right region of memory then because we will
+1590540	1599100	have a 8 megabytes dump of data we try all possible keys to decrypt the ciphertext so
+1599980	1606380	here is a little demo so to do this demo we are going to use a tool called frida
+1607420	1616540	frida will allow us to hook functions into the normal world to halt the execution and when the
+1616540	1625100	execution is stopped after the begin operation we will have a script that will trigger our bugs
+1625100	1635740	to leak the secure word memory and hopefully the key will be in our dump of data we also watch for
+1635740	1643660	the logcat logs because our demo applications will send us the encrypted ciphertext inside it
+1646540	1657280	All right, so we will send the QuarksLab string to be encrypted into the secure world.
+1657280	1667960	As you can see our script on the left is dumping the secure world memory because the begin
+1667960	1672480	operation function has been triggered in Frida.
+1672480	1678720	this can take a bit of time because we are only able to leak four bytes of data so basically what
+1678720	1686720	we're doing here is we are dumping four bytes at a time by sending multiple smc
+1689600	1696000	all right so as you can see in the log we have our ciphertext which is the Quartzlab string
+1696000	1705280	encrypted. And we have the dump of data in the file named leakkey1. So now we are going to be
+1705280	1714800	able to try every possible key inside the leakkey1 file dump and hopefully we will find the key that
+1714800	1725920	is able to decipher our encrypted text so of course we could we could have packed every
+1727040	1735280	steps into one application or one script but for the purpose of this demo it is better to do
+1735280	1748700	do the different steps to be able to see how it works.
+1748700	1752400	So we will try to find the key now.
+1752400	1756140	It can take a bit of time.
+1756140	1757840	And we found the key.
+1757840	1764460	So here, for demonstration purpose, we imported the key only made of A's.
+1765260	1768860	if we generated a key it would have worked also.
+1776700	1777100	Thank you.
+1779900	1786780	All right, so what's next? Actually, it could be the end of this presentation and it was the end
+1786780	1793500	of what we presented at OffensiveCon a couple of months ago, but we received interesting questions
+1793500	1799740	and one of them was what about the key attestation so the key attestation in android relies on the
+1799740	1805420	android key store and it proves that a keeper is stored in the secure hardware either the trust
+1805420	1810860	zone or a security chip and along with that proof comes a bunch of information regarding the device
+1810860	1817180	such as the status of the boot loader is it locked or not the status of the the boot state is it
+1817180	1824300	verified correctly you have a bunch of ids such as the emei and so on and this key attestation is
+1824300	1829820	used by safety net and other frameworks that are similar to safety net so safety net is the one
+1829820	1836460	made by google and it's used to tell if a device has been compromised for example if you have a
+1836460	1842540	bug application the developers of this application may not want it to run on rooted device because
+1842540	1847980	it can be debugged instrumented or whatever so they may use this mechanism for detecting
+1848540	1852220	if the environment is compromised and decide not to run if it's the case
+1853100	1859260	so we didn't know much about the key attestation and for the sake of this research we took an
+1859260	1864540	open source application that will generate the attestation on the device and will pass the
+1864540	1870380	results to make sure it's done correctly and the first thing we notice is that everything seems
+1870380	1875900	fine the exploit seems not to be detected so we tried again with another app that is also open
+1875900	1882140	source that can be found on github this time it relies on safety net and here what we see is that
+1882140	1888060	it fails basically detects that the environment is compromised so safety net is a research topic
+1888060	1892060	on its own there are too many things to to say regarding safety net so it's not something we
+1892060	1900300	will cover today but it is known that it has heuristics to detect some famous routing frameworks
+1900300	1906300	such as Magisk, which we used in our exploits. So it may be the things that were detected here,
+1906300	1912460	but it's still unclear precisely what was detected. So if we come back to the key attestation,
+1913420	1918540	under the hood it relies on a certificate chain, and at the bottom you see there is a
+1918540	1923260	root certificate that is self-signed. And the private key corresponding to this
+1923260	1927740	root certificate is owned by Google. And the other certificates part of this chain
+1927740	1934040	have their private keys stored on the device inside the key store now we have
+1934040	1938600	the first key here is the GAK for Google authenticated key and it's actually the
+1938600	1944300	same across many different devices at least all the Samsung A22 5f what we
+1944300	1948980	looked in two devices but we believe that it's gonna be the same or across
+1948980	1953780	all these devices so they are sharing the same key basically then in orange
+1953780	1957480	you have the Android key store key which is unique per device and finally the
+1957480	1963980	application key that is generated along with the attestation and as I said you
+1963980	1970860	have a bunch of information that comes with this this attestation that
+1970860	1977640	they'll basically unique per device I mean they represent the device for
+1977640	1981820	example you have the version of the OS and you have a couple of fields I'm not
+1981820	1986640	sure you can read from here but you have the hash of the boot partition this might
+1986640	1991680	be one of the things safety net detected because we modified the boot partition so the hash may
+1991680	1999920	have may have changed so the one thing that could be nice is to be able to generate attestations
+1999920	2005600	but decide i mean from the attacker point of view but decide what to put inside these fields
+2005600	2010640	and we if we were able to leak one of the private keys involved in this certificate chain
+2010640	2016560	we might be able to generate valid attestations and decide what to put inside and the key that
+2016560	2022800	makes more sense for that is the GAK because it is the same key shared across different devices so
+2022800	2027600	if you leak it once you can produce valid attestations for many different devices so
+2029280	2035040	so we looked into this key and we discovered that it is stored in the android file system
+2035040	2039840	in the e-key format so it's basically the standard format for keys that are
+2039840	2044300	stored in the key store and it's the same format as any other keys and same as
+2044300	2049800	the keys that we leaked with the proof of concept that Rafael showed you so we
+2049800	2053700	came up with a strategy that is more or less the same as the previous one the
+2053700	2057960	idea is to forge a valid begin request with this key then we send it to the
+2057960	2061680	secure world we stop the execution and from there we use the vulnerabilities to
+2061680	2069800	leak the memory and finally from the dump we try all the possible private keys and this time we
+2069800	2074740	don't use encryption or signature we try to generate the public key out of it simply because
+2074740	2081640	it's faster it's a multiplication but this is a theory and it's still work in progress sadly
+2081640	2087480	because we are still stuck in step one it requires more reverse generating at the moment to better
+2087480	2093160	understand how to forge this begin request that is at least a begin request that is valid so it's
+2093160	2101400	not a failure it's the unfinished business right all right so um that was the last thing we wanted
+2101400	2106680	to share with you uh regarding this presentation so now a few takeaways uh so we're presenting a
+2106680	2111160	chain of four vulnerabilities that led to authentication bypass in odin thanks to that
+2111160	2118360	we can from the usb cable trigger another vulnerability a code execution in little kernel
+2118360	2124280	with persistency and we have shown that using the other vulnerabilities we can leak the memory from
+2124280	2129000	the secure world which include the keystone keys and yes it's still unclear if we can leak the
+2129000	2134360	attestation keys at the moment now regarding the impact all the samsung devices based on media
+2134360	2139640	tech socks seems to be vulnerable so mainly low and middle hand devices and we have seen the
+2139640	2144400	the vulnerabilities are quite simple. They could have been easily spotted through code
+2144400	2149740	reviews and maybe fuzzing for some of them. But yet they are very impactful. And this
+2149740	2156400	is also probably because of the lack of mitigation in Detail Kernel and ATF. So we reported all
+2156400	2161520	these vulnerabilities to Samsung and they are all fixed today. And we would like to thank
+2161520	2168360	Samsung security team for how they handled the reports we sent. And they made it so they
+2168360	2172320	worked quickly so that we could disclose the vulnerabilities in conferences such
+2172320	2176740	as this one so thanks to them and thanks to you for listening to our
+2176740	2181260	presentation and I'm not sure we have two minutes for questions so if you have
+2181260	2197740	some please step forward yeah there should be a microphone just over
+2197740	2216740	Yeah, thanks for your presentation. I saw the conclusion is only in fact the low and middle level of the phone. How about the premium phones?
+2216740	2224740	um well these bugs only applies to phones based on mediatek system on chip so i'm not sure they
+2224740	2230660	have premium phones based on this system and chips so maybe that's a topic for another research
+2231540	2238820	i would be happy to show more bugs on premium phones next time maybe okay so the due to this
+2238820	2248180	only happened to the leader check uh so say right the problem yeah yeah and then they also patched
+2248180	2253460	fixed the problem and they all fixed yeah you should update the the firmware yeah thank you
+2254500	2260660	hi all thanks for the presentation was a blast uh does mediatic planning on releasing uh like
+2260660	2266660	mitigations you said like there weren't any mitigation active and so will they install any
+2266660	2273140	mitigations at all on all those sorry i didn't get it remember can you step a bit can you speak
+2273140	2279220	closer to the mic yeah okay can you hear me now yeah yeah are mediatack planning on releasing
+2279220	2287060	mitigations like acr all kind of stuff there's something they will do in the future so it's hard
+2287060	2292340	to speak in their names i think it's that's something i would expect maybe but i don't know
+2292340	2298580	for this this device i think it's already implemented in some high-end devices for example so yeah
+2304500	2308580	okay well i think that's it thank you everyone

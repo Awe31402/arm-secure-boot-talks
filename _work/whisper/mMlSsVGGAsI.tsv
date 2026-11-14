@@ -1,0 +1,748 @@
+start	end	text
+0	5760	Hello everyone and welcome to my talk on fit happens how secure boot wasn't.
+6320	11120	My name is Ahmad Fatoum. I am an embedded Linux developer with Pingotronics. We are a German
+11120	16880	Linux consulting company and especially in the last few years most of our customer projects
+16880	25200	are employing some verified boot scheme and on the x86 systems this is most often UKIs for us
+25200	31920	and on the arm systems we are heavy users of fit and fit is what i'm going to talk about today
+33040	39760	so i will start with some history about fit how fit came to increase in scope how signing was
+39760	46480	bolted onto the format how it was exploited over the years and then talking about my proposal for
+46480	53440	avoiding some of these issues and how we can survive using fit going forward so how did we
+53440	58400	get fit so it takes us with a grain of salt i was not there for it i was like in middle school i was
+58400	65920	like 13 years old but basically you had uimages and uimage is a very simple format you have a 64
+65920	72560	byte headers in front of your image in its last iteration you had these multi-file images where
+72560	77600	you had at the start of the image a number of sizes and then you had multiple images in the
+77600	85200	same binary and it's not difficult to see where this falls short so you have only a crc32 not
+85200	92480	enough space for like a longer cryptographic hash you have only a single load address and
+92480	98000	you can't have something like a kernel and the device tree but no ram disk because if you have
+98000	104160	a ram disk of zero that terminates this list at the right side at the top so you can't have that
+104880	110800	and looking at these limitations there was a need for proper multi-file images that means this
+110800	117040	metadata that we had for all these images should really be per image so each image whether it's a
+117040	122800	kernel a device tree or a ram disk should have its own load address should have its own hash or crc
+122800	128800	or whatever and to actually boot this you want to have bootable configurations so this is a
+128800	131860	a combination of images, a subset of them,
+131860	133220	or maybe all of them.
+133220	136360	And these are what you would boot on an actual board.
+136360	138180	So board one needs these three images
+138180	140440	and board two needs these two images.
+140440	143220	And all of that should exist in the same file.
+143220	146040	So you can deploy one file that you target
+146040	147660	a lot of different hardware with.
+148600	151840	And yeah, that's basically how FIT came to be.
+151840	154400	Of course, for it all to be in the same file,
+154400	155920	you need a file format.
+155920	159660	and device tree was what was chosen for this file format.
+159660	162940	And it makes sense because, well,
+162940	166100	you had this problem of you image being not flexible,
+166100	168160	device tree is infinitely flexible.
+168160	170620	You can have arbitrary nesting in your nodes.
+170620	173520	I think nowadays it's limited to 64 for fit parsing,
+173520	176140	but yeah, you can go down as you like,
+176140	178860	and you can have any number of key value pairs
+178860	181240	with string property names.
+181240	183700	So you can add anything at all.
+183700	185160	And it had available tooling,
+185160	187280	So there is a device tree compiler even back then.
+187280	189540	There is libfttt, nowadays you have a lot
+189540	191380	of more tooling for it.
+191380	194160	And a very strong argument, especially back then,
+194160	196300	was that code size, especially in the bootloader,
+196300	197640	comes at a premium.
+197640	200900	And if the bootloader already has libfttt
+200900	203940	for parsing the device tree that it manipulates
+203940	206580	before passing to the kernel, so for example,
+206580	208440	the boot arguments on an ARM system
+208440	209720	are written into the device tree.
+209720	212780	So the bootloader has some device tree support.
+212780	215100	So why not use the same device tree support
+215100	217800	for the image where the kernel itself is located in.
+217800	221460	And yeah, so a lot of birds want stone.
+221460	223920	So I think that was the thinking.
+224760	228520	And yeah, so that's how it looks like.
+228520	230700	You have these images on the right.
+230700	233800	You have a kernel, a RAM disk, any number of device trees.
+233800	236320	And then on the left side, you have these configurations.
+236320	237760	You can have any number of images,
+237760	239500	any number of configurations.
+240500	241860	I'm not sure if you can have one
+241860	244000	without any configurations, but yeah.
+244000	248460	you can surely have more than one in any of them.
+248460	252120	And yeah, what the bootloader is going to do
+252120	254360	is it's going to read this device tree
+254360	257740	and determine which configuration it should boot.
+257740	259540	So there are multiple ways to do that.
+259540	260420	What I like to do
+260420	263320	is to use the compatible property of configurations.
+263320	264820	So each configuration can say,
+264820	268860	I am compatible with Aracha Rock 3A for example.
+268860	271080	And the bootloader device tree itself
+271080	272760	has a compatible for the board.
+272760	275160	So the bootloader can match its own compatible
+275160	276980	against the compatible of the fit,
+276980	278360	and once it has a match, okay,
+278360	279920	this is a configuration I want to boot,
+279920	281640	and it's going to boot it.
+281640	284640	Now, as you can see in this fit here,
+284640	286660	there are a lot of configurations.
+286660	290960	419, for example, was the index of the ROC3A.
+290960	293080	This is generated by the kernel build.
+293080	296080	So since Linux 6.10, I think,
+296080	299300	the kernel, the cable supports a make image fit target
+299300	302380	on ARM64, and that generates you a fit
+302380	303980	with all device trees and the kernel
+303980	305960	and optionally a RAM disk.
+305960	308720	But you can also write this ITS
+308720	311300	for image tree source file by hand.
+311300	313540	And there is this ink bin directive.
+313540	315760	I think it might have been added, especially for FIT,
+315760	317800	where you can include arbitrary binaries
+317800	319720	directly into the FIT.
+319720	322720	And yeah, but there are also various build system wrappers
+322720	324880	in tools like PDXtest or Yocto.
+324880	326680	So in Yocto there are two of them.
+326680	329040	One in OE core, kernel fit image pb class.
+329040	330860	One in meta OE fit image pb class.
+330860	334480	These generate for user ITS and then make image
+334480	336780	takes this and compiles a fit out of it.
+336780	340800	Make image can also on its own generate fit
+340800	343160	in that it takes some command line arguments
+343160	345580	and then it produces the binary.
+345580	347160	This is how the binary looks like.
+347160	349360	If you have seen some diagrams of device tree,
+349360	351340	it's exactly a device tree.
+351340	353060	So there is this memory reservation block
+353060	355300	but it doesn't make sense for fit so it's empty.
+355300	357720	There is a structure block which contains all nodes
+357720	360780	and properties including the values of all your kernels,
+360780	361980	device trees and ram disks,
+361980	363800	this is all inline as a properties.
+363800	367320	This is what I have marked here in green.
+367320	370340	And because a number of strings in the properties
+370340	372220	appear a lot of times, so for example,
+372220	374600	this compatible string in a normal device tree,
+374600	377280	it can occur a hundred times or so.
+377280	378820	So these strings are in turns,
+378820	381220	they are in a separate strings block.
+381220	382200	But that's basically it.
+382200	384580	You have a header, it has a number of offsets,
+384580	387280	and yeah, that's how fit looks like.
+387280	389680	And you can use the exact same toolings
+389680	392120	that you use for FTT, for flattened device tree,
+392120	393360	also for fit.
+393360	396380	But the downside here is that you can't detect
+396380	398220	if you have an FTT or a fit.
+398220	399620	They look exactly the same.
+399620	400760	You actually have to pause it
+400760	402520	and implement some heuristic,
+402520	404300	like checking if,
+404300	407060	is there a slash configurations node, for example.
+407060	408360	And yeah, you wouldn't see that
+408360	410400	in actual hardware device tree,
+410400	411760	so that's probably a fit.
+413180	415500	Now, fit didn't stop there.
+415500	419480	Fit has evolved and increased in scope.
+419480	421980	So you can use fit as a partition table.
+421980	425720	So why should you put your kernel inside
+425720	426700	a device tree property?
+426700	428500	Why can't we put it outside
+428500	431660	and just have a data offset and a data size?
+431660	433540	And yeah, basically a partition table
+433540	435240	that you put on the start of your partition
+435240	438620	and then you can have the actual image data outside.
+439860	442080	It's a bit funny kind of partition table
+442080	443980	because you can have interned partitions,
+443980	446440	which are just images are inline in the fit
+446440	449300	and some external partitions.
+449300	453080	But yeah, that is what fit can provide you.
+453080	456680	And this also breaks the total FDT size member.
+456680	459140	So previously you could read that
+459140	460520	and know how big a fit is.
+460520	461420	Now you can't anymore.
+461420	463840	Now you only know how big the device tree portion
+463840	464780	of the fit is,
+464780	466360	but you don't know how big the images is.
+466360	468960	You actually need to walk through the fit
+468960	472160	and pass every image and look at each data offset
+472160	474500	and at each data size, add them up
+474500	477800	and determine which is the largest extent.
+477800	479860	and then you know how big your fit is.
+479860	481860	So you can't say if you have a fit,
+481860	485360	you can't say how big your fit is
+485360	488400	without actually parsing the device tree.
+488400	493340	Now, fit didn't stop at being something booted by U-boot
+493340	495680	or Bearbox or various other bootloaders.
+495680	498880	U-boot itself is nowadays often in a fit.
+498880	501260	So you have U-boot SPL,
+501260	503320	which needs to load not only U-boot proper
+503320	504460	and provided a device tree,
+504460	507300	but also maybe trusted firmware A, Opti and so on.
+507300	509760	and you need some container format for all of these.
+509760	513020	So well, why not use fit, you know, birds and stones.
+513020	515400	So there is a small problem here
+515400	518800	that SPL is running at the highest privilege level.
+518800	522380	So you could maybe mount an attack against you with proper
+522380	525980	and it would not be so bad if Opti has already been loaded
+525980	528420	so you can't access stuff in your trust zone.
+528420	530320	But the SPL is usually running
+530320	532740	at the highest available privilege level.
+532740	537020	And an unfun fact about this is SPL is very size constrained.
+537020	540700	So some checks in libfdt that check
+540700	544820	if a device tree is malformed are skipped in the SPL
+544820	548940	for size reasons, although it is the more critical part.
+548940	550520	But they are there in uBoot proper,
+550520	553700	so you are safe there if this is some issue
+553700	555100	that you could exploit.
+557200	560780	Yeah, so how did fit gain signatures?
+560780	565400	So at the very first, fit only had like hashes and CRCs
+565400	567160	you could just write into the device tree,
+567160	569840	my algorithm is CRC32, this is the value.
+569840	571160	You had no kind of signatures,
+571160	574220	this came after maybe five years after it.
+574220	578740	And at first, it was signing for images.
+578740	580360	That means you have this image node,
+580360	581840	it has this data property,
+581840	583580	and this data property contains for your kernel,
+583580	586760	for example, and what's being signed is exactly that.
+586760	589400	This data property, the content of this data property,
+589400	591500	nothing else in the node is being signed,
+591500	593580	including the load and entry address.
+593580	595640	And this is very critical
+595640	599340	because you can just put your unsigned payload anywhere,
+599340	601280	for example, in a new property,
+601280	603340	just after the data property,
+603340	605460	increment your entry to jump to it
+605460	606840	and nothing will stop you.
+606840	608680	U-Boot has no bounce checking on entry.
+608680	611840	So you can jump anywhere, basically not, yeah.
+611840	614420	So anywhere within the fit that's loaded, you can jump.
+614420	616920	Probably you can also jump outside the fit.
+616920	619700	And you could add bounce checking on entry,
+619700	622420	but this wouldn't help because this is a kernel image.
+622420	626380	it's like 10 megabytes of executable code or 20 megabytes,
+626380	628440	you will have so many jump instructions there
+628440	630480	that you could jump to and then continue
+630480	632060	to jump to your payload.
+632060	635580	So this is fundamentally insecure and you would never,
+635580	638360	I don't think you can salvage it.
+638360	640900	I wasn't aware of this at first until I read about it
+640900	641880	on the uBoot mailing list.
+641880	644920	So Barebox never implemented it because as I understand,
+644920	647020	there were fears of mix and match attacks
+647020	648840	that you take a device tree and the kernel
+648840	650260	and mix and match them.
+650260	653420	But this is really a very minor issue
+654900	658480	next to what you can do with the entry here.
+658480	661240	And yeah, so who does it?
+661240	663620	UiCoreUbootSignBB class does it if you ask it
+663620	665520	with SPL sign enable.
+665520	667820	That means TFR, OPT, FDT, and Uboot,
+667820	669640	if you are using that, yeah,
+669640	672480	they can be trivially exchanged
+672480	675300	and you should probably implement
+675300	680220	some downgrade protection, fixes, revoke your signing keys.
+680220	682660	So yeah, that's bad.
+682660	685180	I reported it and Marta is currently fixing it.
+685180	687800	I think the series is now at version three or version four.
+687800	689300	Here is a link to that.
+689300	691680	Make image itself happily generates it for you
+691680	693360	when you use minus F auto.
+693360	696480	So people use minus F auto because a side effect
+696480	699580	of using it is that it can patch the UBoot device tree.
+699580	702220	Okay, you can do that, but do not use the fit
+702220	705360	that it generates because it's not secure.
+705360	708460	And there are a number of upstream UBoot SPLs
+708460	711140	that do board fit image post process,
+711140	714760	which allow, and SOC code,
+714760	717380	this is a weak function, so SOC code can implement it.
+717380	721240	This allows SOC code to implement some custom way
+721240	723220	to verify the fit.
+723220	724980	I believe that's wrong.
+724980	728060	I didn't look into it, but probably someone should.
+728060	731400	So on ARM64, actually, the entry is ignored,
+731400	734020	but you can change OS to phawxworks,
+734020	735380	which is enabled by default,
+735380	738400	and then you can use entry again.
+738400	741640	So yeah, it's not good.
+741640	743520	What you all are hopefully using,
+743520	746640	or maybe something better, is sign-in configurations.
+746640	750040	And in this case, the hash also only covers the data,
+750040	753380	but critically, the configuration has the signature
+753380	757020	and it covers not only, yeah, it covers a number of nodes.
+757020	760000	So it covers the root node, you see this in this hash node,
+760000	763000	it covers slash, it covers slash configurations on fun,
+763000	765880	it covers your images, all images you have,
+765880	769580	and that hash image, and you should be protected this way.
+769580	771740	I talked about this string interning
+771740	773620	that happens for property names.
+773620	776460	So yeah, you need to hash the strings also,
+776460	779280	but only a prefix of strings is hashed
+779280	781620	because you can add configurations of that effect.
+781620	782740	They can have property names
+782740	784120	that are not in the string table.
+784120	786340	So you hash from the start of the string table
+786340	789400	until some point and don't hash the rest.
+790840	792980	But that's how the format is.
+792980	794940	And yeah, you can't change entry anymore
+794940	796940	with configuration signing,
+796940	798340	but you can add extra images,
+798340	799880	you can add extra configurations,
+799880	802000	you can add a property to slash images,
+802000	803740	but not to the image node itself.
+803740	805740	So there are still some degrees of freedom
+805740	806920	that you can use.
+806920	808140	This is how it looks like.
+808140	810500	So the FTT headers that we passed at start
+810500	812820	is completely unchecked.
+812820	814380	The stuff that's dashed,
+814380	817460	there is only enforced that this node exists,
+817460	819840	but not what it has as contents.
+819840	823280	And the red stuff, yeah, the red stuff is verified,
+823280	825900	that the gray stuff is completely unverified.
+825900	827500	So normally, if everything is correct,
+827500	832180	it shouldn't matter, but things rarely are.
+832180	836540	So both barebox and uboot are written in C,
+836540	840260	and they have the same issues many C code bases have.
+840260	842360	Yeah, a lot of undefined behavior.
+842360	843760	These are only the fixes.
+844680	846580	I will leave it as an exercise to find out
+846580	848920	how much more of these might be there.
+850220	851260	Yeah, fit happens.
+851260	853700	So let's talk about some fit exploits.
+853700	855300	So fit is tricky to pass.
+855300	858760	And this can be a bit unexpected
+858760	861300	because hey, it's just a device tree.
+861300	863320	But you do pass this device tree
+863320	864860	and you pass a lot of it
+864860	867220	before you actually verify the signatures.
+867220	869280	And an attacker has just one goal,
+869280	871460	get fit consumers to confuse nodes.
+871460	874000	So you can add your own nodes, we have seen that.
+874000	878060	You just need to have one place just confuse these nodes.
+878060	881420	So for example, if you have kernel1 in lowercase
+881420	885100	and kernel1 in uppercase that you insert after the fact
+885100	887320	and you have a signed configuration,
+887320	890560	you will have these two parts of the code.
+890560	894040	What was signed, so I can verify it,
+894040	895780	and what should I boot?
+895780	900240	So if you can abuse difference in APIs used for one thing
+900240	902240	and for the other thing,
+902240	905720	then maybe you got yourself a boot bypass.
+906560	909820	And yeah, there are numerous ways you could do that.
+909820	912280	We have seen memory safety issues.
+912280	915900	Perhaps you can get some buffer overflow or something.
+915900	918920	Fuzziness in the API themselves.
+918920	922020	So Uboot is using libftt,
+922020	924800	barebox is using these of underscore functions
+924800	926980	that originally were ported from the kernel,
+926980	929180	but both of them were not originally written
+929180	931080	to handle untrusted input.
+931080	935800	I believe fit might be the only untrusted device tree
+935800	937740	that's actually being used.
+937740	940820	So TFA, if it takes a device tree, it trusts it
+940820	944420	because the first stage bootloader running, the BL2,
+944420	946260	it's already running at the highest privilege level.
+946260	948540	It doesn't need to protect itself against it.
+948540	950180	It's the same thing as a kernel is running
+950180	952500	at the same privilege level as a bootloader booting it.
+952500	954160	It doesn't make sense to assume
+954160	956720	that the bootloader is malicious, you know?
+956720	959080	And yeah, it's the job of the bootloader
+959080	965720	pass something correct here and so you have apis in libftt for example where you say give me a
+965720	971240	memory node and it gives you a memory node or a memory at zero node to make it easier for you and
+971880	977160	there are in the of family of functions from the kernel functions where you tell it give me this
+977160	983560	node with name kernel and it gives you one an uppercase if it doesn't found the lowercase one
+983560	989480	and this sounds like trivial stuff but both of these were full fit signature bypass exploits
+989480	997320	so unit addresses broke uboot fit verification completely but not barebox case sensitivity
+997320	1003560	broke barebox but not uboot so there is something here for everyone and yeah you could try to trick
+1003560	1009400	walkers for example you could add slash in node names this shouldn't happen there but are all
+1009400	1013560	all your APIs expecting that they can handle a slash.
+1014480	1017260	You could have non-null terminated strings
+1017260	1019600	and maybe one API doesn't like this at all
+1019600	1022420	and the other API, okay, yeah, no problem.
+1022420	1025980	I will just copy the bytes because there is a size field.
+1025980	1029340	And there is this, let's call it necessary untrusted data
+1029340	1031800	which you are just accessing and assuming, yeah,
+1031800	1033480	an attacker can't do anything with it.
+1033480	1036100	So the default configuration booted by a fit,
+1036100	1037240	the attacker can choose that.
+1037240	1039220	Of course, it must be a verified configuration
+1039220	1040940	but the attacker can choose that.
+1040940	1045220	And hashed nodes, which we have seen, is also untrusted.
+1045220	1046780	Which brings us to this issue,
+1046780	1050740	which is probably the biggest fit security vulnerability
+1050740	1055500	for the last few years, CVE 2026 and so on.
+1055500	1058720	And it's deceptively simple.
+1058720	1061540	So you had this verified kernel image.
+1061540	1064080	It's completely okay, it's good.
+1064080	1066020	And you rename it, you move it
+1066020	1069080	to slash images slash images kernel one.
+1069080	1071580	And then you add a new slash images kernel one
+1071580	1074020	which is your evil payload and then hash node
+1074020	1075460	because it's not being hashed.
+1075460	1077380	It's just tells you what to hash
+1077380	1080840	but itself is not hashed or covered by any signature.
+1080840	1083680	You change slash images kernel one which is,
+1085720	1086760	yeah, this one.
+1086760	1089540	This one used to say slash images kernel one
+1089540	1093360	but now you have changed it and so you hash the old one
+1093360	1094860	but actually boots a new one.
+1094860	1099220	And this way you got yourself full FITS signature bypass
+1099220	1102080	without abusing any memory safety issues.
+1102080	1106500	So this is something that's very general in applicability.
+1106500	1108700	This has fixed now, so the problem here was
+1108700	1110320	that there were two different ways,
+1110320	1112680	one to how to determine what to hash
+1112680	1114840	and how to determine what to boot.
+1114840	1118620	And actually there were the redundancy here in the node
+1118620	1122100	because the configuration node already has a kernel,
+1122100	1126300	FDT and so on properties that point at the images.
+1126300	1128760	And yeah, you should actually check these
+1128760	1130920	because these are used for booting.
+1130920	1133340	Hash nodes is not something you should check
+1133340	1134420	in the bootloader.
+1134420	1136560	This was fixed in uboot, in barebox,
+1136560	1138220	in the fit specification.
+1138220	1141500	And yeah, I think that's everyone who is affected
+1141500	1143900	because I think no one implements configuration signing
+1143900	1146860	outside of uboot and barebox, I'm not sure.
+1146860	1148860	Yeah, so there is an advisory that I have written
+1148860	1152120	that goes a bit in depth what is affected.
+1152120	1155460	So if you're using configuration signing in the U-Boot SPL,
+1155460	1159800	your opt is also probably, how do you call it,
+1159800	1161600	attacked, attackable by this.
+1163620	1167920	Yeah, and I am interested how good publicity work
+1167920	1168780	was done for this.
+1168780	1171040	So please raise your hand if you have a verified boot
+1171040	1172180	project using fit.
+1174200	1176840	And keep your hand up if you have not heard
+1176840	1178720	of this particular issue.
+1179660	1181820	Okay, yeah.
+1181820	1185540	I wasn't able to see how many hands went down.
+1185540	1188260	But yes, a number of people haven't heard about this issue,
+1188260	1190640	so we should have done better work here,
+1190640	1192340	which I will get to.
+1192340	1195540	So, how do we trim the fit?
+1195540	1197160	Yeah, so fit keeps on growing.
+1197160	1199920	So I showed this partition table thing.
+1199920	1202640	You can have partitions that alias each other.
+1202640	1204760	You can have fit as a partition table with the mverity.
+1204760	1207320	So you actually have a kernel driver
+1207320	1210760	that mounts your fit as a partition table
+1210760	1212320	and has variety on it.
+1212320	1214080	So yeah, you can do that.
+1214080	1215600	This is in the spec.
+1215600	1217180	U-boot support is being added.
+1218480	1221980	So our open pull requests for all sorts of things.
+1221980	1226460	And yeah, we should try to keep fit secure,
+1226460	1229220	but not at the cost of new features, right?
+1229220	1231460	This is a slide that I had last year
+1231460	1233840	in my bootloaders under fire talk.
+1233840	1237240	And this was like a wishlist for barebox or in general.
+1237240	1239480	And I'm happy that a lot of this materialized.
+1239480	1241640	So security policies are upstream.
+1241640	1245460	OSS fast has barebox and uboot support now.
+1245460	1247300	This is nice.
+1247300	1249620	The fit code is also being fast.
+1249620	1252720	I think for uboot it fails whenever you need to hash.
+1252720	1255360	So an attacker can trivially compute a hash.
+1255360	1259560	So it's not cool if the father can't continue there.
+1259560	1262980	For barebox or for both of them, barebox and uboot,
+1262980	1265440	You can't actually find this issue that I have shown
+1265440	1267040	because it's not a memory safety issue.
+1267040	1268620	So there is still some work to do here.
+1268620	1270380	I have been trying to do it for barebox.
+1270380	1271420	Have something promising.
+1271420	1274820	I hope that I can upstream it in the future
+1274820	1278900	so we can actually catch these confusion attacks by fuzzing.
+1279840	1280680	There's a barebox thread model.
+1280680	1282900	And yeah, there was this one here.
+1282900	1285440	Fit images, verify full image before parsing.
+1285440	1287620	When I wrote this, I was thinking about memory safety issue.
+1287620	1291060	I was not thinking about like the barn door
+1291060	1292360	being so wide open.
+1293260	1295080	But yeah, so let's get to that.
+1295080	1297860	A lot of stuff has a check mark on it.
+1297860	1299460	What do we need for whole fit signing?
+1299460	1301960	So this is not a new radical new idea.
+1301960	1304860	You have this on uBoot already for the IMX8M.
+1304860	1307560	You sign the whole fit image as if it were firmware
+1307560	1309080	and then you give it the boot ROM.
+1309080	1312100	It's a bit special and it abuses the fact that you can,
+1312100	1314060	after the fit header, just move the nodes
+1314060	1316580	because there are pointers and then you put something there
+1316580	1317680	that lets the boot ROM sync.
+1317680	1320040	Oh, this is a bootloader, I can verify that.
+1320040	1322100	Yeah, but you can do it, people do it,
+1322100	1326880	and the people who did it were not affected by this issue.
+1326880	1328860	So, but they were probably affected
+1328860	1329920	when booting the kernel
+1329920	1332380	because this is often used only in UBoot SPL.
+1332380	1336600	So kernel is, EL2 is compromised, EL3 isn't.
+1336600	1338640	But well, let's get back.
+1338640	1339940	Android verified boot.
+1339940	1342680	You can have this trailer to verify the fit image
+1342680	1345020	as a whole, so it's not a new thing.
+1345020	1346920	The UBoot implementation, when I looked into it,
+1346920	1349160	is time of check, time of use vulnerable.
+1349160	1351900	So don't get running and say,
+1351900	1353600	yeah, I will use full fit signing
+1353600	1354660	and I will take the first thing
+1354660	1356040	that's implemented in uBoot.
+1356040	1358140	That's not a good idea yet.
+1358140	1359500	One thing that's implemented in uBoot
+1359500	1362040	that you could actually use is config image preloadsig.
+1362040	1363980	This has been there for four years now.
+1363980	1365540	It's unfortunately not in the spec.
+1365540	1367140	It's barely documented.
+1367140	1369680	And I think it's not backwards compatible.
+1369680	1371640	So that wouldn't help adoption.
+1371640	1373020	So what do I think is needed?
+1373020	1375220	We need something generic, must be documented,
+1375220	1376320	must be backwards compatible,
+1376320	1378920	so people can actually use it.
+1378920	1382100	And yeah, there's a lot of things you can do with fit,
+1382100	1384260	but we should really focus on the main use case
+1384260	1387880	for most of us, which is a secure kernel boot container.
+1387880	1389980	And I want this format to be attractive.
+1389980	1392680	So people use it even if they are not really sold
+1392680	1394300	on the whole fit signing idea.
+1394300	1396960	So the format should allow you to detect a fit.
+1396960	1398820	It should allow you to know the size of the fit.
+1398820	1400460	It should allow you to append metadata
+1400460	1402740	that's not being verified.
+1402740	1407100	And very critically, it should not do any device reparsing
+1407100	1409220	before verification, because then I think
+1409220	1410580	you can just throw it away.
+1412160	1413880	Yeah, so this is what I came up with.
+1413880	1415720	You have the struct FTT header.
+1415720	1418780	This has this boot CPU ID field,
+1418780	1420480	which is not used nowadays.
+1420480	1423940	And I propose that we add fit as a magic there.
+1423940	1427280	And when there is fit there, we would expect,
+1427280	1428560	or the bootloader would expect
+1428560	1430860	there is a struct fit header directly after it.
+1430860	1433200	It would have also a fit for cross-checking.
+1433200	1436080	And then it would have actually external data size.
+1436080	1437480	so we can actually size a fit
+1437480	1439820	and we need that to be able to hash the fit.
+1439820	1442080	So without knowing how big a fit is,
+1442080	1444420	how should a bootloader know what to hash?
+1444420	1445820	And then it can have some flags
+1445820	1448060	for backwards and forward compatibility.
+1448060	1450180	And if you have a fit header,
+1450180	1452200	you also have a metadata trailer,
+1452200	1456440	which is just a very simple TLV format at the end
+1456440	1458600	where you can add detached signatures
+1458600	1461260	or something else that shouldn't be covered by a hash,
+1461260	1463240	but it should be very simple.
+1463240	1467220	So in comparison, you just read, I think,
+1467220	1469480	like eight fixed offset integers.
+1469480	1472160	The 64-bit ones of them are kept at 48 bits.
+1472160	1474740	So even if you do not do overflow checking,
+1474740	1477040	just check the upper two bytes.
+1477040	1479180	And yeah, hash it, verify it,
+1479180	1481140	and only then do the parsing.
+1481140	1485460	And yeah, in the old style with configurations,
+1485460	1486640	what you see on the left,
+1486640	1491020	the verifying the signature is just step four
+1491020	1493280	instead of being like something you do
+1493280	1495880	before the device tree is being passed.
+1495880	1499220	And I think this has a pretty good compatibility story.
+1499220	1501420	So if you have a new bootloader and an old fit,
+1501420	1503940	no problem, pair configuration signatures
+1503940	1506640	can be supported for a transitory period.
+1506640	1508700	If you have an old bootloader and a new fit,
+1508700	1511020	no problem, because it looks exactly the same.
+1511020	1513860	The FTT header is something added after the,
+1513860	1516320	the fit header is something added after the FTT header,
+1516320	1517560	which you are allowed to do.
+1517560	1519020	If you have a new bootloader and a new fit,
+1519020	1520920	you can use whole fit signatures.
+1520920	1524340	And you would roll this out in the field,
+1524340	1527460	sign both configurations and the whole fit image.
+1527460	1528840	And after a transitory period,
+1528840	1531900	you would stop allowing configuration signing
+1531900	1533940	as a bootloader policy.
+1533940	1536160	And yeah, this is something I would like to see
+1536160	1537560	in my customer projects.
+1538400	1541860	So I wrote a spec draft for that.
+1543320	1545560	Yeah, so there was some discussions with Simon.
+1545560	1548100	I think we reached a consensus in this approach
+1548100	1550400	that we will add this TLV.
+1550400	1552740	This TLV overlaps a bit with device tree
+1552740	1554300	but I think this is unavoidable
+1554300	1556880	because if we do something device-tree compatible
+1556880	1558820	people will just use libfttt.
+1558820	1561700	And yeah, I don't want any intern strings
+1561700	1564320	and this whole complexity of device tree
+1564320	1566220	before we do a verification.
+1567080	1568700	Not that you can't get it secure
+1568700	1572360	but experience has shown that this is rather tricky
+1572360	1574340	and we should draw a line
+1574340	1576660	and try to do better in my opinion.
+1577720	1579320	Yeah, so ball is in my court.
+1579320	1581040	I have been busy this week,
+1581040	1586040	but I hope to soon update the PR for feedback.
+1586480	1588840	And after that, we will discuss signature entry
+1588840	1591040	and implementation on the GitHub pull request.
+1591040	1592640	You can click there.
+1592640	1594340	PR44 is its number.
+1594340	1597420	So if you are interested in collaboration or sponsoring,
+1597420	1599100	please let me know.
+1599100	1601900	So what should we do till then?
+1601900	1604940	And more importantly, what should we do when we have it?
+1604940	1606900	So vulnerabilities will happen.
+1606900	1614260	it's independent of which format we are using i think so bootloader updates need to be easier
+1614260	1621140	so most my most our projects are using rauc rauc has a wider repertoire of bootloader update methods
+1621140	1626180	so if you are using rauc or your bootloader is allowing you to update sorry your update
+1626180	1631860	system is allowing you to update the bootload and a boot power fail safe manner you should really do
+1631860	1637860	so but i think also on the bootloader development side there are some process changes that are
+1637860	1644580	desirable so these issues i spent a lot of time looking at them and i can't expect some user of
+1644580	1649220	the bootloader to get the same understanding what the implications are by reading a commit message
+1649220	1653620	so for these critical issues i wrote security advisories and they were published on the
+1653620	1659220	barebox github yeah one issue was specific to barebox the other also affected uboots so i wrote
+1659220	1664180	a security advisory so it's applicable to both and got a you would from the you would maintainers
+1664900	1671220	a sign off on it we started requesting cves so cve requesting and bootloader land is something that
+1671220	1677140	a security researcher does if they want to but no one does but yeah i think if you are writing
+1677140	1681380	such a nice severe nice advisory as people have told me you want people to read it so you should
+1681380	1687380	request a cve so people have a reason to go there and yeah we have been maintaining an lts release
+1687380	1694020	for barebox so yokto rhinos includes barebox in open embedded core and this release is lts and
+1694020	1698100	we are backporting patches to there whether there are critical security patches or just normal bug
+1698100	1703780	fixes and for the small versions between them we are having migration guides so we have been doing
+1703780	1709060	this for maybe under two years a year and a half so we have monthly barebox releases there is a
+1709060	1713540	migration guide telling you what you might need to look out for and i really would like to see
+1713540	1718200	like for Opti and other projects because, yeah.
+1718200	1719660	So it's just a small point,
+1719660	1721800	but I want to talk about this a bit
+1721800	1725160	because I think it's really good for security to have it
+1725160	1728940	because there are these defaults in various software
+1728940	1731260	which were chosen at one time
+1731260	1734100	and then it has shown that these are bad defaults.
+1734100	1735260	And now you can change them
+1735260	1737600	because you will break all these users
+1737600	1741620	and all these users wouldn't know why and so on.
+1741620	1746260	And this inconveniences possibly more future users
+1746260	1750580	than there are existing users, just to keep this default.
+1750580	1752580	And I think with migration guides,
+1752580	1756380	we got more bold in bare box to just say you,
+1756380	1760180	there was some, for example, there is boot or boot M
+1760180	1764040	allows you to temporarily raise the level
+1764040	1765640	of fit signature checking.
+1765640	1768520	So there is a global toggle, a build time toggle
+1768520	1769900	and a runtime global toggle.
+1769900	1772740	and then you could, at shell level, raise it.
+1772740	1775520	And this is a feature that might be nice for development,
+1775520	1778820	but it complicates so much thinking about
+1778820	1781020	what level am I at now?
+1781020	1782940	And how do these things interact?
+1782940	1784380	And we just ripped it out.
+1784380	1786080	We wrote in the migration notes,
+1786080	1788040	hey, if you are using this, use this.
+1788040	1790140	We found this is a bad idea, don't use it.
+1790140	1792820	And I would really like more projects to be bold.
+1792820	1793880	So we are not bold.
+1793880	1795460	We still have very old hardware
+1795460	1798660	that I am too emotionally invested to throw out.
+1798660	1801160	but at least a bit.
+1801160	1802600	So in the security relevant stuff,
+1802600	1806460	we should really get into the habit of changing defaults.
+1806460	1811460	And yeah, so I have two more slides and it's about testing.
+1811880	1816220	So I think testing for pitfalls with fit is too difficult.
+1816220	1819520	And who of us even tests that an unsigned fit
+1819520	1821260	is indeed refused?
+1821260	1823920	So this might, great.
+1823920	1827700	Okay, sorry, again, how many were that?
+1827700	1831460	Okay, so six people are doing it, this is good.
+1832340	1834180	Yeah, I wish more people would do it
+1834180	1835800	and that it would be easier to do it
+1835800	1838140	and that it would be also easier to check
+1838140	1841100	that you are indeed, when you are backporting a fix,
+1841100	1842680	for example, that you are not,
+1843700	1845720	that this issue does not affect you
+1845720	1847940	or that you have probably fixed it.
+1847940	1850820	And I think LLMs increase the urgency here
+1850820	1854000	because exploitation has become very easy.
+1855140	1856880	LLM, here is assigned fit.
+1856880	1858760	Here is this open source repository.
+1858760	1860700	Here is this patch that applies on top of it.
+1860700	1862980	Give me a reproducer that a vulnerable bootloader
+1862980	1865180	will accept, and it will happily do so.
+1865180	1867700	And it doesn't need some fancy cyber model.
+1868720	1870720	And to prove that point here is something
+1870720	1871980	I vibe-coded back in March.
+1871980	1873040	I never looked into the code.
+1873040	1877040	I am not much of a JavaScript guy anyway.
+1877040	1878220	And this is a website.
+1878220	1879560	It's a tribute to my cat.
+1879560	1883180	You can also do a tribute to her and upload a fit.
+1883180	1886040	And then from a dropdown, you can choose
+1886040	1887640	if you want to manipulate the device tree,
+1887640	1888820	if you want to replace the kernel,
+1888820	1891060	if you want to amend something after the initramfs
+1891060	1893840	to get a root shell, then you can, from the dropdown,
+1893840	1896280	choose some way to forge your fit.
+1896280	1899680	For example, you are using image signing
+1899680	1902120	and you want to use this entry method.
+1902120	1904220	Then you click root and then you can download it.
+1904220	1906620	It runs in your browser and, of course,
+1906620	1910540	you will only use this responsibly and on devices you own.
+1910540	1912620	But I think we should really use that
+1912620	1914860	and should verify that our systems are safe
+1914860	1917720	because security by obscurity doesn't help us
+1917720	1920820	as people who are trying to defend the software.
+1920820	1923100	So yes, that's it, thank you.
+1934580	1937920	I was a bit quick in talking, so we have like eight minutes,
+1937920	1940760	but I hope you still, I was not too quick.
+1940760	1942860	Yeah, any questions?
+1944860	1953380	I have a lot of backup slides like certain slides I had to cut down to try
+1953380	1956820	to get into yes please
+1964980	1970620	yes so this is one thing that I want in your whole fit signature to support so
+1970620	1974020	old format certainly can be made to support it because it can be made to
+1974020	1980200	support anything and there is actually on the uBoot mailing list a series to add some form of
+1980200	1989620	post-quantum cryptography. Ah you okay okay yeah so yeah I am of the same idea that what feedback
+1989620	1994300	you got in the mailing list we should really use embed TLS so I didn't I have it on a backslide
+1994300	2002400	backup slide that I don't think we should add post-quantum crypto that we support ourselves in
+2002400	2010640	would yeah so uh yeah we are in so whether you would or barebox we have been importing crypto
+2010640	2017520	code from the kernel but the fixes do not usually follow and they follow on a case-by-case basis
+2017520	2025040	and i would much rather have like embed tls which we can just update and has a stable api
+2025040	2026880	when it has support for post quantum
+2026880	2031880	Yeah, yeah, yeah, but maybe that's something
+2034660	2036220	that we should focus on first.
+2036220	2038880	So this week actually someone submitted Authenticode,
+2038880	2043580	which is UEFI PE signing for barebox.
+2043580	2046440	And yeah, my feedback was no, use MBT-LS
+2046440	2049400	because I don't see why we should import
+2049400	2052420	a PK-7 parser or implement one ourselves.
+2052420	2054300	Doesn't make sense to me.
+2054300	2055660	Thanks.
+2056880	2067140	okay I have a general comment which is I would say that in addition to the core work that you're
+2067140	2074880	doing which is super excellent and great one thing I've observed also is that sometimes vendors will
+2074880	2081480	add debug specific functionality that can also be used to do these sorts of bypasses and should
+2081480	2088380	definitely be part of an overall assessment yes yes absolutely so not to
+2088380	2091740	like yeah not to do too much self-marketing but last year I talked
+2091740	2098980	about the box security policies which is a structure yeah which is a general way
+2098980	2104700	to like gates of functionalities that's meant for debug so yeah I think we
+2104700	2111320	should have more structured ways to do this and I hope my laptop survives
+2111480	2120360	it's it's still working here so I hope I burned something in the HDMI just look at it it's very
+2120360	2128040	yeah it doesn't look like an HDMI cable so I hope that's an issue here any other questions
+2133560	2140600	yeah so I had the first slide I expected someone to say UKI so that was the very next slide yeah so
+2141480	2149400	yeah I would just say it so when you boot over UEFI you have a lot of hardening mechanisms and I
+2149400	2153820	really think that we should look into that so that's a boot loader it might be just a fit
+2153820	2159220	but you boot the kernel over UEFI and then you can leave the MMU enabled you can have write
+2159220	2165300	execute probably properly working the kernel can do a kernel address based layout randomization
+2165300	2171460	so I think this is an interesting prospect even for people who don't want to go like full UKI
+2171460	2176020	so it's a use EFI in fit so this is certainly something I want to look into
+2176020	2178500	in the future
+2191220	2199940	now what was the verb how did I what verify
+2201460	2209640	So I work for a consultancy, we have a lot of customers and I just booted, I used this
+2209640	2214860	website, I generated my, it's this website you don't need to upload in fit, you can also
+2214860	2219860	upload in uBoot and it will search for the fit and manipulate it and then I actually
+2219860	2225880	booted it on real hardware and yeah I read the code so I spent a few weeks looking at
+2225880	2233560	fit code and stuff this year yeah it's yeah I hope when you have tooling like this more
+2233560	2242520	easily available it becomes easier I have actually started building a virtual boot chain I'm calling
+2242520	2247880	it boot jig I hope to open source it at some point of time which mimics a secure boot chain
+2247880	2254200	from the boot loader to the kernel and the kernel yeah and so I can do fuzzing on the disk image
+2255000	2259080	uh from the outside so the problem is we are fuzzing only the parser
+2259080	2263080	but the parser is of course only one part of all of it and i want to fuzz all of it
+2263080	2269560	and yeah i hope this is something that we can use in future to find more issues and to verify fixes
+2276040	2277480	the laptop is still working so
+2277480	2287320	yeah so if there are no other questions I am here for the rest of the week just talk to me thank you

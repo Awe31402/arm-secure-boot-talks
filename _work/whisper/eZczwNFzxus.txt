@@ -1,0 +1,524 @@
+all right thank you all for coming here I know it's the last talk of the day and I just hope
+you'll enjoy it as much as I will let me show you the darkest corners of bootloader security
+my name is Ferdi I'm part of a group in Google clouds that actually performs low-level attacks
+on hardware and firmware and i usually do this by basically doing a penetration test
+that means i get all sorts of devices and i get to open them up i you know study the pcbs
+look at each chip try and reverse engineer firmware and basically try and uncover any low
+level firmware and hardware vulnerabilities that there might be hidden and the goal is to find
+vulnerabilities that we can actually exploit that's useful for demonstrating risk and the idea
+there is that hopefully you know we can we can report these and and and you know find these
+vulnerabilities and report them responsibly that's that's the idea but these vulnerabilities are
+actually a little bit different than regular software vulnerabilities so let me say a couple
+words on the context in which they're exploitable so if you have an embedded device or just any
+device really you have a supply chain right because your device has to be manufactured
+it has to be built and it consists of parts that you know come together and when that all has
+happened it's actually shipped and there's a lot of hands touching the device even before it is
+actually deployed. That means attackers will have time-limited access, but they will have
+physical access to the device. And time-limited in this sense can already be in the order of days,
+so you can pull off quite a lot of nice hardware and firmware attacks during that time. And then
+even when it's deployed and, you know, even assuming you have a perfect supply chain,
+there's legitimate use cases to access the device, either remotely with credentials or physically
+to do some repairs maybe so in that case attackers might also be able to physically access the device
+and perform some attacks and it gets even more interesting if you consider bare metal clouds
+offerings in these scenarios you know there's nothing that stands you know between an attacker
+that's already privileged on the device and you know they might want to mess with the hardware
+and firmware a bit so what's important in these scenarios is that you can actually bring back the
+device into a trustworthy state that's what we're trying to do that's why we need hardware security
+and of course once the tenant leaves the device you also want to make sure that you can return
+the device into a trustworthy state and you know there's many definitions of trustworthy but for
+For sure, what you want to avoid is some persistence.
+Persistence in firmware, persistence in flash or peripheral devices.
+And I find this work very interesting.
+I will show some of our findings to you today.
+All of this has, of course, been reported responsibly.
+Our idea is that this low-level perspective can contribute to all of the other good stuff
+that's already happening in the security community and standard bodies and the idea is that hopefully
+we can protect not just google clouds infrastructure but that of the entire world because
+a lot of this work is published and i actually you know would like to thank everyone who's worked on
+this and allow me to present my findings here today so i said bottom up right we we open up
+devices we start with looking at chips at debugging interfaces and and reverse engineering some
+hardware, and eventually you end up reverse engineering firmware, and once you did that,
+there's no way around bootloaders.
+This is what I'll be showing you today.
+Bootloaders often have a security critical role in all sorts of devices, and yeah, we
+will have a look at this.
+I will basically show you two critical vulnerabilities that I identified, and then I'm going to tell
+how to fix it all because I hope that we'll be interested in fixing it and I think this is
+actually a good chance to do so across a wide range of devices. And just some fun facts for you.
+We have reviewed more than 15 different device types and these devices were using open source
+bootloaders and all of them have been affected by bootloader vulnerabilities at some point.
+What does that mean? A bootloader vulnerability in this case would have allowed an attacker
+to gain code execution in the bootloader context that's usually very very privileged and basically
+allows you to compromise all further boot stages or the operating system and i think this is a
+concern um i i hope this is a chance for me to you know present this and point at the gaps that i can
+see and show you some of the examples now you might be wondering what kind of device types
+that we look at this was usually related to data center equipment so compute
+platforms like servers but also appliances security appliances and even
+HSMs so this is a wide range and I'm actually convinced that the bootloaders
+that we will talk about here will actually extend and cover a wider range
+of devices like IOT and cars and most likely you will be recognizing some of
+open source bootloaders as well. Now I will kick this off with one of the first vulnerabilities
+that I found in Cisco devices. So this is a Cisco Nexus N9000 series switch. There's different
+variations, different port counts, but inside they all look similar if you open them up, because
+there's a lot of specialized hardware like ASICs that handle network traffic of course.
+But it's all bootstrapped by this, what I call the management board,
+shown here on the right-hand picture.
+So in this picture, you should be able to see an SSD down there.
+And under the heatsink, there's an Intel processor.
+And Cisco actually invested, you know, some resources there
+and hardened the boot chain.
+So this device has a secure boot chain.
+It has a root-of-trust chip.
+And, yeah, you could consider it state-of-the-art, in my opinion.
+And, well, of course, I as an attacker don't like this.
+I want to run my own software on this.
+I want to run Doom or whatever.
+And since it's an Intel processor, I would expect to find Intel firmware.
+And actually, that's what I did.
+So I took out the mainboard, turned it around, and there it is.
+There you have your small SPI flash chip.
+This is very common in these types of devices.
+And when you dump it and open it in UEFI tool, you find that this is a firmware volume.
+There's a couple of firmware volumes on there with all sorts of drivers and EDK2-based firmware.
+And one of them is actually called Cisco Grub.
+And since I already knew they had implemented secure boot, I thought maybe Cisco Grub actually is the bootloader.
+And maybe it's involved in enforcing secure boot and signature checks for the operating system image.
+So I fired up Ghidra, loaded up this binary, and what I found were some strings that seemed a little odd, right?
+And it actually seemed like they had just taken grub.
+But I expected to see grub too, which is like the modern version of it and the one that all Linux distribution use nowadays.
+But instead, after googling some of the strings, I found that they had actually forked grub legacy, the one from the 90s.
+and that was surprising.
+So then I thought, you know,
+how on earth did they actually implement Secure Boot
+with such an old bootloader?
+Grub legacy didn't support Secure Boot.
+So the way that this works is Cisco Grub
+will identify all kinds of boot devices.
+This is mostly the internal flash
+that you saw on the previous image,
+but it could also be a USB drive
+that you plug into the front of the device.
+And once it's identified a bootable device, it will try and identify OS images.
+They always kind of look the same and have some signatures on them.
+And once it's loaded in an operating system image, it will verify the signature and execute it, if it's proper.
+This first part here, this actually requires interacting with a file system.
+And the way that this is commonly solved today in modern firmware is that you use EDK2 or load image which hooks into the EFI firmware where someone else has implemented a way to interact with some file system and load a file.
+But Grub Legacy didn't have all that because it's from the 90s, right?
+So they implemented all kinds of file system drivers.
+and what actually happens here is that there's a big loop
+that basically brute forces all available file system backends
+and the first one that mounts successfully
+will actually be used to try and find an operating system image.
+My idea was maybe I can find a bug in such a file system
+because at the time they had around 12 or 13
+like random file systems like even RyzaFS
+So I thought, okay, there might be actually a chance for me to find a vulnerability.
+And looking at the XFS driver, I found this function that's responsible for listing files.
+And here you can see there's this link buff, stack allocated buffer, that has a size.
+And its size is controlled by a variable in the super block.
+And you need to remember that the super block is actually stored externally.
+It's stored on a USB drive or the internal SSD.
+And of course, if I have physical access, or maybe even remote access with a root shell,
+I can just modify that superblock, set its size to zero, which will make the next length
+check here succeed, and end up calling memcopy into my zero size link buff buffer with an
+attacker-controlled size.
+So this is a textbook example of a buffer overflow.
+Of course, there's no exploit mitigations or anything like that.
+And I think there's two scenarios in which you can exploit this.
+The first one is what I've hinted at already, like you can plug a USB drive that you prepared
+into the front of the device that's shown here on this picture and, you know, just walk
+up to it, plug it in, and the next time the device will reboot, it could trigger the vulnerability.
+Or you could do that remotely, you know, maybe you have administrative credentials or another
+a vulnerability, you can get a shell.
+This is actually a feature.
+You can just ask the device to give you a shell
+and then use that shell to write the malicious XFF partition
+to disk and reboot.
+And what happens then is that Grub will, or Cisco Grub,
+will open a well-known file.
+And you can use that to exploit the buffer overflow, get code
+execution, bypass the signature checks, and so on.
+If you actually do this, it would look similar to this.
+I did this for demonstration purposes here.
+This is actually in an emulator, where
+you get a nice register dump at the end.
+But basically, I set the storage device.
+I list a file, and this triggers the buffer overflow
+in the XFS file system backend.
+Cool.
+What does this allow you to do?
+You get code execution in the context of Cisco Grub.
+That's very privileged.
+There's no exploit mitigations.
+I find this very hard to detect, honestly,
+because the device doesn't really give you that many ways
+that you could detect an attack like that.
+Yes, they have a root of trust chip,
+but even if it did gather measurements or hashes
+of the firmware and stores them in a safe place,
+there's no software interface that you can use
+to interface with that root of trust chip yet.
+And also, all recovery functions that this device provides
+are based or implemented in either Grub itself,
+maybe some other drivers, but that's unlikely,
+or most of it actually lives in the Linux operating system
+that has started after you already compromised Grub.
+So if you're smart about it, you could potentially
+try and hook into these recovery functions as well
+and gain a stealthy foothold to whichever network
+that device is deployed in.
+Or often these devices are also used
+to run certain applications that have credentials.
+And, yeah, this is cool as long as you, again, have credentials to the device or physical access.
+And it really doesn't take that long.
+Like, plugging in a USB drive and letting it boot takes, like, three minutes.
+I would like to thank Cisco for addressing these vulnerabilities and fixing them.
+We had a CVE assigned.
+But what actually surprised me was that I googled the vulnerable code,
+and it showed up in a bunch of other places.
+because actually thinking about it now makes kind of sense to me because they
+like grub legacy had a very easy to use minimal implementation of all these
+fault systems that you can just drop into your projects without including any
+other libraries so it ended up you being used in some tools that the Zen
+hypervisor it has and actually in some other bootloader in core boot filo
+payload, and we had security advisories published and CVs assigned for that as well.
+Thanks to all the maintainers who have patched this, this is not a problem anymore.
+But of course, it kind of makes you wonder.
+It certainly made me wonder, which is why I then went to the next project in which I
+looked at a Dell system.
+So on these systems, you know, what you have to remember is that, of course, the likelihood
+that another project was reusing drop legacy was different, but you can see the same patterns
+here.
+Like Dell will also have a secure boot chain, and yeah, we will also have some nice memory
+corruption vulnerability there, which I will talk about in a second.
+So Dell Enterprise products have a remote management function called iDRAC.
+It's the first thing that starts when you power on a PowerEdge server, for example.
+It has its own processor, its own SoC with dedicated storage with, you know, a bunch
+of RAM and so on. And yeah, it's a baseboard management controller called iDRAC. Its current
+version iDRAC 9 is what I reviewed, and it's used across all sorts of products. So I'm
+going to refer to servers, I'm going to show you pictures of servers, but actually this
+is also used in storage appliances and all sorts of other things, and they reused a lot
+of it, actually the same SOC, and the amount of reuse is really nice for me as an attacker
+of course, but of course underlines the criticality of this device actually executing only code
+that was signed by Dell.
+So they implemented secure boot where, again, each stage verifies the next one, and yeah,
+then hopefully you end up running Linux on this separate system that, you know, has signatures
+and even integrity enforced by the fault system.
+Now, it turns out that they are using an SOC dedicated to BMC use cases created by Nuvotan.
+And Nuvotan also wrote what's called a first-stage bootloader called BootBlock.
+That's just their project name.
+And I found a vulnerability in BootBlock.
+So there's one function, basically, that has a lot of the business logic.
+A first-stage bootloader basically has one job, and that is to bring the system into
+a state where a more capable bootloader can execute.
+So this function here tries to locate the image of that next more capable bootloader
+in external memory, in an SPI flash, load it into DRAM, verify signature, and then execute
+it.
+That's what this function is supposed to do.
+So as you can see here, I've already highlighted that there's different locations in memory
+where you could put this bootloader.
+Maybe the next bootloader prefers to be executed from a specific address, well in that case
+you just modify the image header of that bootloader such that it is copied by bootblock into that
+particular address.
+And well, I as an attacker end up controlling that address because it's stored in the external
+SPI flash, and the signature of that whole thing
+is only verified after it has been loaded to that destination
+address.
+So my idea here was that I could try and fool boot
+block into overriding itself with my payload.
+So you need to know that SRAM is just a different type
+of memory that's addressable like any other memory in the SOC.
+That's where boot block lives.
+Boot block will execute the check image copy and jump function.
+It will read the header from external memory that I control.
+I can guess the address of boot block in memory
+and have mem copy overwrite the rest of boot block.
+Why does this work?
+Because here, actually, conveniently, mem copy
+lives at a very high address.
+So I can basically overwrite the rest of boot block
+without actually overwriting mem copy,
+because sometimes this creates issues.
+In this case, it was not an issue.
+There were a couple of other issues, but if you experiment a bit,
+you can get this attack right.
+And when memcopy returns, you can return to your own payload.
+Because this is exactly the image that you store in external memory.
+Yeah, and as you can see, DRAM here is not used at all.
+In practice, as an attacker, you would go to a server, open it up,
+and find iDrag's SPI flash,
+which is indicated by this blue arrow here.
+And the right-hand picture shows my experimental setup
+to work with this vulnerability.
+I basically removed the SPI flash and put it on an adapter.
+Yeah, of course, finding the exploit and vulnerability
+was super fun, but I hated this adapter at the end
+because I had to literally write to the flash a gazillion times,
+and I also had to use a logic analyzer
+to debug some of the aspects of the system.
+Because on a production server, this actually
+doesn't give you a UART console or anything like that.
+You're completely blind.
+So what I ended up doing is executing my exploits,
+which would look like this.
+Yeah, there you go.
+I compiled my own U-boot for this particular chip.
+and made it print a funny string.
+And I had to do all this over a logic analyzer
+because, again, I couldn't actually get a UART shell.
+I had to invent some other way to exfiltrate some data from this.
+And, yeah, this is very similar to the Cisco case,
+where if you're prepared and you manage
+to manipulate this SPI flash, it happens
+without any user interaction.
+You just turn on the system, and it will execute your UBoot.
+In this case, there's plenty of space
+where you could also put a kernel image.
+But if I were an attacker, I would probably
+try and load the original kernel image
+that Dell has stored on the MMC, modify it, patch it up
+a little bit, which brings us in a very similar situation
+as with the Cisco vulnerability, where you would get persistence
+for sure, but also a very hard to detect foothold
+on this device.
+Of course, the BMC in every server and every system
+usually very privileged. From there you can mount other attacks, compromising the host potentially.
+You can do this also on using a programmer. Sometimes it requires soldering, removing the
+SPI chip, programming it, putting it back into the system. But on other systems that I've tested,
+it can be done using a $20 chip clip. You just clip on the flash, provide your image.
+and because they're reusing the system so much it's it's it's doable to to you
+know just prepare an image that would trigger the exploits or the
+vulnerability and and you know use a more capable environment like you would
+to mount other attacks I would also like to thank Dell for fixing this we have
+worked together on fixing this they have released their advisory we have released
+our advisory. Well, and this brings us to my favorite part of this talk, which is
+discussing how to fix this. I think these are issues. They all have similarities, not just
+you know, within the two examples that I showed you, but also with other vulnerabilities that
+we've seen in the last couple of years. I'm actually convinced that we can address this
+using a layered approach in security we really like layers so I also like layers
+and you know here I would actually start with changing the threat models because
+I don't really think that the vendors or the bootloader maintainers are you know
+doing this on purpose instead I think that they had certain assumptions when
+they built these devices or made these bootloader projects of course grub
+legacy is an exception because it's abandoned for a long time and in the
+90s you had different problems like Y2K for example. But in general, if you remember the
+first slides that I showed you, you know, you could really start to think and say physical
+security is a lie. It's maybe one layer that you use for defense in depth, but you can't really
+assume that your device is protected from attacks that involve physical attacks. And if you bake
+this in in the design phase if you think about it when threat modeling I would
+really hope that some of these attacks were not possible anymore or at least
+very hard to pull off. This also means that users or workloads cannot be
+inherently trusted. Think about bare metal cloud use cases but also use cases
+where there's maybe another more powerful vulnerability like something
+wormable that could then crack open the shell of such a device and try to gain
+and persistence on them that's really hard to get rid of.
+Again, I actually think that these assumptions should not
+play or should be questioned when threat modeling.
+And no matter what firmware you're building,
+if you're building any device, you'll have firmware for sure,
+you should consider the attack surface.
+I tried to map the attack surface
+that I could see from my perspective.
+It looks a little bit like this.
+You can separate it into remote attack surface
+and local attack surface, and while most of it
+is specific to bootloaders, this could affect
+to other types of firmware as well, maybe loaders or libraries
+that are used in firmware.
+And really, the job of these projects often
+is to load an operating system.
+That's the goal.
+We want to execute something nice.
+And just to illustrate what's going on here,
+and just to illustrate that this is a theme,
+collected some of the other vulnerabilities that others have found for example here on the remotely
+exploitable sites there was a vulnerability in shim shim is a small bootloader project
+it's also open source it's used by a lot of linux distributions to run to run linux or other
+other bootloaders that were not signed by the standard UEFI CAs.
+And for some reason, it also supported HTTP.
+So then someone found a parsing bug in HTTP with out-of-bounds write primitives, which
+as we have seen can be quite dangerous and powerful in firmware land.
+But looking at the local side, even in some of the most fundamental firmware projects
+like edk2 you have heat buffer overflows here found by mark beethoff and actually this is a
+security related function this function is supposed to measure a partition table from a storage
+device into you know a pcr for example in a security chip and it also has a denial of service
+vulnerability, so nothing to see here, I guess. And then, of course, whatever I showed here also
+affected the local end of the attack surface with fault systems and image format parsing.
+Very classic parser bugs. Yeah, so I think the location of these vulnerabilities is interesting.
+It might be a text surface that has not been publicly covered that much, but the nature of
+the bugs is is very classic i think so these are puzzle bugs that you know cause memory corruption
+issues which brings us to the next point that even if we have perfect threat modeling we probably
+want our hardware to support this a little bit we want to use modern hardware security features
+that we can use to our advantage as defenders which means that you know secure boot is nice
+But over time, there will be bugs in any firmware, in any bootloader perhaps, and it's important
+that we actually have a way to manage the versions that are running in our fleets.
+And downgrade protection is one way that you can do this.
+Imagine if here version 1.1 was affected by critical vulnerability, downgrade protection
+could help us prevent an attacker with physical access
+to just flash back the old vulnerable firmware
+onto the devices.
+Remember the examples that I showed you?
+All of them have been fixed.
+But without downgrade protection or some of the other stuff
+that I'll show, it's actually a challenge
+to completely roll out the possibility of this ever
+being exploited in your fleet.
+And these are devices that are deployed for years, right?
+It's one way to solve it.
+There is possibly other cases that actually
+lead you to want to downgrade.
+So it would be nice if this was configurable as a user.
+Currently, this is not the case with any device
+that we have reviewed.
+Another option that would allow you
+to manage your firmware vulnerability footprint
+or version footprint would be remote attestation.
+So secure boot works in the way that one stage verifies the next one.
+It's simple.
+If the next stage signature doesn't match, if there's something wrong going on,
+it would just not execute that.
+And this is an important property.
+This is strong.
+But at the end, if the device actually boots,
+you kind of need to infer that it's in a trustworthy state
+just from the fact that it booted.
+And I think that's a little weak.
+I think that it could be better.
+and remote attestation is one way that you can use to address this.
+You can have each stage not just verify the signature of the next stage.
+You can still do that if you like.
+But instead, in what's called measured boot,
+each stage would collect some evidence of whatever configuration or binary it executes next.
+And this evidence, it's usually a hash that you put in a temper-resistant environment
+like a root of trust chip or a security chip, some area in your SOC, whatever,
+and combined with an identity, a cryptographic identity, you can create proof.
+And this proof can then be made, you know, maybe challenged with some freshness
+and then used by your credential infrastructure to not just get some evidence of what versions
+and what types of firmware and binaries you're running in your fleet,
+but also, you know, see if a downgrade actually happens.
+because often you just see the changes, and it's not easy to predict what type of evidence you have.
+At the end of the day, you just have a bunch of hashes.
+So there's a lot of practical hurdles with this,
+and maybe one way that we can improve this is by asking vendors to actually make this usable.
+In almost all devices that we reviewed, it's actually not usable,
+even though the hardware theoretically supports it.
+And then if it is usable, it would be nice if it was usable for everyone
+and not just large enterprises who already have some kind of credential infrastructure,
+who already know what remote attestation is and how it works and so on.
+But it is certainly a way to address some of the issues
+and to deal with the vulnerabilities that I showed you in particular.
+Finally, to top it all off, I think that you could just go
+look for all the bugs and all the bootloaders. Why not? I think, you know, eventually you find these
+bugs and it's actually surprising how few exploit mitigations exist for firmware in general.
+This is nothing new. Many others have mentioned that in the embedded space, for example, there's
+still a lot of work to do to port known good classic exploit mitigations like
+secondaries or control flow integrity to embedded systems but even beyond that even in
+you know compute platform firmware if you want you usually don't see exploit mitigations that much
+there's nothing to invent there i think it's it's just about practically applying this asking for
+it if you get the chance to do that also in in the root block case i think if you use the hardware's
+memory management unit you could actually make this less exploitable because here the issue was
+that you can overwrite a previous boot stage with the next one if you just make it read only then
+this could have prevented entirely i actually charted all the bootloaders that i like all the
+ones that i found were important and this is not an exhausted list there's not all bootloaders on
+here, of course, but there's a lot of open source bootloader projects there that I think
+are influential, and most of them are security-critical.
+So Grub legacy is not really security-critical, except for that one case, but the rest is.
+So you certainly know Grub, right?
+And if you look at whether these projects are using memory-safe languages or whether
+they actually have implemented exploit mitigations, you will find that they don't.
+And you will also find that only very few projects here are being fast actively.
+And those that are fast might, you know, they could have better coverage, they might not
+be covering all the attack surface that I showed you earlier.
+So there's for sure some work to do, and I really think this is danger territory.
+Because, you know, secure boot is the way that a lot of devices try to protect their
+firmware today, and eventually it will depend on one of these projects.
+So what can we do?
+Like I said, these are not super large software projects.
+This is not your browser or JavaScript running JavaScript engine.
+You could try and just find a lot of vulnerabilities here and put a lot of eyeballs looking at
+the code.
+I tried that.
+I used a code scanner.
+I used some LLMs and tried to find new vulnerabilities beyond what I showed you.
+And I have to say, a code scanner would have caught these two vulnerabilities 100%.
+And LLM would have caught these vulnerabilities 100%.
+They didn't cover much more.
+I found it then a little bit hard to work with them because they're not really good
+at inferring which parts of the code are actually active and which parts of the code might be
+processing attacker-controlled data.
+But what I think here should really work well is using fuzzing.
+Because a crash is a crash, it's either an issue in your harness or in the code.
+And we actually have infrastructure that allows you to integrate these into your open source
+project.
+It's called OSS Fuzz.
+And while I'm not actively part of the OSS Fuzz project, I did talk to the maintainers
+and made sure that the popular bootloaders are actually considered critical.
+So they are eligible for a US$15,000 reward that you will receive if you integrate one
+of these critical open source bootloaders.
+And the rest is handled by the OSS Fuzz infrastructure.
+I have already started putting U-Boot into OSS Fuzz, but if you're a bootloader developer
+or if you're creating board support packages that are distributed with your chips, for
+For example, maybe you are forking one of the bootloaders
+and you want to integrate these into OSS fuzz as well.
+Because the idea here is that once you have the integration,
+the fuzzers are going to run on each and every commit
+that are made to the project, or at least
+on the critical branches.
+And then if you find a crash, you
+can notify the people who are actually working on it,
+and they will usually know what to do.
+So please reach out.
+I will try and help wherever I can, of course.
+And I think, together, we can actually really
+make an impact here for all kinds of devices.
+That's my main message.
+So if you are developing a product, a chip,
+or maintaining a bootloader, please reach out.
+That's all from my side.
+I would like to thank everyone who's
+helped me put together this presentation, especially
+Lydia and my girlfriend, who really
+helped me make the most out of this talk.
+And I have linked here all the advisories that I mentioned
+so that when you download the slides later,
+you can just click on it and have a link
+or a look at the advisories because there's
+a lot more details in the advisories themselves.
+Thank you very much.
+I think we will have time for a couple of questions.
+So if you have questions, please use the microphones that
+in the aisles here. And if you don't, that's fine, too. It's been a long day, and I'll
+be around, and I hope I can talk to some of you for sure. Oh, we have one question.
+Yeah, thank you for the presentation. It was great. One question regarding memory-safe
+languages. You mentioned that it's not off. I mean, that is possible, because one of the
+solution was implementing that if i understand correctly but why is it discarded most of the
+time is it for performance reasons is it something that is doable i think it's legacy i think a lot
+of these projects have evolved over many many many years and just taking grub2 and uboot these are
+super popular bootloaders right and i'm i'm actually not too sure if it's a good idea to
+go ahead and just replace them all because of what i said you know there's many other
+known good approaches that you can use to harden the ones that exist there's exploit mitigations
+and so on yeah there's good examples like the calypter firmware that's actually a cross vendor
+efforts an open source project that implements not just memory safe languages but also exploit
+mitigations in the memory safe language which i think is a great example but i i definitely
+understand that you know these these projects have a legacy and a lot of people that just work
+on them every day you know if you're in a better systems engineer you just know
+how to bring up a board with you would that's that's just what people have done
+for years
+A quick question.
+You mentioned in the beginning of the presentation
+there were 15 types of devices you looked at.
+You showed us a couple.
+What were the other speeds?
+Yeah, so in general, we have looked
+at all kinds of data center-related devices,
+such as network devices that you saw, compute platforms.
+Yeah, but honestly, the point here
+was to talk about the broader bootloaders in general,
+and not these particular bootloaders.
+It's a theme that we've seen in every review.
+And I'm sure that over time, we will
+be able to tell you more and show you more devices
+that we've reviewed.
+Those were the two that I brought to today's presentation.
+Well, if there's any other questions, I'll be around for a while.
+And again, thank you so much for having me here and for staying for my car.

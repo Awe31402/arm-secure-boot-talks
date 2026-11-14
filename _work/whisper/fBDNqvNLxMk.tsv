@@ -1,0 +1,123 @@
+start	end	text
+0	18000	Welcome to this presentation. Hi, I'm Thomas and today I will speak about
+18000	26000	Secure Boot in Embedded Linux systems. But first, I am going to introduce myself.
+26000	34000	I am an embedded Linux engineer and a member of the bootlim team since few months.
+34000	41000	Moreover, I am also a contributor to open source projects.
+41000	46000	I am living in France, close to Toulouse.
+46000	50000	This presentation is divided in two parts.
+50000	59000	The first part introduces Secure Boot as well as some notion about signature process.
+59000	67000	I will also speak about the impact that I can bring.
+67000	77000	The second part is an example of Secure Boot implementation on IMX 8 platform
+77000	86000	which has the particularity of not requiring an initial MFS.
+89000	102000	Thickerboot is a feature to verify the parts used to boot a system, including hardware and software,
+102000	118000	to protect the system against hijacking, to protect users against tampering applications, hardware fault and malware execution.
+118000	128000	Finally, that allows the vendor to meet legal and commercial goals.
+128000	139840	Another name for Seeker Boot is Chain of Trust because the main functionality of this feature
+139840	152000	is Hat Boot. Each stage is able to verify the integrity of the next stage before its execution.
+152000	169240	For it, each stage contains a signature created a build that represents its integrity, as
+169240	179440	well as the public key of the next stage in order to perform the integrity checking.
+179440	193440	Here, I am introducing the notion of asymmetric signature used in the chain of trust.
+193440	202920	Asymmetric signature is a couple of keys, the public keys that will be shared with recipients
+202920	213960	to perform the data integrity checking and the private key that must be secret is used
+213960	221240	by the issuer to send shared data.
+221240	230960	The data is hashed then signed to be shared with recipients in addition to the public
+230960	242400	key. Then recipients are able to verify that the digest of the received data is correct.
+245600	251680	Enable secure boot also involves to be able
+251680	265600	to manage keys, especially to be able to protect private keys, to lock devices during the manufacturing,
+266880	272560	to boot upgrade images including signature and public keys,
+272560	283660	and to accept a raise of the boot time duration because it had some crypto
+283660	294340	operation to perform the checking. Here I will speak about an example of secure
+294340	310140	boot implementation done for a target based on an EMX8. So secure boot can be implemented
+310140	321140	in several ways, depending on requirements. In this example, there are four main parts
+321140	330740	according to the boot process of the target. To check the bootloader integrity there is only one
+330740	340820	choice that depends on the silicon vendor. Here the feature is provided by NXP and called
+340820	353540	advanced height assurance boot. The kernel checking, we show to use an hubboot
+353540	365180	feature named VerifiedBoot. And for the rootFS part, we choose to use DMVerity
+365180	370940	because it is simple and it is able to use hardware offloading.
+374700	382620	The advanced high high surveillance boot is more complex than the secure boot feature
+382620	393020	implemented for previous IMX platform. As for the high high surveillance boot
+393020	402440	of previous EMX platform. It fuses asymmetric keys and one-time program app fuses to store
+402440	415520	hatches of public keys. Bootloader stages our packages into a signed image through code signing
+415520	427160	tool. And the secure statue can be checked from Herboot with the hub statue command.
+427160	443000	But its boot flow is very different because it used a security controller and it's also
+443000	457760	able to start a binary for a SP processor. Then it uses two containers.
+460640	470900	The images contain some binaries. It is divided in two main parts. The first
+470900	482900	The first contains the binaries of security controller firmware and its signature using NXP keys.
+482900	499900	The second contains the SPL, the harm tested firmware, hubboot, and the associated signature using hohohem keys.
+499900	516900	At boot, the system controller unit loads the signature controller firmware, then others bootcoder stage.
+516900	524900	And at each step, the security controller validates the binary.
+524900	544900	When all binaries have been loaded and verified, they are executed each at their turn.
+545300	554180	The first step is to generate OM keys. Keys are built with a script using a file
+554820	562580	that contains trace, passphrase, and some additional parameters to configure the kind,
+562580	565860	the size, the key, and the validity period.
+565860	582780	Here we choose to use elliptic algorithm because there is a limitation in silicon B0 of IMXX8.
+582780	593580	In addition, it is necessary to generate the hash table as well as here checksum that should
+593580	603500	be stored in the one-time programmer fuses. So there is another script for this purpose.
+605740	614940	It is also possible to use the hodi command to check the hash table in order to be sure
+614940	618060	that the values burnt will be correct.
+621900	631660	Once we have the keys, the stables, the bootloader image, then it is now necessary to write a little
+633420	643340	configuration file for coding and tools in order to build the same image.
+643340	657140	Here you can see an example. It contains patches to the Hatch table, to the public key, the
+657140	668540	bootloader binary that should be assigned. But also the offset of the header signature
+668540	677720	block that's depending on the target and that can be found from the datasheet.
+677720	694100	The sign and bootloader will not be verified until the fuses are burned.
+694100	711100	So, here, it is an example of commands performed from Huboot to burn and to read them.
+711100	721100	Before and after burning fuses, it is also possible from Huboot to check the secure boot status.
+721100	737100	In case of issue, the SecureController returns an event that can be print with the HAB Statute command.
+739100	745100	The event code returned corresponds to a kind of issue.
+745100	752100	In addition, events are erased by container.
+752100	763100	Finally, if no event occurs, then the targets can be locked
+763100	776100	Thanks to the command HAB clause that will burn and additional fuse to prevent unsigned boot loader execution.
+776100	781100	Let's move to the kernel signature.
+781100	787100	Here we choose to use a boot feature called verified boot.
+787100	792100	This feature uses fitimage.
+792100	803100	FitImage is a container and which content is described by an image source file.
+803100	816100	Basically, an image source file is a list of nodes representing each element of the FitImage.
+816100	828100	It also uses asymmetric keys with which public key will be stored in a boot binary and the
+828100	835100	private key is used to sign the kernel image had built.
+835100	845100	The kernel image is built and signed in three steps through the DTC and the make image command.
+846100	856100	The build is ensigned. The first step is to build the ensigned kernel image.
+856100	861100	The second step is to build the signed kernel image.
+861100	869100	And finally, the last step is to inject the public key in HuBoot.
+869100	880220	FitImage can contain some images and configurations.
+880220	890940	Images can be a kernel image, a device tree binary, a device tree overlay, a boot script,
+890940	894940	and so on.
+894940	907740	configuration is a combination of these images. From this example, the fit image contains only one
+907740	921980	kernel image, only one kernel device tribunary and only one reboot script, as well as only one
+921980	928540	configuration using a combination of all the provided images.
+931660	938860	Moreover, images and configuration from the fit image are asked.
+944140	946060	There is two ways to send a fit image.
+946060	957340	either send individually each image, either send each available configuration.
+959740	967260	Then a configuration allows to prevent mix and max attack.
+967260	984420	This example uses a second way, then a signature node has been added in the configuration node.
+984420	999420	node. If we have chosen to sign individually each image, then a signature node would have
+999420	1012340	been added in each node describing an image. The following commands allow to create a key
+1012340	1019140	as well as a public key and a certificate that will be used to sign the kernel.
+1022020	1030500	Now, this is an example of command that will be used to build and sign the kernel
+1030500	1036980	and allow to inject the public key into the root binary.
+1036980	1045980	Now, how it meant to care the root interface and take a deep checking.
+1045980	1051980	Here, there are some available solutions.
+1051980	1057980	And we choose to use DMVivity.
+1057980	1071180	Basically, Jam Verity is a virtual file system using a hash tree where each leaf is a hash
+1071180	1082860	of a block of the file system, then Jam Verity can be only used with block devices like squash
+1082860	1097300	and so on. In addition, it can be only used for read-only devices. By default, the hash
+1097300	1110860	tree is stored into a separate block device called hashDevice, but it is also possible
+1110860	1123340	to concatenate it with the data device. In addition, it is also possible to sign the route fsh.
+1130060	1139420	Following a few commands to create a DMVRT device, then to check it and to open it.
+1140860	1145860	As you can see, this is a very hazy.
+1145860	1150860	Here the hash tree is append at the end of the data image.
+1150860	1161860	Then we use an additional parameter, hash offset, to specify the end of the data.
+1161860	1172860	In addition, the integrity can be checked with you knowing the root hash, but it is necessary to want it.
+1176860	1185860	It is not the case in this example, but it is also possible to sign the root afese hash
+1185860	1193860	with the key that will be stored in the kernel keyring.
+1193860	1204860	Finally, one of the requirements of the project was
+1204860	1211860	we don't need to use a in-itram FS to prepare the real-root FS device.
+1211860	1221860	To do that, we use dm init that allows from the kernel command line to early mount
+1222740	1227620	dm-verity device that contains the rootfs file system.
+1227620	1240580	and in addition we chose to use a boot script stored in the fit image and loaded
+1240580	1248820	by uboot between the command that load the kernel and the one that boot it.
+1248820	1263820	As this boot script is a part of the fit image, then it is also assigned.
+1263820	1273180	script is useful to store parameters that are required by the adminit to early mount the
+1273180	1288460	DUMVAS MIPER like the root fsh, the block size, so on. Thank you for attending this presentation.
+1289020	1290460	I hope you like it.
+1292460	1302460	Do you have any questions?

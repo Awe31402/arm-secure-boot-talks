@@ -1,0 +1,740 @@
+start	end	text
+0	1060	Good morning, everybody.
+2540	3420	Yeah, good morning.
+3800	6400	So thank you for attending our presentation.
+7160	10900	So I'm Milene, and with my colleague, Quentin,
+11240	13300	we will present you the secure boot.
+15900	17320	A short presentation.
+17760	20700	So we are embedded Linux engineer at Bootlin,
+21080	23120	formerly Free Electrons,
+23540	27320	but due to some trademark dispute,
+27320	29460	we changed our company name,
+29460	35060	but that's it. We just changed the company name. We are still the same engineers, the same team,
+35060	43620	and still we have a strong open source focus. For our customer, we implemented a full chain
+43620	53220	of trust on a custom IMX6 board, and we wanted to share it in case it can help other people. So
+53220	58220	So this is what we are going to talk in this presentation.
+61100	65440	Short disclaimer, we are definitely not a security expert.
+66340	71340	And we are presenting you one way to verify both
+71800	76220	on a board based on a specific family of SOCs,
+76220	81220	but some parts can be applied to other boards.
+81220	91700	And a container will tell you when there is some specificity on IAMX SOC.
+91700	101220	So first, in introduction, who wants to verify the boot sequence and why?
+101220	103500	So there is product vendors.
+103500	109780	They want to make sure that the devices are used in the same way they should be and not
+109780	117780	for a different purpose. Also not for running inappropriate software. So for
+117780	128760	example, a company may have some software limitation and would need license for
+128760	135400	customer to have a fully featured software. So it can be used with the
+135400	137940	chain of trust to be sure that the user
+137940	143720	are using the fully-featured software with a license.
+143720	147900	And of course, to protect customers
+147900	152680	without having some malwares on your system.
+152680	154460	There is also end users.
+154460	157980	They may want to make sure that the system has not
+157980	160500	been tampered with.
+160500	164520	So basically, it's to make sure that the binaries you are
+164520	173700	trying to load, boot, or execute by a person that you trust.
+173700	176460	So how does it work?
+176460	180720	Everything is based on digital signature verification, which
+180720	183180	is different from encryption.
+183180	186080	So Quentin will show you in the next slides
+186080	191940	the difference between signature verification and encryption.
+191940	195440	So in fact, the first element in the boot process
+195440	197560	authenticate the second one.
+197560	200280	The second one will authenticate the third one,
+200280	201420	et cetera, et cetera.
+201420	204720	And that's why it's called a chain of trust,
+204720	208680	because you have this chain mechanism.
+208680	212400	And if any element is authenticated,
+212400	216560	but not sufficiently locked down, so for example,
+216560	220260	if you let console access in bootloader
+220260	226700	or with access in user space, the device is not verified anymore.
+226700	229620	And so you will break the chain of trust.
+233400	239300	So this is how the chain of trust looks like.
+239300	241580	So you have the ROM code.
+241580	243940	It has a public key.
+243940	248580	It uses this public key to perform a signature verification
+248580	250100	on the bootloader.
+250100	253220	Then the root loader have a public key
+253220	257880	and it will perform signature verification on the kernel.
+257880	259860	And the kernel will have a digest
+259860	263880	to perform a hash verification on the root file system.
+265080	267580	So every component is verified using
+267580	271340	its digital signature and a public key.
+272340	274140	The root file system integrity is verified
+274140	275640	using a hash mechanism.
+275640	280640	We'll see later in next slides how it works.
+280640	283800	And our experience, so as I said before,
+283800	287960	we implemented it on a custom IAMX6 board.
+289000	291960	Content work on the chain of trust
+291960	295160	from room code to the kernel,
+295160	298020	and I worked on the root file system parts.
+299620	304680	Okay, so now a little bit of, well,
+304680	307420	explanation on what are the differences between encryption
+307420	308680	and signature.
+308680	312740	So as Milan told you, the verified boot sequence,
+312740	315460	or a secure boot, as it's called,
+315460	318180	is based on signature and not encryption.
+318180	321680	These are different things, but they are compatible.
+321680	325540	You can actually have encrypted data that is also signed.
+325540	330060	So here is the monetary Alice and Bob example about encryption.
+330060	333600	So the point of encryption is to be
+333600	340780	able to send some data that is unreadable for anyone else
+340780	343480	that isn't supposed to receive, for example, the mail.
+343480	346980	So here, we want to be sure that the mail Alice is sending
+346980	352720	to Bob when it can only be read by Bob.
+352720	356880	So you have as input the data and the public key of Bob,
+356880	359640	which is the input to a math function.
+359640	363300	So we don't care what is it, but it's math function.
+363300	366180	And then it outputs the encrypted data.
+366180	367500	You send it over the internet.
+367500	370000	Nobody can read it except Bob.
+370000	373500	Bob receives the encrypted data, and it
+373500	380360	put it into a math function along with his private key,
+380360	383120	which is the only one to own.
+383120	385980	Of course, it's his private key.
+385980	389160	into my function, and then you have the decrypted data.
+389160	391500	And you're sure Bob is the only one
+391500	393920	who is able to read this data.
+393920	398140	The next one is actually the signature verification.
+398140	401280	So here is a different purpose.
+401280	404160	Here, you want to be sure that Alice,
+404160	407980	so the one who sent the mail to Bob is actually Alice
+407980	410440	and not somebody else.
+410440	414860	The data is unencrypted, so everybody can read it.
+414860	421040	So basically, Alice will take her private key and her data,
+421040	422900	put it into a math function.
+422900	424500	It will output assigned data.
+424500	426760	It's readable by anyone.
+426760	429440	It's a very important concept.
+429440	431540	Everybody can read it.
+431540	435420	And go through the internet, and Bob receives it.
+435420	436460	He can read it.
+436460	441040	And to attest that Alice is the one who sent the mail,
+441040	443420	Well, it will use the public key of Alice
+443420	447300	to actually verify the signature.
+447300	449720	Goes into a math function again, a different one,
+449720	452500	and, well, the data is verified or not.
+452500	456700	So we can attest it's actually Alice who has sent the mail.
+456700	459240	So that's it for the differences between encryption
+459240	460920	and signature.
+460920	467340	So now you have to know that, well, the secure boot sequence,
+467340	469720	it has consequences, of course.
+469720	474880	It's costly in terms of setting up
+474880	477640	the whole architecture for managing your keys,
+477640	481360	creating your keys, signing all your binaries, et cetera.
+481360	487780	So of course, it's a bit longer to handle all those cases.
+487780	490740	You have some added complexity to your workflow
+490740	494480	for developers, because once your platform is locked down
+494480	498000	and can only boot verified binaries,
+498000	502900	you have to sign those binaries to test them.
+502900	504960	And of course, the boot time is, well,
+504960	508200	increased because, well, you have a bunch of authentication
+508200	513120	along the way to the prompt boot, to the Linux prompt, sorry.
+513120	516060	And well, last but not least, you really
+516060	517920	have to be careful with your private keys
+517920	520800	because if one gets stolen or leaked,
+520800	522660	then, well, you're pretty much screwed up
+522660	526760	because, well, anyone can sign your binaries
+526760	529400	and then it's not secure anymore.
+529400	531220	So that was it for the introduction.
+531220	533520	And now we can go to the first element of the chain
+533520	537920	of trust, the RAM card, or as it's called, the root of trust.
+537920	543420	So this is really the main point of your chain of trust.
+543420	545720	It's very specific to the SOC.
+545720	547440	So it depends on your vendors.
+547440	551340	Not all SOCs support secure booting.
+551340	554840	And well, as I told you before, you
+554840	557880	need the public key to be able to verify the signature
+557880	559100	of binary.
+559100	562380	So you need a way to securely store it somewhere
+562380	564580	that the ROM code can look at.
+564580	570080	And well, that depends on every vendor implementation.
+570080	573900	And it's definitely embedded in the ROM code,
+573900	575300	so you don't have access to it.
+575300	577280	You have to trace your vendor.
+577280	579640	And there are definitely different vendors that
+579640	581560	implement some kind of secure boot.
+581560	584240	So these are the main one, I would say.
+584240	590260	Xilinx, Tegra, NXP, et cetera, and missing some shortly.
+590260	594480	So now you have to have a way to store your public keys.
+594480	598720	So this is very the specific way for NXP
+598720	600860	to handle the public keys.
+600860	604820	So basically, it's a non-volatile memory, of course,
+604820	610160	because you need it to be up when the bootstrum starts.
+610160	614100	NXP uses OTP, so one-time programmable fuses.
+614100	622920	So basically a fuse, eFuse also, is, well, we could illustrate it with a wire.
+622920	627940	And when the current path through the wire, then it's a binary one.
+627940	632840	And you apply a very, very, very high current to it, and it disrupts the wire.
+632840	635140	And then you're going to get a binary zero.
+635140	636620	That's how it works.
+636620	638460	And it's irreversible.
+638460	643200	So once you have blown a fuse, then, well,
+643200	645900	never gets wired again.
+645900	648280	Otifix uses are really, really expensive
+648280	651900	in terms of size occupied on your PCB.
+651900	656400	And whereas the public is already at least 1 kilobyte,
+656400	660600	and sometimes up to 4 kilobytes,
+660600	663900	so maybe a good idea would be to actually store
+663900	667500	the hash of this key, which is way, way smaller,
+667500	673620	into the OTP and have the public key in another place.
+673620	676660	For example, in the binary, you're going to load.
+676660	679680	That way, you just have to check the hash of the public key
+679680	681940	that is embedded somewhere else.
+681940	685380	And if it matches, then you're good to go.
+685380	688080	Well, now we have plenty of space,
+688080	692980	so why not using maybe four keys so that we can actually
+692980	698160	revoke some if some get stolen or, well, lost.
+698160	702600	So that way, you can just revoke one key and just say,
+702600	704680	well, this one, we don't want to use it anymore.
+704680	709080	We can use any of the three remaining ones.
+709080	711560	So that's it.
+711560	714440	For the next slide, yeah, thank you.
+714440	717380	The ROM code, so basically the process
+717380	721660	is to load the bootloader in a secure space
+721660	723440	to avoid physical attacks.
+723440	727740	So the point is here, if you load your bootloader
+727740	731440	and authenticate it from a space that is unsecure,
+731440	735160	the problem is, once you have to actually boot,
+735160	739520	execute the binary, well, this is a time frame
+739520	742140	where an attacker can actually change the binary
+742140	745560	and make it like it was authenticated
+745560	749260	while it was definitely not.
+749260	757220	Then it loads the embedded public key, which is in the bootloader binary, for example.
+757220	761620	It checks the hash of the public key, which is embedded in the binary of the bootloader
+761620	768400	against the one which is in the hash table, made of different OTPs, fuses.
+768400	773880	You check the public key, then you execute the bootloader binary if it matches.
+773880	785380	And on NXP for IMX, et cetera, SOC family, it's called HAB for High Insurance Boot.
+785380	788260	So how do you set it up for your board?
+788260	791380	It's, again, very specific to your vendor.
+791380	798980	Here, you use code signing tools, so CST, for creating the keys, so the private keys
+798980	800860	and certificates.
+800860	807280	You flush the fuses using working and verified uBoot,
+807280	811480	again, using NXP-specific code, which is Fuse Flush or something
+811480	815020	like that, Fuse Prog, I think, with the Fuse table written
+815020	816620	by CST.
+816620	819320	You sign the bootloader using, again, CST,
+819320	821620	and you check the status of the bootloader,
+821620	824620	H-I-B underscore status, from the bootloader,
+824620	829500	so from uBoot, with a signed uBoot, which is also NXP-specific.
+829500	833100	And if you have reached this step successfully,
+833100	835260	then you can decide to lock down your bootloader
+835260	839820	to actually restrict the loading of the bootloader to one
+839820	842980	which is authenticated, so verified.
+842980	847200	And well, if you just screwed one of the previous item
+847200	850180	and you blow the locking fuse, then you screwed up.
+850180	854940	So be sure you are doing the right thing.
+854940	859620	So this is the two examples of the results of HAB status
+859620	861060	from your boot.
+861060	864140	The first example, you have the first line,
+864140	865420	which is secure boot disabled.
+865420	868820	This is because I haven't blown, actually, the locking fuse.
+868820	871440	When it's blown, then it's secure boot enabled.
+871440	875000	If you have any HAB event following this line,
+875000	878560	it means that your bootloader hasn't been authenticated.
+878560	880540	So it failed.
+880540	884020	In the next example, you can see no HAB events found.
+884020	887260	well, you successfully authenticated your bootloader.
+887260	889800	So that was it for the ROM code part,
+889800	892660	to authenticate the bootloader.
+892660	896480	But now you have to authenticate your kernel.
+896480	899340	So trust no one.
+899340	900740	Believe me, trust no one.
+900740	903380	So there is no point of having a secure bootloader
+903380	906840	if it's not authenticated by the ROM code.
+906840	909820	So by that, I mean if you can actually
+909820	914080	switch the bootloader with something that isn't
+914080	918960	authenticated, then there is no point actually
+918960	920740	taking the time to authenticate it.
+920740	925100	Because with a not-authenticated bootloader,
+925100	928580	you can boot whatever you want after that.
+928580	930820	The bootloader has to be sufficiently locked down.
+930820	934060	So it depends on the bootloader binary you're booting.
+934060	938460	And there is a very specific use case,
+938460	941820	Well, example for U-boot in mainline.
+941820	945560	U-boot in mainline has environment variable called
+945560	946860	verify.
+946860	949940	If it's set to no, U-boot stops to verify
+949940	952000	the signature of images.
+952000	956140	And that's, well, not what we want.
+956140	958220	So we definitely do not want any user
+958220	961940	to access the console to set the environment variable from there.
+961940	966040	So you have to disable the console at all.
+966040	968620	Well, very important point.
+968620	971180	You should, under no circumstances,
+971180	974780	trust anything that isn't in an authenticated binary.
+974780	977180	So that means that, well, environments
+977180	979960	are often on other mediums.
+979960	982800	But there, you can trust them, because you cannot authenticate
+982800	983680	them.
+983680	985800	So you should use the one which is definitely
+985800	988520	in the you would binary that was authenticated by the ROM
+988520	990940	code.
+990940	996020	Well, that doesn't really work with update software
+996020	1000800	from Linux kernel, because they often interact
+1000800	1004120	with the uBoot environments to say,
+1004120	1007320	you should boot this image or this image.
+1007320	1009960	So I have a pending patch for uBoot
+1009960	1011800	to only load a handful of variables
+1011800	1019260	that you can control from the uBoot embedded environment
+1019260	1023440	binary, and it can load from whichever medium
+1023440	1027540	you want to load the environment from.
+1027540	1030660	So yeah, that's it.
+1030660	1032820	So now, how it actually works, you're
+1032820	1036660	going to use the device through blob, which is basically
+1036660	1040060	the same as it's in the kernel.
+1040060	1044040	It's used to actually embed the public key
+1044040	1046660	within the uBoot binary.
+1046660	1049580	And this public key will be used to check the signature
+1049580	1052240	of the kernel images.
+1052240	1055680	And because it's appended to the UBoot binary,
+1055680	1057880	it's also authenticated by the ROM card.
+1057880	1060280	So you can actually trust the public key, which
+1060280	1065340	is within the UBoot binary.
+1065340	1071280	So now, to be a bit more practical and simple to use,
+1071280	1074760	to check the signature of the different images,
+1074760	1075700	you have two choices.
+1075700	1078560	Either you load one image, and then its signature,
+1078560	1081440	and then the second image, and its signature, et cetera,
+1081440	1085320	or you use the fit image, which is basically a container
+1085320	1090160	storing a lot of different binaries and their hashes.
+1090160	1094660	And MKImage, so the tool to actually compile the fit image,
+1094660	1098040	has already built-in support for signing in while doing
+1098040	1099100	the binaries hash.
+1099100	1100760	So well, we're on luck.
+1100760	1103260	So better use this tool.
+1103260	1110980	So well, now in the process to get to the next chain
+1110980	1113040	in a chain of trust, you have to create actually
+1113040	1118840	your keys to verify the kernel to actually sign the bootloader.
+1118840	1119340	Sorry.
+1119340	1122640	To sign the kernel and verify it from the bootloader.
+1122640	1127160	So the first line is to create an RSA 4K key, which
+1127160	1129080	is called my underscore key.
+1129080	1130180	This is a private key.
+1130180	1131860	And then you create a certificate.
+1131860	1136340	Certificates is really close to a public key.
+1136340	1141940	So it's really MKMitch requires the use of certificates
+1141940	1143320	and not public keys.
+1143320	1144900	Well, it's a choice.
+1144900	1148220	And it's really, really important that your certificate
+1148220	1150420	and your private key are named the same.
+1150420	1152600	Otherwise, MKMitch doesn't work at all.
+1155920	1160240	So this is an example of a source file for the device
+1160240	1165920	tree used to embed the public key within the UBoot binary.
+1165920	1168700	So you have the signature device 3 node.
+1168700	1172000	If your board already has device 3,
+1172000	1174360	well, you should be able to use it and just add
+1174360	1176840	the signature device 3 node.
+1176840	1180480	Something to note is that key name hint and the suffix
+1180480	1186660	to key dash dt node has to be the same value or name
+1186660	1188040	as the one you have given to your key.
+1188040	1190420	So in the previous slide, it was my underscore key.
+1190420	1193020	You have to use the same.
+1193020	1197520	There is also a property, which is called required.
+1197520	1200640	It's either image or configuration.
+1200640	1203500	It depends on which level you want to actually
+1203500	1206620	do your signature verification.
+1206620	1211980	And you can find the explanation in the documentation here
+1211980	1214220	in the UBoot project.
+1214220	1216380	So what's a fit image?
+1216380	1218000	So let's say it's basically a container.
+1218000	1222140	So you have a set of images, different one, one, two,
+1222140	1224400	three, kernel, whatever.
+1224400	1226840	The same for device trees, you have also
+1226840	1231100	support for other kind of files like scripts.
+1231100	1233440	And then you have also configurations.
+1233440	1236940	So configurations are a way to force the user
+1236940	1240920	to load binaries together.
+1240920	1245820	So for example, here you have conf at one, so the red box,
+1245820	1248240	which force the user to load the first kernel, the third
+1248240	1251800	device tree, and the first .
+1251800	1254560	So that's a way to force your user
+1254560	1258360	to boot a certain configuration.
+1258360	1262200	It supports different architectures, OSCs, image
+1262200	1264820	types, and a lot of other things.
+1264820	1267160	And you can find all of them in the source code
+1267160	1270660	in command slash image.c.
+1270660	1274580	So this is really a quick example of a source file
+1274580	1283420	for FitImage. So we have the images device tree or node with all the different binaries
+1283420	1291440	where you can find them, where you can load your binaries, which key to use to sign each
+1291440	1298440	of the binaries. And you have the configurations on the right. And there is an important line
+1298440	1302200	which is default equals conf at one.
+1302200	1306180	And this will be important in the next upcoming slides.
+1306180	1310480	And you can see that the conf at one has kernel
+1310480	1312100	is equal to kernel at one.
+1312100	1314460	So it will be using the first kernel
+1314460	1318680	and the device reads, which is also the first one.
+1318680	1323780	So there is a little bit of tricks
+1323780	1327020	to do before compiling your uBoot binary.
+1327020	1333180	you have to actually compile your device which contains
+1333180	1338800	the embedded public key outside of your UBoot source
+1338800	1340200	repository.
+1340200	1344760	And this is because we need to use
+1344760	1346900	MKMet, which is a tool from UBoot,
+1346900	1349780	to actually embed the public key before we are going
+1349780	1352580	to build the UBoot binary.
+1352580	1357380	So you use DTC to do the first compilation
+1357380	1360360	of the uBoot public key, the DTB.
+1360360	1363320	Then you compile all the tools from uBoot.
+1363320	1367200	You run MKImage to actually build the fit image
+1367200	1369480	and at the same time embed the public key
+1369480	1372240	within the device tree.
+1372240	1373740	And then you compile the uBoot binary
+1373740	1375880	using the external device tree blob, which
+1375880	1380080	is called uBoot underscore public key.
+1380080	1383020	These are the, well, the configuration
+1383020	1388240	you have to put to enable the fit image signature
+1388240	1392120	verification in U-boot.
+1392120	1396360	They say config of control is for embedding, actually,
+1396360	1401160	using, actually, the device support in U-boot.
+1401160	1404060	And the first two items are NXP-specific.
+1404060	1413040	So this is actually what it looks like to boot a fit image
+1413040	1415660	with all the verification steps, et cetera.
+1415660	1420200	So provided you have a fit image loaded at 0x15, let's say,
+1420200	1424920	so you do boot m 0x15 pound conf at 1.
+1424920	1430440	But since the default in the configurations node
+1430440	1432700	in the source file of your fit image,
+1432700	1435800	you know that conf at 1 is the default one.
+1435800	1439200	So you can actually just keep the part after the pound.
+1439200	1442580	So bootem XORX 15 is fine.
+1442580	1445200	You can see that it's using conf at 1.
+1445200	1448860	It's trying to load the kernel at 1.
+1448860	1452160	It does all of those things and verify the hash integrity,
+1452160	1453620	which says, well, it's OK.
+1453620	1459860	So let's get to the next binary in the fit image,
+1459860	1462260	which is the .
+1462260	1466880	It checks it, well, it's fine, so let's get started with the kernel.
+1466880	1474800	But then, someone touched the device and, well, hopefully, it will get it and stops
+1474800	1475800	the boot.
+1475800	1479780	And that's what happened in the lower part of this slide.
+1479780	1481220	It's verifying the hash integrity.
+1481220	1483380	They say, no, I cannot verify it.
+1483380	1490000	So well, I'm stopping there, and I'm crashing you, but you shouldn't stop, stop here.
+1490000	1495540	So I think that was it for the part up to the root file system.
+1495540	1501060	So now we will present her part on the root file system.
+1501060	1506720	So it's the final part of the chain of trust.
+1506720	1514120	To have a verified root file system, we have chosen the following solution.
+1514120	1519280	You can have other kind of solution, but this is what we choose.
+1519280	1524700	So first of all, we wanted to have an unalterable file system.
+1524700	1531920	So we choose to have a read-only file system, so it's impossible to modify it.
+1531920	1538480	So we use a SquashFS image, which is a type for read-only file system.
+1538480	1544520	So this part is not really part of the secure board process, but it was important for us
+1544520	1547700	and for our customer.
+1547700	1555860	So the authentication of the root file system, so it's really the part of the chain of trust,
+1555860	1557680	we use DMVarity.
+1557680	1563660	So DMVarity, it's an infrastructure to check if the root file system is the one we are
+1563660	1565960	expecting to have.
+1565960	1570760	So in fact, it's the authentication of the SquashFS image.
+1570760	1577140	And DMVarity needs some user space application to authenticate the system.
+1577140	1582840	And so you need to have these tools available.
+1582840	1589100	So that's why we choose to have init1fs as a first file system.
+1589100	1598420	And in this init1fs, you will have the application tools to perform the authentication of the
+1598420	1601500	root file system.
+1601500	1604240	The init1fs is built in the kernel.
+1604240	1613200	So thanks to that, it doesn't break the chain of trust because, as Compton told you before,
+1613200	1620840	the kernel is already in the chain of trust using the fit image.
+1620840	1622220	So now DMVVT.
+1622220	1627220	So DM, it stands for device mapper.
+1627220	1634500	It's an infrastructure in the Linux kernel to create virtual layers on block devices.
+1634500	1642700	So device mapper Verity, it provides integrity checking of block devices using kernel crypto
+1642700	1643700	API.
+1643700	1653320	Then Verity could hash the whole block device and then compare the hash with an expected
+1653320	1655480	hash, but it's not doing that.
+1655480	1658780	Otherwise, the boot time will be very, very long.
+1658780	1664620	So instead of that, it's use cryptographic hash tree.
+1664620	1669160	And your block device will be split in small block,
+1669160	1672760	and each block will have its hash.
+1672760	1677780	And it will create a hash tree until the last hash,
+1677780	1679460	which is called root hash.
+1679460	1684220	we will use this root hash in the authentication mechanism.
+1684220	1688080	So we will see it in the next slides.
+1688080	1693740	And this block are hashed only on access.
+1693740	1698120	So instead of having a longer boot time,
+1698120	1706080	we will just have a smaller, long access on a block device.
+1706080	1711880	And as I said before, DMVT needs some user space application.
+1711880	1715860	So CryptSetup package provides different tools,
+1715860	1717480	such as VeritySetup.
+1717480	1719320	So we'll see in the next slide.
+1719320	1724400	VeritySetup is a tool to create the hash tree
+1724400	1726480	and also to authenticate the device.
+1729780	1735740	So DMVT in our case, so we have our kernel.
+1735740	1740500	DemVarity has some configuration in the kernel,
+1740500	1743000	so you need to enable this configuration
+1743000	1745740	to have DemVarity.
+1745740	1748380	And as I said before, we have a NeetromFS,
+1748380	1753500	and we created a script that will use a Verity Setup tool
+1753500	1757900	to perform the verification on our block device.
+1757900	1761100	For our use case, we use UBI block device,
+1761100	1764420	but it can be other kind of block device.
+1765300	1768440	If the verification is successful,
+1768440	1772680	then you can use mount command, for example,
+1772680	1777680	to have access of your squashfs that you verified.
+1777680	1779180	And if it's not the case,
+1779180	1783100	then it will fail to mount the squashfs
+1783100	1786080	and it will stop the init here.
+1789600	1793500	So now let's see how to create the hash tree
+1793500	1798000	that we have seen in previous slide.
+1798000	1805960	So Verity Setup can create the hash tree on device or images.
+1805960	1809060	In this example, it's on images, but you
+1809060	1811780	can do it on device node.
+1811780	1814120	So we have our SquashFS image.
+1814120	1818500	We perform Verity Setup format command.
+1818500	1822560	The resulting image is a hash image,
+1822560	1824800	and it's containing the hash tree
+1824800	1828920	that we will use to authenticate the device.
+1828920	1833920	And it also prints on your screen the root hash.
+1833920	1836300	And you need to keep it,
+1836300	1839060	because we will use it to authenticate the device
+1839060	1842200	to be sure that the SquashFS image
+1842200	1846160	that we've created the hash tree right now,
+1846160	1849600	it's the correct one that we want to authenticate.
+1849600	1860620	So by default, the DemVerity and VeritySetup expect to have a block device with data in
+1860620	1865080	there and another block device with the hash tree.
+1865080	1873520	So the command used is VeritySetup format, then the data device, and the hash device.
+1873520	1878100	But in fact, in our use case, we wanted to have only one device.
+1878100	1882500	So our block device will have the SquashFS image
+1882500	1886340	and also it will contain the hash tree.
+1887600	1889980	For that, we can contain the hash image
+1889980	1894380	at the end of the SquashFS image
+1894380	1899380	to have at the end final SquashFS containing also the hash tree.
+1903060	1905400	To do that, Verity Setup tool
+1905400	1910400	as an option, hash offset,
+1912120	1917120	and to say how to locate the hash area
+1918400	1921160	in the same device or image.
+1921160	1925900	So here's the example of the command,
+1925900	1929660	so verity setup format, then we set the offset,
+1929660	1931740	so where we can find the hash tree
+1931740	1934920	in the same device or image.
+1936400	1938200	Currently, in our example,
+1939380	1944380	because the hash tree is at the end of the SquashFS image,
+1944380	1948300	the offset is the size of the SquashFS image.
+1949580	1951320	And then the data device,
+1951320	1954580	so in our use case, it's the SquashFS image.
+1954580	1959400	And the final result, so it's the SquashFS image
+1959400	1963000	and also the hash image.
+1965380	1968160	So now we have created our hash tree.
+1968160	1970740	We have the root hash,
+1970740	1974260	and we will see how to authenticate the device.
+1975960	1978200	So now we are on our platform.
+1978200	1981800	We have flashed all the different images,
+1981800	1985480	and we have our block device
+1985480	1989400	that contains the SquashFS and the hash image.
+1989400	1992260	We use Verity Setup create command
+1992260	1997260	that we need the offset to know where to find the hash tree
+1997680	1999360	and also the root hash.
+2000600	2003600	If the hash corresponds to the one
+2003600	2006640	that is available in the hash tree,
+2006640	2011640	then you have a mapper device on the SquashFS verified.
+2011640	2018280	So at the end, you will have a slash dev, slash mapper, slash something.
+2018280	2025920	And on this device mapper, you can use the standard mount command to then have access
+2025920	2029780	to your verified SquashFS.
+2029780	2039300	So the command you use is a very tight setup create, then the name of the device mapper.
+2039300	2042260	So in our example, it's a root file system.
+2042260	2044140	It can be another one.
+2046000	2051000	Again, we use the hash offset option of Verity Setup
+2052140	2057140	to say where to locate the hash tree in the device block.
+2061380	2064960	Then there is a data device and the hash device.
+2064960	2067960	In our use case, it's the same one.
+2067960	2071080	and finally, the root hash.
+2072600	2075920	So because we use the same block device
+2075920	2080920	and it contains both data and hash image,
+2081280	2084960	we use UBI block zero twice.
+2084960	2088000	Of course, if you use a default mechanism,
+2088000	2093000	so if you have, for example, the data on UBI block zero
+2093600	2096900	and hash three on UBI block one,
+2096900	2100580	then you don't use hash offset parameters,
+2100580	2103380	and you will have block zero and block one
+2103380	2106120	in your command varity setup create.
+2110080	2114140	Yeah, so here you can see that we have the offset
+2114140	2116660	and the hash parameters,
+2116660	2121660	and we need a way to have it available in the kernel.
+2122160	2124700	So in fact, we use both args,
+2125600	2129700	And for that, we created a U-boot environment script.
+2131260	2134740	But this new component can be attacked.
+2134740	2137880	So to not again break the chain of trust,
+2137880	2140380	we add it in the fit image.
+2140380	2144320	So in the fit image, we have the U-boot environment script
+2144320	2146260	with the hash,
+2148140	2152020	which has the signature of the hash of the binary.
+2152020	2156720	Then u-boot checks the signature of this u-boot environment
+2156720	2158000	script.
+2158000	2164260	If the signature is matching, then it can source this script.
+2164260	2168500	And in this script, we have some variables
+2168500	2172940	to retrieve the offset and the hash.
+2172940	2176520	And also, of course, it sets the boot hash.
+2176520	2181900	Thanks to that, we can retrieve it in the kernel.
+2181900	2185300	So here, it's the final mechanism.
+2185300	2187320	So as I said before, we have uBoot.
+2187320	2191760	It checks the signature of the uBoot environment script.
+2191760	2196120	If it's not the correct one, it will fail to source it.
+2196120	2199460	If it's the correct one, it will source the script.
+2199460	2201500	Thanks to that, in the boot args,
+2201500	2205400	we will have the offset and the hash.
+2205400	2210180	Then we have our kernel with DMVVT enabled, our init1FS
+2210180	2214760	with the init script that will use the Verity Setup command
+2214760	2219540	to do the verification on the UBI block device.
+2219540	2222900	Of course, as we have seen before, Verity Setup command
+2222900	2225280	needs the hash and the offset.
+2225280	2228860	So thanks to the boot args, it can retrieve it.
+2228860	2232020	And if the verification is successful,
+2232020	2238060	then you have a device mapper, and you can do a switch route.
+2238060	2242120	So in our use case, we use switch routes instead of mount
+2242120	2246040	because we wanted to switch the root file system
+2246040	2249880	from the init1fs to the verified squashfs.
+2249880	2252820	Otherwise, our system will always
+2252820	2255500	be on the init1fs, and we don't want that.
+2258380	2261840	And to complete the chain of trust,
+2261840	2266460	so as we added a new component, so use a U-boot environment
+2266460	2269440	script, for example, we add it in the fit image
+2269440	2271600	to not break the chain of trust.
+2275040	2276420	Thanks, Milan.
+2276420	2283100	So now we have actually completed our chain of trust.
+2283100	2287900	So basically, now to summarize what
+2287900	2291580	has been done yet until now.
+2291580	2298360	So in the ROM code, you have up to four hash of public keys,
+2298360	2300740	which are used to verify the public key which
+2300740	2304640	is embedded in the binary of the bootloader.
+2304640	2307180	Then when it's verified, the public key,
+2307180	2308880	then you can use it to verify, actually,
+2308880	2310620	the signature of the bootloader.
+2310620	2312880	Once that's done, you have another public key
+2312880	2315300	in the uBoot binary, which is used
+2315300	2318380	to verify the signature of the kernel and the DTB,
+2318380	2320380	Well, basically the fit image, the whole fit image
+2320380	2324920	with the UBoot script presented just the slides before.
+2324920	2326960	And once that's done, you have the digest
+2326960	2329720	within the fit image, which is used to verify
+2329720	2332600	and authenticate the rootFS.
+2332600	2335920	So yeah, basically that's done.
+2335920	2339220	But now we really want some kind of, I would say,
+2339220	2342400	distribution as a rootFS.
+2342400	2344720	And we don't want to, well, do it manually.
+2344720	2348860	We can use build root, Yocto, whatever build system you want.
+2348860	2351020	But in our case, it was Yocto.
+2351020	2353460	But Yocto has a really specific way
+2353460	2357060	to create fit images.
+2357060	2360500	And currently, it's the kernel recipe
+2360500	2364380	that actually inherits the kernel fit image class.
+2364380	2371760	And that means that, well, it's done before the root
+2371760	2373180	has been created.
+2373180	2375880	And I think the point is that actually people
+2375880	2379320	want to have the fit image, the kernel, whatever,
+2379320	2382900	within the slash boot of the rootFS.
+2382900	2388680	But our script needs the rootFS to be actually compiled, built,
+2388680	2393800	so that we can compute the hash and put it in the U-boot script.
+2393800	2398680	But, well, we want it in the fit image, which
+2398680	2401620	is created before the rootFS.
+2401620	2404520	So basically, that's how we end up with a dependency loop
+2404520	2407540	in Yocto, and that's really hard to debug.
+2407540	2410740	So while we throw away the kernel feature image class
+2410740	2413920	and wrote a new image and class recipes
+2413920	2416800	to work around this issue, it's really, I would say,
+2416800	2420440	the level of draft or proof of concept.
+2420440	2424320	But that works, so that was it for us.
+2424320	2431400	So well, it was a very specific example we presented today.
+2431400	2435180	to have only read-only file system.
+2435180	2439780	But you definitely may want to have some read-only file
+2439780	2444960	system besides your read-only file system.
+2444960	2447780	So if it stores not critical data,
+2447780	2453340	well, just mount it alongside your read-only file system.
+2453340	2454020	That's fine.
+2454020	2456360	You can store blogs, user data.
+2456360	2457640	Well, you don't care.
+2457640	2462260	Well, if it's critical, well, we haven't really looked at it.
+2462260	2466100	But a hint would be to look at IMA EVM.
+2466100	2469880	We have provided a bit of toolings to look at it.
+2469880	2471680	I don't know how it works.
+2471680	2474960	Just have a look at it.
+2474960	2481640	So to end this talk, remember I told you to trust no one?
+2481640	2486000	Well, you cannot even trust the vendor of your SOC.
+2486000	2489540	So NXP had publicly disclosed about a year ago
+2489540	2494460	that they had secure boot vulnerabilities in their HAB
+2494460	2500500	verification code for IMX6 and the other family SoCs.
+2500500	2502820	But I think right now it should be fixed,
+2502820	2504540	so you should ask them if you want
+2504540	2506680	to base your product on it.
+2506680	2512160	And I attended, well, yesterday, a good talk
+2512160	2515060	on introduction to reverse engineering
+2515060	2517140	by Michael Anderson.
+2517140	2520200	And it was really interesting because, well,
+2520200	2522540	nothing is 100% secure.
+2522540	2526760	So what do you want to protect yourself from?
+2526760	2528940	So I'll end it with this.
+2528940	2535860	Look at his talk to see what can be done to actually break
+2535860	2537580	your thing.
+2537580	2538900	So that was it.
+2538900	2540140	Thank you for your attention.
+2540140	2542540	If you have any questions, I'll be in the audience
+2542540	2543780	to post you the microphone.
+2543780	2544280	Yeah.
+2544280	2545280	Thank you.
+2556960	2559100	Hello.
+2559100	2560000	Hello.
+2560000	2562620	How long did it take your team to implement all this?
+2565960	2567360	So actually, from the beginning
+2567360	2572980	to actually look at all the software, everything.
+2572980	2578600	I would say for both of us, it took like six months,
+2578600	2579480	but not full-time.
+2579480	2582720	So I would say month is, definitely.
+2589980	2590680	Two questions.
+2590680	2593100	One of all, I saw that you're using SHA-1.
+2593100	2596780	You probably shouldn't use that as a hash algorithm anymore.
+2596780	2599220	It's totally broken.
+2599220	2602560	Number two, where is your code that you actually talked about
+2602560	2605640	that works for doing the switch route thing
+2605640	2607420	so you don't get the dependency problem?
+2610080	2611420	Well, it's a bit different.
+2615580	2618740	The problem with the dependency loop is within Yocto.
+2618740	2623200	It does not have something to do with the final root of S.
+2623200	2626280	So it's only when you actually build the root of S
+2626280	2636480	is the problem. Well, it's a new, well, recipe, so that's how Yocto work. So the question
+2636480	2646280	is, is the recipe in Yocto yet? No. It's, well, in our Yocto, yeah. Yeah, no. But, well,
+2646280	2658020	definitely would want to work on it so I have two two questions to firstly how
+2658020	2663860	many boards do you actually break doing this and secondly is it emulator ball
+2663860	2671660	and sound like you emu so good question the first one of how many boards are we
+2671660	2680960	broken yet, so none. Yeah, there are a lot of tutorials on the internet, so luckily,
+2680960	2687840	we didn't have to break any boards, so, well, we're happy with this. And the next question
+2687840	2706560	was QMUs support I haven't yeah I don't know sorry you mentioned the performance
+2706560	2713740	impact of the verification? Did you actually measure how much it affected the boot time
+2713740	2721740	in your case? So I think there's not really a point
+2721740	2731760	measuring it because if you need a secure device, well, the latency, you don't care really.
+2731760	2738600	On the rootFS part, they pretend that the IO takes so much time compared to the hash
+2738600	2747640	computation that, well, you can ignore it.
+2747640	2753540	Any reason you do verification of your rootFS and kernel and not U-boot?
+2753540	2761760	So for example, can U-boot read this block device?
+2761760	2768380	So the question is where the verification of the rootfs is.
+2768380	2769520	Why not in your boot?
+2769520	2772340	There is no support for SquashFS, first.
+2772340	2779440	And second is that, oh, that was it.
+2779440	2784260	It's on two different mediums for media for our clients.
+2784260	2788700	So the first one is used to store the kernel, et cetera.
+2788700	2802080	And the rootFS is on another medium.
+2802080	2807840	So there is a really interesting remarks, and I forgot about it.
+2807840	2813220	It's actually done only on the read access of your data.
+2813220	2818700	So you cannot actually use the bootloader to verify your rootFS because it's done only
+2818700	2822700	when you access data, which is done only by the kernel.
+2822700	2826700	Yep.
+2826700	2830700	You have four public keys stored in your boot image.
+2830700	2834700	How do you revoke one if one's bad?
+2834700	2838700	The same way you actually flash the public key, so you blow a fuse.
+2838700	2842700	And this fuse just say, well, this one is revoked.
+2842700	2846700	That's it.
+2846700	2849740	Oh, from U-boot.
+2849740	2853880	So within U-boot, with your update scripts or whatever,
+2853880	2858580	you ask it to blow the fuse.
+2858580	2861640	But yeah, if it's already too late, then I'll be screwed.
+2866220	2867220	Anyone?
+2867220	2867720	No.
+2867720	2868720	Oh, again.
+2868720	2881760	I actually have an observation on an earlier comment, one-time verification of the Squash
+2881760	2887780	FS is not good enough, while Squash FS itself is read-only, it does not cache all your data.
+2887780	2892480	So if you're sneaky, you can go in and rewrite the data that's in the Squash FS.
+2892480	2897060	We found this because one of our clients accidentally ran their upgrade system against their currently
+2897060	2898820	running SquashFS.
+2898820	2902820	This makes the kernel very unhappy and crashes the system.
+2912960	2914280	When will the URL work?
+2914280	2918040	I tried it, and it returns file not found.
+2918040	2921060	The URL on up there, I tried it.
+2921060	2926060	Yeah, it's not up yet, but it's on the sked.org website.
+2926060	2933840	So it's going to be available, hopefully, next week, tops.
+2933840	2937620	Any other questions?
+2937620	2939660	Well, thank you, and bon appétit.

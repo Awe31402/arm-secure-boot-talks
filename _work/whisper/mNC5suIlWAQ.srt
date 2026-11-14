@@ -1,0 +1,1328 @@
+1
+00:00:00,000 --> 00:00:11,200
+so hello everybody it's afternoon um i'm joining in from oulu finland up north we have snow and
+
+2
+00:00:11,200 --> 00:00:16,640
+it's minus 10 centigrade outdoors it's nice to be inside and talking about yoktu and secure boot
+
+3
+00:00:16,640 --> 00:00:24,400
+instead of being out there so i work for linaro we are in the world to improve the arm ecosystem
+
+4
+00:00:24,400 --> 00:00:28,960
+and doing a whole bunch of stuff there and one of these things is has a has a bunch of
+
+5
+00:00:28,960 --> 00:00:36,640
+do with the secure boot um so another abstract we will be talking about trusted substrate which
+
+6
+00:00:36,640 --> 00:00:43,280
+is an arm system ready ufi firmware that we have developed um at linero and also the counterpart
+
+7
+00:00:43,280 --> 00:00:47,840
+is the operating system called trusted reference stack trs where we have a kernel in the trauma
+
+8
+00:00:47,840 --> 00:00:54,560
+phase root file system and so on and all these work together with ufi secure boot and and also
+
+9
+00:00:54,560 --> 00:01:00,640
+utilize tpm trusted platform module as a device to encrypt our root file systems with
+
+10
+00:01:02,160 --> 00:01:07,840
+and we discuss about the details of these solutions and then some of the issues that we are
+
+11
+00:01:08,480 --> 00:01:11,600
+seeing when we try to upstream these to introduce community layers
+
+12
+00:01:14,800 --> 00:01:22,320
+yeah so a few words arm system ready is one word which comes here and there
+
+13
+00:01:23,120 --> 00:01:27,760
+it's a compliance program to ensure operating system interoperability with arm-based devices
+
+14
+00:01:28,640 --> 00:01:37,600
+basically relies on the ufi firmware standard for arm-based devices then it has multiple profiles
+
+15
+00:01:38,240 --> 00:01:43,040
+for different kinds of devices some with more or less hardware on them and more memory and so on
+
+16
+00:01:44,640 --> 00:01:49,920
+and for example the server class hardware requirements do not dictate acpi support for
+
+17
+00:01:49,920 --> 00:01:56,240
+the firmware which impacts gpm discovery which i'll briefly mention also later on um but this
+
+18
+00:01:56,240 --> 00:02:01,840
+arm system ready enables running operating systems on devices without any software modification so
+
+19
+00:02:01,840 --> 00:02:05,600
+you don't need to build a device specific software stack and or you don't need to
+
+20
+00:02:06,560 --> 00:02:12,240
+monitor or generate linux distribution if it is has been made compatible with our arm system ready
+
+21
+00:02:12,240 --> 00:02:18,400
+it will just work on new hardware out of the box and this is a really good um for many kinds of
+
+22
+00:02:18,400 --> 00:02:23,760
+products which don't have so strict firmware requirements but it's also a really good starting
+
+23
+00:02:23,760 --> 00:02:28,960
+point for devices which do have more strict boot time requirements and so on for the firmware
+
+24
+00:02:30,960 --> 00:02:35,520
+and there's a link to the arm system reading compliance program if anyone's interested in
+
+25
+00:02:35,520 --> 00:02:43,040
+the details um then a few words about ufi itself so this is unified extensible firmware interface
+
+26
+00:02:43,040 --> 00:02:49,440
+standard um yeah a standard for firmware implementations um provides users and device
+
+27
+00:02:49,440 --> 00:02:53,920
+manufacturers interfaces to run scripts to interact with the firmware and load and run
+
+28
+00:02:53,920 --> 00:02:59,440
+binaries and basically the one of the major points of course is to discover hardware which
+
+29
+00:02:59,440 --> 00:03:07,200
+is usually not discoverable in other other way um yeah it includes support for secure boot
+
+30
+00:03:08,080 --> 00:03:15,120
+then some support for TPM devices as well and there's a quite standard method for
+
+31
+00:03:16,160 --> 00:03:22,720
+uploading new keys or vendor keys to enable secure boot with UFI as well. And in open
+
+32
+00:03:22,720 --> 00:03:26,720
+source world we have a couple of common implementations that can be used for UFI
+
+33
+00:03:26,720 --> 00:03:29,120
+standard and those are U-Boot and EDK2.
+
+34
+00:03:29,120 --> 00:03:39,240
+um then what is secure boot well it's basically a way for the owner and maintainer or and or
+
+35
+00:03:39,240 --> 00:03:43,100
+maintainer of the device to make sure that only the software that they created and signed
+
+36
+00:03:43,100 --> 00:03:49,000
+will be able to run on the device and basically any modification to the software that the owner
+
+37
+00:03:49,000 --> 00:03:53,760
+or maintainer created should needs to be detected and then running the software must fail on the
+
+38
+00:03:53,760 --> 00:04:00,960
+target usually it's done implemented by signing the software in various ways with secure boot
+
+39
+00:04:00,960 --> 00:04:08,960
+keys and some of these keys may be also verified by hardware the secure boot keys are usually not
+
+40
+00:04:08,960 --> 00:04:14,960
+device specific but they're generic for a range of devices or or product family or even a full
+
+41
+00:04:15,520 --> 00:04:21,440
+vendor yeah and as was mentioned there are multiple layers of signing usually involved
+
+42
+00:04:21,440 --> 00:04:26,860
+to create a chain of trust from hardware all the way up to application stack.
+
+43
+00:04:30,340 --> 00:04:33,060
+Then TPM or Trusted Platform Module.
+
+44
+00:04:33,400 --> 00:04:35,860
+It's an add-on hardware module,
+
+45
+00:04:36,100 --> 00:04:40,700
+which is basically able to calculate checksums and combine them,
+
+46
+00:04:42,160 --> 00:04:43,460
+so-called PCR values.
+
+47
+00:04:43,460 --> 00:04:46,200
+And then these are stored on the device persistently.
+
+48
+00:04:46,720 --> 00:04:49,560
+And the operating system that runs on the main CPU
+
+49
+00:04:49,560 --> 00:04:59,960
+is not able to modify the data in the dpn it's only able to amend data to this pcr data banks
+
+50
+00:04:59,960 --> 00:05:06,600
+but that basically an xor which takes the previous value and appends a new data or amends new data to
+
+51
+00:05:06,600 --> 00:05:11,880
+it and this can be then used to verify the boot state and to unlock access to encryption
+
+52
+00:05:12,600 --> 00:05:17,080
+so the use cases basically are encryption encrypting partitions or data storage
+
+53
+00:05:17,080 --> 00:05:23,080
+based on the boot time measurements or the full-blown boot sequence measurements.
+
+54
+00:05:23,080 --> 00:05:27,080
+And also, it can be used to block access to certain partitions data
+
+55
+00:05:27,080 --> 00:05:32,080
+or even network services if the boot data is not cryptographically correct.
+
+56
+00:05:32,080 --> 00:05:37,080
+And this TPM data is really specific to its device.
+
+57
+00:05:37,080 --> 00:05:41,080
+There's usually a device-specific secret key,
+
+58
+00:05:41,080 --> 00:05:46,080
+which is the basics of all these operations.
+
+59
+00:05:46,080 --> 00:05:51,080
+And there's also a firmware implementation of the TPM interfaces.
+
+60
+00:05:51,080 --> 00:05:54,080
+It's in OPTI, it's called FTPM, firmware TPM,
+
+61
+00:05:54,080 --> 00:05:56,080
+and it can be also used as an implementation
+
+62
+00:05:56,080 --> 00:05:58,080
+if the real hardware is not available.
+
+63
+00:06:01,080 --> 00:06:03,080
+Then measured boot.
+
+64
+00:06:03,080 --> 00:06:07,080
+It's basically when we use the TPM device
+
+65
+00:06:07,080 --> 00:06:09,080
+from each stage of the boot
+
+66
+00:06:09,080 --> 00:06:12,080
+to calculate a checksum of the next sequence,
+
+67
+00:06:12,080 --> 00:06:14,080
+for example, when we're loading binaries,
+
+68
+00:06:14,480 --> 00:06:17,920
+and then storing this data or amending this data into the TPM.
+
+69
+00:06:20,720 --> 00:06:26,800
+We get a digital signature of the boot status on each of the stages that we are running.
+
+70
+00:06:28,000 --> 00:06:34,000
+And then this can be used to basically unlock access to device-specific data partitions, for
+
+71
+00:06:34,000 --> 00:06:42,480
+example. Then a few words about this linear trusted substrate, which is a firmware
+
+72
+00:06:42,480 --> 00:06:47,200
+implementation that we've done, which is compatible with ARM system ready, IR,
+
+73
+00:06:47,200 --> 00:06:50,880
+which is the embedded version for a number of hardware devices.
+
+74
+00:06:52,440 --> 00:06:57,880
+We have an implementation which basically is for ARMv7 with QEMU,
+
+75
+00:06:58,280 --> 00:07:06,800
+then ARMv8, ARM 64-bit variant of QEMU, AMD CRIA KV260 without TPM support.
+
+76
+00:07:06,880 --> 00:07:09,840
+So these QEMU devices can use a software TPM
+
+77
+00:07:09,840 --> 00:07:19,200
+um and then hook up to that and then amd zcu 102 as well and rock by 4b a synch laser
+
+78
+00:07:20,320 --> 00:07:28,800
+then raspberry pi 4 and also nxps imx8 qualcom's robotics platforms one two three and five
+
+79
+00:07:29,840 --> 00:07:36,720
+um then also the ava developer platform which is a bigger box and this work was done in the
+
+80
+00:07:36,720 --> 00:07:41,520
+linear knowledge group and we have sponsors who were interested in us doing this kind of a prototype
+
+81
+00:07:42,560 --> 00:07:47,760
+and as mentioned a lot of these devices have also been passing and certified in the arm system ready
+
+82
+00:07:47,760 --> 00:07:56,960
+program with this firmware in the device um the basic components of the trusted substrate
+
+83
+00:07:57,920 --> 00:08:02,160
+stack of firmware basically is u-put we take the latest one from pokey
+
+84
+00:08:03,040 --> 00:08:09,520
+we do some configuration changes to it though and then we use meta arm heavily to give us
+
+85
+00:08:09,520 --> 00:08:16,080
+for example trusted firmware a component um and then also opti if if we want to support opti
+
+86
+00:08:16,080 --> 00:08:22,800
+for example with the ftp and firmware tpm on the on the board and into firmware
+
+87
+00:08:25,680 --> 00:08:29,040
+then we've implemented some additional features of interest for us
+
+88
+00:08:29,040 --> 00:08:33,760
+for example we have the authenticated capsule updates for the firmware i mean when you build
+
+89
+00:08:33,760 --> 00:08:37,920
+the firmware you need to be able to also update the firmware and when these updates are not
+
+90
+00:08:37,920 --> 00:08:44,080
+cryptographic assigned then you have a security house as well then we've also implemented an
+
+91
+00:08:44,080 --> 00:08:51,920
+alternative tcpip stack with lightweight ip into uboot and also this has been submitted upstream
+
+92
+00:08:51,920 --> 00:08:58,960
+in uboot and that has been an enabler for enabling tls support in uboot directly
+
+93
+00:08:59,520 --> 00:09:04,480
+with embed tls another software component which we are upstream into uboot community work
+
+94
+00:09:05,360 --> 00:09:12,880
+and then these together enable the uboot and a ufi interfaces to provide http and https
+
+95
+00:09:12,880 --> 00:09:20,800
+downloads for example to download an installer image directly in the boot or uboot or ufi
+
+96
+00:09:20,800 --> 00:09:28,560
+interface um yeah then we also have some additional arm trusted services alternative
+
+97
+00:09:28,560 --> 00:09:36,320
+to the tpm device for example to use parsec more heavily and of course the basic feature that we do
+
+98
+00:09:36,320 --> 00:09:43,120
+is is this ufi secure boot um where we verify all the binaries before we load them with the ufi
+
+99
+00:09:43,120 --> 00:09:50,080
+standard methodologies then some issues our implementation is a proof of concept so of
+
+100
+00:09:50,080 --> 00:09:58,480
+course it's not completely product ready in all aspects um we don't do the binding from the soc
+
+101
+00:09:58,480 --> 00:10:07,360
+firmware um to the firm of soc rom let's say from hardware to the you put binary that we run or the
+
+102
+00:10:07,360 --> 00:10:13,920
+binary that we run and this is because it requires very vendor specific tooling and it would also
+
+103
+00:10:13,920 --> 00:10:18,400
+mean that some other aspects would be more difficult for us to work with in the ci environment
+
+104
+00:10:18,400 --> 00:10:23,760
+for example so that's we we use open hardware and we also leave the device in open state
+
+105
+00:10:23,760 --> 00:10:30,320
+so that we can use them for testing purposes um our stack is also using um private case
+
+106
+00:10:30,320 --> 00:10:35,360
+keys which are in public kit repo when we do our builds which is of course a bad thing to do
+
+107
+00:10:35,360 --> 00:10:42,160
+but we do it for testing purposes um and real products will need to swap these keys to vendor
+
+108
+00:10:42,160 --> 00:10:47,040
+keys and and do the builds again or hopefully there's a better solution to deciding instead of
+
+109
+00:10:47,040 --> 00:10:50,880
+embedding the keys in the build environment but maybe i'll come back to later as well
+
+110
+00:10:53,040 --> 00:10:57,040
+um yeah or there's an alternative mechanism where where the keys don't need to be in the
+
+111
+00:10:57,040 --> 00:11:02,160
+hardware at all or in the builds at all because in the uf5 firmness standard there is a way of
+
+112
+00:11:02,160 --> 00:11:07,520
+copying the vendor keys to the target hardware also in a separate step which can be for example
+
+113
+00:11:07,520 --> 00:11:14,080
+done after the initial production of the hardware um then for the tls support the time is slightly
+
+114
+00:11:14,080 --> 00:11:19,680
+problematic there is to be some notion of accurate time on the device to be able to verify
+
+115
+00:11:19,680 --> 00:11:25,680
+certificate expirations and that on some boards may be tricky especially if there's no real time
+
+116
+00:11:25,680 --> 00:11:33,520
+clock with a battery or other power management or power to the battery or clock um yeah and then
+
+117
+00:11:33,520 --> 00:11:38,800
+we've enabled both u-boot and ufi consoles by default um this is to enable our testing that
+
+118
+00:11:38,800 --> 00:11:41,580
+that we do in the Linar and Lava CI environment.
+
+119
+00:11:42,560 --> 00:11:46,200
+And that can be used to break secure boot,
+
+120
+00:11:46,200 --> 00:11:47,400
+and which we also do.
+
+121
+00:11:47,400 --> 00:11:50,040
+And we just want to see that when we mess around
+
+122
+00:11:50,040 --> 00:11:51,680
+with the TP and PCR values,
+
+123
+00:11:51,680 --> 00:11:53,840
+then we are not able to decrypt our root file system,
+
+124
+00:11:53,840 --> 00:11:54,680
+for example.
+
+125
+00:11:58,820 --> 00:12:00,300
+The implementation that we have,
+
+126
+00:12:00,300 --> 00:12:02,780
+here's the GitLab repo for the R-Meta layer,
+
+127
+00:12:02,780 --> 00:12:04,300
+which implements this.
+
+128
+00:12:04,300 --> 00:12:06,660
+We basically have a Yocto machine configuration
+
+129
+00:12:06,660 --> 00:12:08,360
+for each supported board.
+
+130
+00:12:10,300 --> 00:12:12,740
+In this machine configurations,
+
+131
+00:12:12,740 --> 00:12:16,060
+we use machine features for secure boot,
+
+132
+00:12:16,060 --> 00:12:18,520
+which basically then does the signing
+
+133
+00:12:18,520 --> 00:12:21,320
+and embeds the public key into the U-boot firmware binary
+
+134
+00:12:21,320 --> 00:12:24,960
+that we can compare that signatures then at boot time.
+
+135
+00:12:26,180 --> 00:12:29,140
+Then we also have machine feature for TPM tool
+
+136
+00:12:29,140 --> 00:12:31,820
+to do the TPM measured boot support.
+
+137
+00:12:33,420 --> 00:12:36,000
+Then also OPTI and capsule updates
+
+138
+00:12:36,000 --> 00:12:40,880
+authenticated capture updates for all of these we have then machine features which can be relatively
+
+139
+00:12:40,880 --> 00:12:47,520
+easily enabled for also new machines and these machine features are basically implemented by
+
+140
+00:12:48,480 --> 00:12:53,840
+with config snippets which are applied on top of the upstream devconfig for example in uboot
+
+141
+00:12:53,840 --> 00:12:59,120
+so we utilize for many of the boards the upstream uboot devconfig and then we apply configuration
+
+142
+00:12:59,120 --> 00:13:05,440
+snippets for secure boot for tpm support and opti and so on on top of that and as
+
+143
+00:13:05,440 --> 00:13:11,120
+we work really closely with the communities our aim is to also directly right away upstream any
+
+144
+00:13:11,120 --> 00:13:16,480
+patches that we're working with and at least the patches that we have in the layer are some of them
+
+145
+00:13:16,480 --> 00:13:20,560
+which may not be merged yet so at least they go ongoing reviews and they've been submitted already
+
+146
+00:13:22,480 --> 00:13:29,520
+um there are some patches and changes in the layer that we are more like configuration for
+
+147
+00:13:29,520 --> 00:13:34,000
+some some of the firmware specific or hardware specific memory layouts because we combine
+
+148
+00:13:34,000 --> 00:13:38,640
+to the firmware elements you know in a way that it's not it's basically configuration it's not
+
+149
+00:13:38,640 --> 00:13:43,520
+something that can be easily upstream because others might not be running the same same opti
+
+150
+00:13:43,520 --> 00:13:49,680
+and tpm and so on components in the firmware and basically the built output is a binary um
+
+151
+00:13:50,560 --> 00:13:56,800
+a firmware binary for a specific device um and which needs to be combined with with the esp
+
+152
+00:13:56,800 --> 00:14:00,960
+partition for where the ufi firmware then is able to load load additional binaries like
+
+153
+00:14:00,960 --> 00:14:07,920
+kernel on any drum fss there and like mentioned we we do this testing with u-boot console a lot
+
+154
+00:14:07,920 --> 00:14:12,960
+so we can also make sure that when when the tpm pcr values are messed with we cannot actually
+
+155
+00:14:12,960 --> 00:14:20,240
+access the encrypted root process and all tests are automated with linear lava ci setup
+
+156
+00:14:22,400 --> 00:14:28,160
+yeah so upstreaming of these these features um we for certain aspects we did not find a suitable
+
+157
+00:14:28,160 --> 00:14:34,240
+upstream for example these device devices like rock by four psing quasar and amd and even a
+
+158
+00:14:34,240 --> 00:14:40,800
+raspberry pi four um the reason is that we utilize mostly upstream u-boot and dfa and so on
+
+159
+00:14:41,440 --> 00:14:47,280
+and the vendor psb layers are usually forked version which are maybe an older version of
+
+160
+00:14:47,280 --> 00:14:57,520
+viewport where some of the issues are not fixed yet um but um on the other hand these vendor so
+
+161
+00:14:57,520 --> 00:15:03,600
+soc and bsp layers are usually able to fix at least one major gap that we have in our in our
+
+162
+00:15:03,600 --> 00:15:08,320
+secure boot world which is when the hardware is verifying the first first firmware that is
+
+163
+00:15:08,320 --> 00:15:15,040
+executing and we don't utilize the firmware or the vendor bsp layers so much so that's why we
+
+164
+00:15:15,040 --> 00:15:21,200
+not have that enabled on all our hardware but then again for all the qmo machines we've found
+
+165
+00:15:21,200 --> 00:15:28,160
+found a nice upstream which is meta arm of course um and there we basically have um upstreamed and
+
+166
+00:15:28,160 --> 00:15:35,920
+it was accepted this autumn um that we have our secure boot way of enabling it also available
+
+167
+00:15:35,920 --> 00:15:42,000
+there on the qmo arm secure boot machine configuration um so basically what it does
+
+168
+00:15:42,000 --> 00:15:48,640
+is it builds u-boot based firmware just like in our trusted substrate stack and then at build time
+
+169
+00:15:48,640 --> 00:15:57,920
+it also builds uh some qm warm um pokey machine uh definition for the kernel and also systemd boot
+
+170
+00:15:58,800 --> 00:16:04,960
+and then signs these um with the same secure boot keys and then creates a big image with
+
+171
+00:16:04,960 --> 00:16:10,720
+with the esp partition with those binaries in there this work was up seen by by javier dia from
+
+172
+00:16:10,720 --> 00:16:17,600
+linado and yeah it's available for anyone to use uh for the users of meta arm they have a couple
+
+173
+00:16:17,600 --> 00:16:22,400
+of instructions how to simply do the build which also runs tests automatically with that the secure
+
+174
+00:16:22,400 --> 00:16:30,880
+boot works um here are some details of how it looks like um in a cus configuration file for
+
+175
+00:16:30,880 --> 00:16:36,560
+ufi secure boot there's a convex snippet basically in meta arm that can be used also in other layers
+
+176
+00:16:36,560 --> 00:16:45,520
+i think uh at the top we basically define the keys for the secure boot signing how to how to
+
+177
+00:16:45,520 --> 00:16:51,760
+find the keys and then there are some run qmo related configurations we basically need to
+
+178
+00:16:51,760 --> 00:16:56,160
+disable run cameo to not find the kernel directly but instead we just put the firmware and the
+
+179
+00:16:56,160 --> 00:17:02,160
+firmware is supposed to load the binaries then correctly from the esp partition and the esp
+
+180
+00:17:02,160 --> 00:17:09,760
+partition is basically where the big wks file configuration option is important um yeah there
+
+181
+00:17:09,760 --> 00:17:16,800
+needs to be some config options for the systemd boot there to have some files and then the binary
+
+182
+00:17:16,800 --> 00:17:28,240
+as well to load them correctly um for the machine features um yeah we hide the ufi secure boot
+
+183
+00:17:28,240 --> 00:17:33,360
+be fine behind the ufi secure boot machine feature so these need to be appended to the build
+
+184
+00:17:33,360 --> 00:17:38,640
+and we also have ufi hdb boot and ufi capsule updates as machine features in meta arm as well
+
+185
+00:17:38,640 --> 00:17:47,120
+now um yeah and then we do testing quite a bit with systemd because there are quite a few of
+
+186
+00:17:47,120 --> 00:17:53,440
+the tpm related features are are well implemented there um yeah maybe i'll come back to that later
+
+187
+00:17:53,440 --> 00:18:01,440
+on as well yeah and we use systemd boot not grub and wrap is like the problematic with tpm and it
+
+188
+00:18:01,440 --> 00:18:06,160
+also enables by default editing of the different boot entries which basically is a security hole
+
+189
+00:18:07,360 --> 00:18:12,320
+if if used correctly with tpm devices all the time then maybe that wouldn't be such an issue
+
+190
+00:18:12,320 --> 00:18:16,800
+because the tpm measurements will still hold correctly with crap but in our case we find it
+
+191
+00:18:16,800 --> 00:18:22,560
+easier to work with systemd boot which creates another boot entry or a menu where you can select
+
+192
+00:18:22,560 --> 00:18:30,080
+different things to put if you want to do that yeah and and like i said systemd in it is better
+
+193
+00:18:30,080 --> 00:18:35,040
+with basically tpm especially where the pcr measurements are done quite well already there
+
+194
+00:18:35,760 --> 00:18:42,320
+and we are also upstreaming the tpm support details and the likely upstream location for
+
+195
+00:18:42,320 --> 00:18:52,160
+those is meta security and meta tpm layer there um i need to double check on how with time
+
+196
+00:18:52,560 --> 00:18:56,560
+Okay, we need to speed up.
+
+197
+00:18:56,560 --> 00:19:01,560
+Yeah, so then to trust the reference tag from Lilara, basically it's the operating system counterpart,
+
+198
+00:19:01,560 --> 00:19:08,560
+where we use the same keys that were embedded into the firmware to sign the kernel,
+
+199
+00:19:08,560 --> 00:19:11,560
+a grub, or in our case systemd boot.
+
+200
+00:19:11,560 --> 00:19:18,560
+And then we also have, the original implementation was a shell script,
+
+201
+00:19:18,560 --> 00:19:23,560
+but we refactored this to be systemd based completely.
+
+202
+00:19:23,560 --> 00:19:26,560
+This is to basically do all the TPM support correctly,
+
+203
+00:19:26,560 --> 00:19:31,560
+just like basically quite a few of the existing laptops
+
+204
+00:19:31,560 --> 00:19:33,560
+and other x86 based machines.
+
+205
+00:19:33,560 --> 00:19:36,560
+They nowadays have UFI as the firmware interface
+
+206
+00:19:36,560 --> 00:19:38,560
+and then all the distros work correctly with that.
+
+207
+00:19:38,560 --> 00:19:41,560
+Also with secure boot and TPM support.
+
+208
+00:19:41,560 --> 00:19:45,560
+And many of the distros are based with systemd.
+
+209
+00:19:45,560 --> 00:19:50,560
+So basically what we create is the UFI secure port chain of trust.
+
+210
+00:19:50,560 --> 00:19:53,560
+Hardware verifies the firmware.
+
+211
+00:19:53,560 --> 00:19:58,560
+The firmware, UFI firmware verifies system default, which also is signed.
+
+212
+00:19:58,560 --> 00:20:04,560
+And then the firmware also verifies the, let's say, UKI.
+
+213
+00:20:04,560 --> 00:20:06,560
+We'll come back to that later.
+
+214
+00:20:06,560 --> 00:20:11,560
+Which then combines kernel command line and initial run disk into a single UFI binary,
+
+215
+00:20:11,560 --> 00:20:13,560
+which is signed correctly.
+
+216
+00:20:13,560 --> 00:20:21,400
+That's where we extend the secure boot all the way into the UFI secure boot and all the way to the UnitramFS.
+
+217
+00:20:21,720 --> 00:20:27,920
+And then to bind the full root file system, we don't use the secure boot keys to sign the root file system.
+
+218
+00:20:28,060 --> 00:20:29,320
+We instead use DMVarity.
+
+219
+00:20:29,640 --> 00:20:37,180
+And then we embed the DMVarity hash, which uniquely identifies the DMVarity partition into the kernel command line.
+
+220
+00:20:37,260 --> 00:20:40,900
+So that's how we create this full chain of trust all the way to user space.
+
+221
+00:20:40,900 --> 00:20:54,220
+yeah um then the same needs to be done for tpm um or measurement of the boot because the the
+
+222
+00:20:54,220 --> 00:21:00,560
+secure boot keys are are generic for a bunch of devices but we need something which is unique to
+
+223
+00:21:00,560 --> 00:21:05,560
+our device and tpm is the thing which is unique to a device the tpm is a secret key it's the first
+
+224
+00:21:05,560 --> 00:21:11,480
+step and then once the hardware has the firmware the firmware is being measured with tpm and then
+
+225
+00:21:11,480 --> 00:21:16,840
+the firmware is also when it's loading other binaries it's it's measuring them into the tpm
+
+226
+00:21:16,840 --> 00:21:22,680
+pcrs and and all the way we get into the end and root file system different measurements
+
+227
+00:21:23,240 --> 00:21:27,880
+that can be then used to decrypt for example through partition and there are different
+
+228
+00:21:27,880 --> 00:21:32,760
+policies that that is and the standards on which of the pcr there are multiple pcr
+
+229
+00:21:33,400 --> 00:21:37,720
+banks and which of them are dedicated for which use cases for example one of them is
+
+230
+00:21:38,360 --> 00:21:45,160
+basically the public key um used for ufi secure boot that can be used as a only thing which is
+
+231
+00:21:45,160 --> 00:21:50,040
+then for example um together with the device tpm device specific secret key
+
+232
+00:21:51,000 --> 00:21:55,320
+to generate an encrypted partition key which is unique to device
+
+233
+00:21:55,320 --> 00:22:05,080
+yeah and and this is somewhat handy because it also binds the dm verity and the um the
+
+234
+00:22:05,080 --> 00:22:11,400
+ability partition with with the uk i binary so hardware verifies firmware firmware verifies um
+
+235
+00:22:12,280 --> 00:22:17,640
+uk binary and the uk binary embeds the unit from fs already which is verified and then it also
+
+236
+00:22:17,640 --> 00:22:26,440
+embeds the dmv80 hash and then we have secure boot all the way and there's an added simplification
+
+237
+00:22:26,440 --> 00:22:33,720
+that for the software updates the boot chain is sort of unique when you are booting into a specific
+
+238
+00:22:33,720 --> 00:22:39,960
+uki it only puts a specific dmv80 partition and if you have updates to dmv80 partition that means
+
+239
+00:22:39,960 --> 00:22:46,360
+that you need to also also provide a new uki binary that is matching with the dmv80 hash on
+
+240
+00:22:46,360 --> 00:22:54,120
+the kernel command line. Yeah, okay, the implementation of the UKIPB class was recently
+
+241
+00:22:54,120 --> 00:22:59,800
+added into Poki. It's available for anyone to use. Here's an example, which basically is in
+
+242
+00:23:00,760 --> 00:23:11,800
+meta-arm. It changes the meta-arm secure port into a UKI. And basically, we have the key signing
+
+243
+00:23:11,800 --> 00:23:19,080
+here at the top. We specify which keys to use. Then there are some human boot related options.
+
+244
+00:23:19,080 --> 00:23:22,760
+We need to disable a bunch of features because we want to boot into the firmware and the firmware
+
+245
+00:23:22,760 --> 00:23:27,720
+needs to find the correct things to boot directly from the ESP partition. And the ESP partition
+
+246
+00:23:27,720 --> 00:23:34,760
+needs to be set in the WKS file, which is here. And then of course the machine features for UFI
+
+247
+00:23:34,760 --> 00:23:39,560
+secure boot and so on need to be enabled. And the EFI provider needs to be a systemdeboot
+
+248
+00:23:39,560 --> 00:23:43,560
+in this case. The init manager is systemd as well.
+
+249
+00:23:43,560 --> 00:23:48,560
+And yeah, then we add a bunch of tests, image classes for UKI.
+
+250
+00:23:48,560 --> 00:23:51,560
+And of course with UKI, because we're binding the kernel initramifes
+
+251
+00:23:51,560 --> 00:23:55,560
+and kernel command line into one secure boot side binary,
+
+252
+00:23:55,560 --> 00:23:59,560
+we also need to build an initramifes, which in our case is core image,
+
+253
+00:23:59,560 --> 00:24:03,560
+minimal initramifes. And then the spsign classes here basically
+
+254
+00:24:03,560 --> 00:24:07,560
+to get access to the keys, which are actually being used by the UKI
+
+255
+00:24:07,560 --> 00:24:10,680
+tooling from systemd to handle the signing.
+
+256
+00:24:12,900 --> 00:24:13,260
+Yeah.
+
+257
+00:24:17,140 --> 00:24:20,900
+Yeah, so then a whole bunch of small issues and details around systemd and
+
+258
+00:24:20,900 --> 00:24:21,960
+intramarfs.
+
+259
+00:24:22,880 --> 00:24:26,040
+I think in our case, it's best to implement all of these.
+
+260
+00:24:26,760 --> 00:24:30,060
+They will use systemd already in the intramarfs, which is not correctly the
+
+261
+00:24:30,060 --> 00:24:36,120
+default in any of the POKE or other image recipes.
+
+262
+00:24:36,120 --> 00:24:43,120
+We need to maybe provide an example, and that's why we're working on upstream in this solution as well.
+
+263
+00:24:43,120 --> 00:24:51,120
+And so there are certain details, for example, that the.
+
+264
+00:24:51,120 --> 00:24:56,120
+Really, I will skip this slightly just to save time. We're running out of it already.
+
+265
+00:24:56,120 --> 00:25:06,120
+Then there's a whole bunch of details around using DM Verity correctly and combining that, for example, with weak images, which are doing other stuff.
+
+266
+00:25:06,120 --> 00:25:14,320
+So, for example, in our prototype environment, we had to split the de-embeddity work, which basically de-embeddity support comes from metasecurity.
+
+267
+00:25:15,020 --> 00:25:21,440
+But the way that we use it, it's not so easy to combine it with other images, especially big images.
+
+268
+00:25:21,440 --> 00:25:30,440
+And we had to split the main root file system to a different recipe, which creates both a root file system and UKI binary, and then also the initramfs.
+
+269
+00:25:30,440 --> 00:25:37,080
+and then an actual recipe for the image, which then creates the end-week image file.
+
+270
+00:25:37,700 --> 00:25:47,700
+And this was because of some issues in that, because the DMVality classes in MetaSecurity are also generating a weak image configuration, and these were conflicting with each other.
+
+271
+00:25:48,840 --> 00:25:55,060
+And we're planning to upstream this so that we have a running system also, or anyone can test this out more easily.
+
+272
+00:25:55,060 --> 00:26:03,940
+um then other intuitive especially run into was the firmware tpm support because it also has a
+
+273
+00:26:03,940 --> 00:26:08,340
+dependency to t-supplicant which is a user space component of the opt-t software stack
+
+274
+00:26:09,540 --> 00:26:16,420
+and that has a dependency to replay protected memory block to basically store data securely
+
+275
+00:26:16,420 --> 00:26:22,900
+from the from the for the tpm and all of these had a quite complicated dependency tree which meant
+
+276
+00:26:22,900 --> 00:26:26,900
+that in the NITRAMFS you need to also start the T-Supplicant before the actual
+
+277
+00:26:26,900 --> 00:26:30,340
+in it to make that firmware TPM device usable.
+
+278
+00:26:30,900 --> 00:26:36,220
+Luckily, some developers, Jens Wiklander in our case, was already working on a solution
+
+279
+00:26:36,220 --> 00:26:42,540
+which basically moves the RPMP support implementation directly into kernel.
+
+280
+00:26:42,940 --> 00:26:45,980
+And this is available now in upstream kernel 6.12 already.
+
+281
+00:26:46,260 --> 00:26:50,460
+And that removes the need to run the T-Supplicant completely from the NITRAMFS
+
+282
+00:26:50,900 --> 00:26:52,860
+when working with a firmware TPM device.
+
+283
+00:26:52,900 --> 00:27:04,900
+It tells that the majority of the work has been done in the current support for our PMP.
+
+284
+00:27:04,900 --> 00:27:12,900
+Which is most tricky to solve is how to basically detect the TPM device.
+
+285
+00:27:12,900 --> 00:27:16,900
+The logic on system D currently is twofold.
+
+286
+00:27:16,900 --> 00:27:30,900
+First of all, if there is already a TPM device when system D runs, which is the first thing, for example, in an interim office, then it means that the kernel driver was already built into the kernel and it's detected and working correctly.
+
+287
+00:27:30,900 --> 00:27:42,900
+The other alternative for Systemd to know that there is a TPM device is if there is an ACPI table entry in the firmware, which is exported through the kernel to Systemd.
+
+288
+00:27:42,900 --> 00:27:47,900
+And then if this happens, then Systemd knows that, okay, we need to wait for a TPM device to appear.
+
+289
+00:27:47,900 --> 00:27:58,900
+But this breaks if the TPM report is compiled into the kernel as modules, which are not loaded before Systemd runs, which is basically before UDEV.
+
+290
+00:27:59,540 --> 00:28:04,580
+and also what if the devices don't have acpi support like the system arm system or the ir
+
+291
+00:28:05,380 --> 00:28:08,740
+which basically tries to embed everything into device three instead of acpi
+
+292
+00:28:10,260 --> 00:28:16,900
+and for these cases we basically have a prototype patches available which have not been merged yet
+
+293
+00:28:16,900 --> 00:28:23,300
+but anyway there's for example a way for the tpm devices to export some some event logs
+
+294
+00:28:23,300 --> 00:28:30,320
+from the firmware to the operating system and the kernel ufi stuff does this and can receive those
+
+295
+00:28:30,320 --> 00:28:34,400
+but they are not visible in the user space at all at the moment so if those are exported to
+
+296
+00:28:34,400 --> 00:28:39,800
+users based in system they can use that also as an way to detect that there is a TPM device and
+
+297
+00:28:39,800 --> 00:28:50,840
+then it can also then queue in the user space portions of the TPM stack right somewhat related
+
+298
+00:28:50,840 --> 00:28:55,240
+system partition auto-detecting stuff, but maybe I'll skip this.
+
+299
+00:28:55,240 --> 00:28:58,440
+I mean, it becomes easier when security is included,
+
+300
+00:28:58,440 --> 00:29:01,240
+but if you don't have security like DMVerity, then it's a bit tricky
+
+301
+00:29:01,240 --> 00:29:06,240
+how to detect a partition before, at build time.
+
+302
+00:29:06,240 --> 00:29:10,840
+One of the solutions is there to use these global standards for GUIDs,
+
+303
+00:29:10,840 --> 00:29:13,840
+where you can generate the partition, which systemd is automatically able to
+
+304
+00:29:13,840 --> 00:29:18,240
+detect as the root file system, as a DMVerity root file system,
+
+305
+00:29:18,240 --> 00:29:21,360
+or DMVarity user partition.
+
+306
+00:29:21,360 --> 00:29:24,600
+These are really handy to have there.
+
+307
+00:29:24,600 --> 00:29:26,760
+And of course, testing had some issues as well,
+
+308
+00:29:26,760 --> 00:29:31,000
+a whole bunch of details there.
+
+309
+00:29:31,000 --> 00:29:34,120
+Testing on x86 versus our native ARM machines
+
+310
+00:29:34,120 --> 00:29:35,440
+is somewhat tricky.
+
+311
+00:29:35,440 --> 00:29:38,680
+There are some bugs somewhere in KVM or somewhere
+
+312
+00:29:38,680 --> 00:29:42,200
+that made at least upstreaming of the UKIPP class quite
+
+313
+00:29:42,200 --> 00:29:42,960
+complicated.
+
+314
+00:29:42,960 --> 00:29:45,640
+We had to do several iterations, and Richard
+
+315
+00:29:45,640 --> 00:29:50,320
+was at least tirelessly running the test, which was good.
+
+316
+00:29:50,320 --> 00:29:52,560
+And finally, we got it working correctly.
+
+317
+00:29:52,560 --> 00:29:56,480
+And then another silly side effect is that
+
+318
+00:29:56,480 --> 00:29:59,960
+on some build and test cases, I suddenly had an empty root
+
+319
+00:29:59,960 --> 00:30:03,840
+file system, which was really annoying, but it turns out to be just a simple issue
+
+320
+00:30:03,840 --> 00:30:07,480
+of using BP fatal in a test image
+
+321
+00:30:07,480 --> 00:30:11,200
+PP class is linked to the actual commit, which downgrading
+
+322
+00:30:11,200 --> 00:30:14,520
+the PP fatal to error somehow and magically resolve the issue.
+
+323
+00:30:16,440 --> 00:30:21,320
+yeah so quite frequently when we're upstreaming changes we run into all kinds of issues which
+
+324
+00:30:21,320 --> 00:30:27,000
+we had no idea that would become blockers for the for the thing and one of the issues which
+
+325
+00:30:27,000 --> 00:30:32,680
+is also really unsolved is how to manage keys in the bitback build or any way in the build i mean
+
+326
+00:30:32,680 --> 00:30:39,800
+there's the hsm high security module hardware or the software variant of that or like currently
+
+327
+00:30:39,800 --> 00:30:44,600
+meta secure core meta arm we are basically hacking the keys into the build system using
+
+328
+00:30:44,600 --> 00:30:50,840
+environment variables and so on and this isn't good for built reproducibility um yeah i hope
+
+329
+00:30:50,840 --> 00:30:54,280
+this someone would tackle this solution and document it really well so
+
+330
+00:30:57,080 --> 00:31:06,040
+and i hope i'm sufficiently um oh we are working on these issues for a long time and i think
+
+331
+00:31:06,040 --> 00:31:11,320
+maybe in 2025 we've had these these solutions for secure boot both the firmware and the operating
+
+332
+00:31:11,320 --> 00:31:15,800
+just apart end-to-end covered in some use case in one of the objective layers.
+

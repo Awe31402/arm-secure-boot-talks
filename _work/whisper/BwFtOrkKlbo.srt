@@ -1,0 +1,1124 @@
+1
+00:00:00,000 --> 00:00:25,000
+Hi everyone, today I will show you how I exploited Samsung Secure Boot to retrieve sensitive data in the Galaxy S10.
+
+2
+00:00:25,000 --> 00:00:31,000
+My name is Jeff Zhao. I have been playing CTF in Hikon CTF team for 10 years.
+
+3
+00:00:31,000 --> 00:00:36,000
+I am also a member of ChangeRoot, Taiwan's private security studying group.
+
+4
+00:00:36,000 --> 00:00:41,000
+I now focus on mobile and IoT security.
+
+5
+00:00:41,000 --> 00:00:51,000
+This is my agenda. In the beginning, I will play a demo video to show a scenario where the vulnerabilities could be exploited.
+
+6
+00:00:51,000 --> 00:00:58,680
+Then, I will introduce how Samsung enhanced the security in Android with their own framework,
+
+7
+00:00:58,680 --> 00:01:06,680
+Knox, and a quick guidance to see previous research on Knox framework.
+
+8
+00:01:06,680 --> 00:01:12,120
+With the background knowledge, I will explain the vulnerabilities I found and how to exploit
+
+9
+00:01:12,120 --> 00:01:16,800
+secure boot by these vulnerabilities.
+
+10
+00:01:16,800 --> 00:01:24,360
+And finally, I will discuss how further damage can be caused after exploiting secure boot
+
+11
+00:01:24,360 --> 00:01:29,880
+even without the passcode.
+
+12
+00:01:29,880 --> 00:01:36,880
+Before we start, let's watch a demo video.
+
+13
+00:01:59,880 --> 00:02:01,880
+Like this, I think that's다
+
+14
+00:02:02,280 --> 00:02:11,160
+Oh, noか
+
+15
+00:02:29,880 --> 00:02:39,880
+I don't want to put adding some things right, I guess.
+
+16
+00:02:39,880 --> 00:02:47,880
+This may not be too fun for everyone, by giving up this online company to try not to do fair abilities.
+
+17
+00:02:47,880 --> 00:02:53,880
+If you wish, I'd throw something on there and need it there in Rенты,
+
+18
+00:02:53,880 --> 00:03:23,860
+Thank you.
+
+19
+00:03:23,880 --> 00:03:47,360
+Let me start by giving you a brief introduction of the Samsung Security Framework, NUCS.
+
+20
+00:03:47,360 --> 00:03:53,480
+NUCS is a huge, complicated whole system security enhancement based on TrustZone.
+
+21
+00:03:53,480 --> 00:03:58,600
+contains TMA Trash Zone-based Integrity Measurement architecture,
+
+22
+00:04:00,280 --> 00:04:05,720
+real-time kernel protection, TMA periodic kernel measurement,
+
+23
+00:04:07,400 --> 00:04:12,520
+SE Linux enhancement, and many other things to prevent privileged escalation
+
+24
+00:04:12,520 --> 00:04:19,960
+and unauthorized access to the phone's data. Since we are attacking the bootloader,
+
+25
+00:04:19,960 --> 00:04:24,040
+we will only discuss the most relevant part, secure boot.
+
+26
+00:04:27,320 --> 00:04:32,840
+The Android boot procedure starts from the primary boot loader, also called PVL.
+
+27
+00:04:33,400 --> 00:04:40,680
+It will load the second stage boot loader. In Samsung devices, it is called Secure Boot,
+
+28
+00:04:41,720 --> 00:04:48,920
+also known as S-Boot. Secure Boot will bring up the operating system from the boot image.
+
+29
+00:04:49,800 --> 00:04:54,440
+Each boot stage will verify the signature before proceeding to the next stage.
+
+30
+00:04:55,800 --> 00:04:59,480
+The verified key is stored in hardware drilling manufacturing.
+
+31
+00:05:01,160 --> 00:05:05,000
+Primary bootloader only runs secure boot if the signature is valid.
+
+32
+00:05:06,280 --> 00:05:13,000
+We cannot change the primary bootloader. Thus, the phone can only boot the official secure boot image.
+
+33
+00:05:13,000 --> 00:05:21,580
+Next, Secure Boot will launch the boot image or the requiring image if its signature is valid.
+
+34
+00:05:21,580 --> 00:05:29,980
+If the signature is not valid, Secure Boot will boot the image with an additional action,
+
+35
+00:05:29,980 --> 00:05:39,700
+which is blowing the next bit. What will happen if the next bit is set?
+
+36
+00:05:39,700 --> 00:05:48,140
+The provision of Samsung's warranty depends on the Nux bit, also called the warranty bit.
+
+37
+00:05:49,280 --> 00:05:54,140
+Trying to boot an unofficial boot image will tamper with the Nux bit.
+
+38
+00:05:55,780 --> 00:06:00,660
+It is a one-time writable memory. There is no way to recover it.
+
+39
+00:06:01,620 --> 00:06:06,720
+Some services in Trostone cannot be launched if the bit is set,
+
+40
+00:06:06,720 --> 00:06:13,720
+such as Lux Container, Samsung Pay, and Trusted Key Store.
+
+41
+00:06:16,720 --> 00:06:22,720
+After the Galaxy S9, Samsung equipped the storage with default settings.
+
+42
+00:06:22,720 --> 00:06:28,720
+Only after the first time unlocking the screen, the storage gets decrypted.
+
+43
+00:06:29,720 --> 00:06:33,720
+The encryption key is stored in the TrustLong application.
+
+44
+00:06:34,600 --> 00:06:42,200
+We cannot decrypt the storage without unlocking the phone, even if we have root privilege.
+
+45
+00:06:50,920 --> 00:06:56,440
+Other than the storage encryption key, there is lots of critical information
+
+46
+00:06:56,440 --> 00:07:01,880
+that can only be decrypted by translate. Once the next bit is set,
+
+47
+00:07:02,760 --> 00:07:04,920
+most of them will no longer work.
+
+48
+00:07:08,120 --> 00:07:11,720
+This is a diagram of untrust zone exception level.
+
+49
+00:07:12,600 --> 00:07:16,680
+Traditional root method only gets exception level 1 in non-secure world.
+
+50
+00:07:17,320 --> 00:07:22,440
+The data encrypted by trust zone cannot be decrypted if lock speed is set.
+
+51
+00:07:24,360 --> 00:07:30,680
+The way to get sensitive data is privileged escalation to exception level 1 in secure world
+
+52
+00:07:30,680 --> 00:07:37,680
+or trick the device into thinking that the lag speed is still safe.
+
+53
+00:07:37,680 --> 00:07:44,680
+There has been a lot of research into breaking lags protection.
+
+54
+00:07:44,680 --> 00:07:47,680
+I will show you some previous work.
+
+55
+00:07:47,680 --> 00:07:57,680
+First, at Black Hat USA 2017, ReturnsMe defeated lags real-time kernel protection,
+
+56
+00:07:57,680 --> 00:08:09,680
+which is designed to prevent privileged escalation from non-secure wall exception level 0 to non-secure wall exception level 1.
+
+57
+00:08:09,680 --> 00:08:15,680
+And second, at Black Hat Europe 2017,
+
+58
+00:08:15,680 --> 00:08:20,960
+Tenshun Lab demoed a vulnerability to exploit a Samsung pair trustlet in trust zone,
+
+59
+00:08:22,240 --> 00:08:28,240
+resulting in an escalated privilege level from non-secure wall exception level 0
+
+60
+00:08:28,240 --> 00:08:30,480
+to secure wall exception level 1.
+
+61
+00:08:33,920 --> 00:08:40,320
+Last year, Quarks Lab demoed some amazing work that shattered the trust zone protection,
+
+62
+00:08:41,200 --> 00:08:46,880
+resulting in privileged escalation all the way from non-secure wall exception level 0
+
+63
+00:08:46,880 --> 00:08:48,960
+to secure wall exception level 3.
+
+64
+00:08:53,520 --> 00:09:00,400
+But all of this work needs at least non-secure wall exception level 0 privilege.
+
+65
+00:09:02,400 --> 00:09:06,720
+So what if the device is turned off and we don't know the passcode?
+
+66
+00:09:10,320 --> 00:09:22,320
+In this talk, we are discussing the scenario in which we can exploit the locked phone and keep sensitive data reachable.
+
+67
+00:09:26,320 --> 00:09:37,320
+In general, Samsung Secure Boot will verify the boot image and boot into kernel after setting up Secure Monitor and initializing hardware.
+
+68
+00:09:37,320 --> 00:09:46,320
+But, secure boot will enter audit mode if we push the button down and power buttons during the booting process.
+
+69
+00:09:49,320 --> 00:09:56,320
+The audit mode allows user to flash stock firmware to manually update the phone.
+
+70
+00:09:56,320 --> 00:10:02,320
+It not only verifies the signature, but also checks the version number.
+
+71
+00:10:02,320 --> 00:10:12,020
+Audit mode does not allow the user to flash previous versions or unofficial firmware.
+
+72
+00:10:12,020 --> 00:10:19,700
+This exposes a channel for interacting with secure boot.
+
+73
+00:10:19,700 --> 00:10:27,340
+In Audit mode, we found several vulnerabilities which can achieve arbitrary co-execution.
+
+74
+00:10:27,340 --> 00:10:44,160
+The first one can only get code execution on older models, like the Galaxy S8.
+
+75
+00:10:44,160 --> 00:10:46,700
+Odin request is very simple.
+
+76
+00:10:46,700 --> 00:10:49,740
+We send an integer as operation code.
+
+77
+00:10:49,740 --> 00:10:56,100
+The operation code specifies the function we want to use in Odin.
+
+78
+00:10:56,100 --> 00:11:02,660
+And then, we follow that with another integer, sub-operation, to tell Odin whether we are
+
+79
+00:11:02,660 --> 00:11:07,380
+going to set, get, or initialize something.
+
+80
+00:11:07,380 --> 00:11:15,780
+And finally, we can have some argument.
+
+81
+00:11:15,780 --> 00:11:22,660
+In Odin Flash Image command, the image size is provided by the user, and there is no check
+
+82
+00:11:22,660 --> 00:11:25,980
+for it.
+
+83
+00:11:25,980 --> 00:11:32,620
+Even if Odin decides the buffer location by the size, it has an integer overflow bug,
+
+84
+00:11:32,620 --> 00:11:39,460
+so we can choose which buffer location we want.
+
+85
+00:11:39,460 --> 00:11:43,720
+What data is stored behind the buffer?
+
+86
+00:11:43,720 --> 00:11:51,300
+They are the secure boot code segment, VSS, stack and heap.
+
+87
+00:11:51,300 --> 00:12:00,300
+Due to the lack of size check, we can override everything and control the call segment, stack, and heap.
+
+88
+00:12:03,300 --> 00:12:11,300
+Since the Galaxy S8, Samsung has tightened the NNU table and set the call segment to read-only.
+
+89
+00:12:11,300 --> 00:12:23,300
+Fortunately, USB devices have directory memory access, we are not restricted by MNU control.
+
+90
+00:12:23,300 --> 00:12:31,300
+And next, we must deal with the cache incohesence problem.
+
+91
+00:12:31,300 --> 00:12:38,300
+Since USB manipulates memory directly, we cannot affect the cache data.
+
+92
+00:12:38,300 --> 00:12:48,300
+Unfortunately, while receiving data, the CPU keeps tracking the USB event, which is in a while loop.
+
+93
+00:12:48,300 --> 00:12:57,300
+Obviously, this code is cached by the CPU. Therefore, we cannot affect the code data.
+
+94
+00:12:57,300 --> 00:13:05,300
+But there are some memory segments which are not set to be cached, and those segments are the heap.
+
+95
+00:13:08,300 --> 00:13:13,300
+In the wire loop, it will access a heap pointer.
+
+96
+00:13:13,300 --> 00:13:19,300
+Since the heap is not cached, once we overwrite heap data with all new bytes,
+
+97
+00:13:19,300 --> 00:13:25,300
+it will access address 0 and trigger data abort.
+
+98
+00:13:25,300 --> 00:13:31,300
+Once data abort is triggered, it will jump to the arrow handler immediately.
+
+99
+00:13:31,300 --> 00:13:37,300
+The arrow handler function has never been executed, thus it is not cached.
+
+100
+00:13:37,300 --> 00:13:45,820
+We can just put jump-slid on the arrow handle, and we put the share code in front of the
+
+101
+00:13:45,820 --> 00:13:55,860
+code segment to ensure it will not be affected by the CPU cache.
+
+102
+00:13:55,860 --> 00:14:01,220
+In conclusion, we overflow the memory according to the layout.
+
+103
+00:14:01,220 --> 00:14:07,460
+then we can achieve arbitrary code execution in SecureBoot.
+
+104
+00:14:11,460 --> 00:14:16,020
+But we are not able to exploit S9 any later,
+
+105
+00:14:16,020 --> 00:14:19,780
+because the buffer location is changed to another address,
+
+106
+00:14:19,780 --> 00:14:25,220
+which is far from the SecureBoot code segment.
+
+107
+00:14:25,220 --> 00:14:30,220
+we had to figure out a potential exploit path to exploit the newer Marble door.
+
+108
+00:14:33,220 --> 00:14:40,220
+In S9 and later, Odin changed the buffer location to a big address, which is behind the call segment.
+
+109
+00:14:42,220 --> 00:14:48,220
+That is because Odin added the parallel download feature to make the transfer speed faster.
+
+110
+00:14:48,220 --> 00:14:55,220
+To use this feature, Secure Boot needs to boot up another two CPU cores.
+
+111
+00:14:55,220 --> 00:15:03,220
+If the cores boot fails, Secure Boot will fall back to normal download mode,
+
+112
+00:15:03,220 --> 00:15:08,220
+which changes the buffer to the original location.
+
+113
+00:15:08,220 --> 00:15:15,220
+So, we try to find a way to make the CPU boot fails.
+
+114
+00:15:18,220 --> 00:15:30,620
+In secure boot, the CPU boot function will not boot the call if there are more than three
+
+115
+00:15:30,620 --> 00:15:32,620
+calls activated.
+
+116
+00:15:32,620 --> 00:15:41,300
+Thus, if we can boot another call before enter audit mode, we can make the secure boot fall
+
+117
+00:15:41,300 --> 00:15:47,660
+back to normal download mode.
+
+118
+00:15:47,660 --> 00:15:52,140
+That is amazing, there is really a way to achieve it.
+
+119
+00:15:52,140 --> 00:15:58,080
+Secureboot has another mode, which called ur-debug mode.
+
+120
+00:15:58,080 --> 00:16:03,500
+The mode has a command that can boot another call for testing.
+
+121
+00:16:03,500 --> 00:16:10,220
+Most importantly, when it's done, it will not decrease the count of booted calls.
+
+122
+00:16:10,220 --> 00:16:17,940
+We can keep increase the count of booted calls until it exceeds the limit.
+
+123
+00:16:17,940 --> 00:16:27,600
+And the UART mode has another command, download, can enter into OD mode.
+
+124
+00:16:27,600 --> 00:16:35,520
+So if we can enter UART mode, we can exploit S10 with the vulnerability.
+
+125
+00:16:35,520 --> 00:16:40,600
+We found that SecureBoot will track the resistor in the USB cable.
+
+126
+00:16:40,600 --> 00:16:48,620
+If the resistor matches a specific value, it will enter UART mode.
+
+127
+00:16:48,620 --> 00:16:55,260
+But even some researchers successfully entered UART mode in Galaxy S7.
+
+128
+00:16:55,260 --> 00:17:02,340
+The method was no longer working in Galaxy S8 and later, because the cable was changed
+
+129
+00:17:02,340 --> 00:17:11,340
+to type C. We have tried many other methods, such as making a type C cable connected with
+
+130
+00:17:11,340 --> 00:17:20,460
+a pull-down and pull-up resistor, or making the type C cable in accessory mode, or trying
+
+131
+00:17:20,460 --> 00:17:29,860
+communicate with S10 by the vendor-defined message. All of this work all failed. Secure
+
+132
+00:17:29,860 --> 00:17:41,440
+cannot detect the resistor so six months later we stopped trying and reported the
+
+133
+00:17:41,440 --> 00:17:56,800
+bug to Samsung on August 2019 and a several days later Samsung got back to
+
+134
+00:17:56,800 --> 00:18:03,700
+me and told me that this issue was duplicated. This was a real blow to me,
+
+135
+00:18:03,700 --> 00:18:09,520
+and I changed my research target to other areas.
+
+136
+00:18:12,000 --> 00:18:20,400
+Several months later, Samsung released the patch. The title is Potential Integer
+
+137
+00:18:20,400 --> 00:18:26,520
+Overflow. After reading the description, I guess the reporter did not notice that
+
+138
+00:18:26,520 --> 00:18:33,120
+that the bug can lead to arbitrary co-execution.
+
+139
+00:18:33,120 --> 00:18:39,900
+The patch description said it fixed the unsigned comparison issue.
+
+140
+00:18:39,900 --> 00:18:46,640
+But actually, Samsung did not only make the comparison unsigned, but also added a size
+
+141
+00:18:46,640 --> 00:18:51,960
+check to prevent buffer overflow.
+
+142
+00:18:51,960 --> 00:19:01,500
+After looking at the patch, I was wondering if there was any way to bypass the track.
+
+143
+00:19:01,500 --> 00:19:12,740
+Several days later, I found another vulnerability that can bypass the track.
+
+144
+00:19:12,740 --> 00:19:19,380
+After looking more deeply into the function related to USB receive, I found that the provided
+
+145
+00:19:19,380 --> 00:19:27,320
+The size is calculated as a line size with a stringy value.
+
+146
+00:19:27,320 --> 00:19:33,940
+After cross-referencing the list value with all the areas of the system, we found that
+
+147
+00:19:33,940 --> 00:19:38,880
+it can be changed by Odin request.
+
+148
+00:19:38,880 --> 00:19:45,940
+According to the debug message, we know it is used to specify the size of data packets.
+
+149
+00:19:45,940 --> 00:19:49,940
+the value doesn't have any checks.
+
+150
+00:19:53,940 --> 00:19:59,940
+Therefore, if we set the size of data packet to a larger amount,
+
+151
+00:19:59,940 --> 00:20:05,940
+we can bypass the check last Samsung edit in October 2019
+
+152
+00:20:05,940 --> 00:20:09,940
+and exploit the same buffer again.
+
+153
+00:20:09,940 --> 00:20:17,940
+This time, I reported the bug immediately.
+
+154
+00:20:17,940 --> 00:20:26,940
+Several months later, Samsung released the patch in January 2020.
+
+155
+00:20:26,940 --> 00:20:37,940
+They added a check to ensure the size of data packets cannot be larger than 100,000 in HEX.
+
+156
+00:20:37,940 --> 00:20:45,940
+The patch gave me an idea, and three hours later, I figure out another exploit.
+
+157
+00:20:45,940 --> 00:20:49,940
+So, let's discuss the third vulnerability.
+
+158
+00:20:49,940 --> 00:20:56,940
+This time, we can exploit the Galaxy S10.
+
+159
+00:20:56,940 --> 00:21:02,940
+Odin has another operation command, can flush the partition information table.
+
+160
+00:21:02,940 --> 00:21:12,940
+The table is small. Let's only allocate a heap buffer to store it instead of using the big buffer in front of core segment.
+
+161
+00:21:14,940 --> 00:21:25,940
+We cannot directly overflow it, because there is a check to make sure that the size is smaller than the heap buffer to prevent buffer overflow.
+
+162
+00:21:25,940 --> 00:21:33,360
+Remember the second vulnerability I just mentioned?
+
+163
+00:21:33,360 --> 00:21:38,620
+We can use the size of peci data to enlarge the receive size.
+
+164
+00:21:38,620 --> 00:21:46,840
+Although the page added an additional check to the size of peci data, the limit is 6f
+
+165
+00:21:46,840 --> 00:21:49,900
+in hex.
+
+166
+00:21:49,900 --> 00:21:57,820
+But the heap buffer size for the partition information table has only 2000 in hex, which
+
+167
+00:21:57,820 --> 00:22:04,980
+could lead to heap overflow.
+
+168
+00:22:04,980 --> 00:22:13,140
+This is the pseudocode that shows what happens when Odin tries to receive data.
+
+169
+00:22:13,140 --> 00:22:19,060
+Looking to the pseudocode, we can see the USB receive will receive the packet data size
+
+170
+00:22:19,060 --> 00:22:28,920
+variable only if the request size is bigger than 6F in hex, or if the first receive attempt
+
+171
+00:22:28,920 --> 00:22:33,340
+cannot get enough data.
+
+172
+00:22:33,340 --> 00:22:37,700
+This is what we need to achieve.
+
+173
+00:22:37,700 --> 00:22:46,420
+But the USB receive function will keep receiving data until the past size is reached.
+
+174
+00:22:46,420 --> 00:22:54,520
+Even if we send data in huge intervals, the device will still be waiting for data.
+
+175
+00:22:54,520 --> 00:23:05,740
+Actually, we found the bug at the very beginning, but we thought it was an unexploitable vulnerability.
+
+176
+00:23:05,740 --> 00:23:11,860
+We cannot make the USB receive function get insufficient data.
+
+177
+00:23:11,860 --> 00:23:19,420
+So we wasted our time on vulnerability 1.
+
+178
+00:23:19,420 --> 00:23:25,520
+But after seeing the patch of vulnerability 2, I was struck by lightning.
+
+179
+00:23:25,520 --> 00:23:31,000
+I had a light bulb moment.
+
+180
+00:23:31,000 --> 00:23:39,920
+This time, I came up with an idea, which was to send only a very small amount of data,
+
+181
+00:23:39,920 --> 00:23:46,240
+and then remove and reinsert the USB cable.
+
+182
+00:23:46,240 --> 00:23:52,680
+The first USB receive returned in sufficient size, which allowed us to reach the second
+
+183
+00:23:52,680 --> 00:23:54,900
+USB receive.
+
+184
+00:23:54,900 --> 00:24:05,280
+This time, it's received with the size of PEGI data, allow us to overflow the heap buffer.
+
+185
+00:24:05,280 --> 00:24:09,940
+It's turned into a heap overflow challenge.
+
+186
+00:24:09,940 --> 00:24:23,220
+We use the traditional heap exploitation technique, house of spirit, to achieve arbitrary co-execution.
+
+187
+00:24:23,220 --> 00:24:28,920
+There is no check for the double linking list for the heap, so we can fake the chunks and
+
+188
+00:24:28,920 --> 00:24:37,840
+overwrite the heap's metadata to insert our faked chunk into the heap.
+
+189
+00:24:37,840 --> 00:24:44,460
+Once we can insert the fake chunk into the heap and free it, we can overwrite arbitrary
+
+190
+00:24:44,460 --> 00:24:56,040
+address. But there is a limitation. The unused bit must not be zero. Since secure
+
+191
+00:24:56,040 --> 00:25:03,540
+boot is 64-bit, we cannot overwrite the GOT entry function pointers in data
+
+192
+00:25:03,540 --> 00:25:12,300
+segment. Because the unused bit is in the higher part of the address, which always
+
+193
+00:25:12,300 --> 00:25:20,100
+be 0 when the data is a pointer.
+
+194
+00:25:20,100 --> 00:25:26,300
+The only chance is to override the return address on stack, if we can control the first
+
+195
+00:25:26,300 --> 00:25:30,540
+local variable in the functions.
+
+196
+00:25:30,540 --> 00:25:36,260
+But there are only three function calls after we free our fake heap chunk.
+
+197
+00:25:36,260 --> 00:25:43,460
+Luckily, one of those is the Odding command handler.
+
+198
+00:25:43,460 --> 00:25:48,160
+The Odding command buffer is the first local variable in the handler.
+
+199
+00:25:48,160 --> 00:25:55,160
+The command buffer is in our control, which means we can fulfill the limitation and set
+
+200
+00:25:55,160 --> 00:26:01,440
+the unused bit to non-zero.
+
+201
+00:26:01,440 --> 00:26:06,620
+Now we can execute arbitrary call in Secure Boot.
+
+202
+00:26:06,620 --> 00:26:10,780
+What's the next step?
+
+203
+00:26:10,780 --> 00:26:17,280
+Since we overwrite the BSS stack and heap with all neural bytes, it's hard to recover
+
+204
+00:26:17,280 --> 00:26:18,280
+the data.
+
+205
+00:26:18,280 --> 00:26:28,800
+Thus, we restart the booting process in Secure Boot to recover this data.
+
+206
+00:26:28,800 --> 00:26:37,540
+But we only get exception level 1 in non-secure world, some data in TrustZone already initialized.
+
+207
+00:26:37,540 --> 00:26:49,680
+We cannot init it twice, therefore we must skip the TrustZone related code to keep TrustZone stable.
+
+208
+00:26:49,680 --> 00:26:54,840
+And we continue the booting process until loading kernel to memory.
+
+209
+00:26:54,840 --> 00:27:01,280
+In this step, we replace the kernel image with a custom one.
+
+210
+00:27:01,280 --> 00:27:05,720
+So, this is our exploit step.
+
+211
+00:27:05,720 --> 00:27:11,400
+First, we set the size of the packet data to a big number.
+
+212
+00:27:11,400 --> 00:27:19,840
+Second, we send the Odin PIT Flash command to trigger USB data received.
+
+213
+00:27:19,840 --> 00:27:27,840
+Third, we remove and reinsert the USB cable, trigger the second USB receive.
+
+214
+00:27:27,840 --> 00:27:32,840
+This time, we overwrite the metadata of heap trunk.
+
+215
+00:27:32,840 --> 00:27:40,840
+Fourth, we send another Odding command to trigger mainlock and free a heap buffer.
+
+216
+00:27:40,840 --> 00:27:48,840
+Finally, the free action overwrite the return address on stack, then we can jump to our
+
+217
+00:27:48,840 --> 00:27:57,280
+The share code will boot custom kernel to get root privilege.
+
+218
+00:27:57,280 --> 00:28:02,100
+Now we got the exception level 1 in normal world.
+
+219
+00:28:02,100 --> 00:28:10,960
+The data in secure world is still reachable, since the nut speed is safe.
+
+220
+00:28:10,960 --> 00:28:14,980
+But we don't have the screen passcode.
+
+221
+00:28:14,980 --> 00:28:20,000
+The phone is still locked.
+
+222
+00:28:20,000 --> 00:28:22,620
+We cannot read sensitive data.
+
+223
+00:28:22,620 --> 00:28:25,960
+The storage is still encrypted.
+
+224
+00:28:25,960 --> 00:28:31,100
+The encryption key for storage is stored in the gatekeeper translate.
+
+225
+00:28:31,100 --> 00:28:33,480
+Some data also cannot be reached.
+
+226
+00:28:33,480 --> 00:28:38,960
+For example, credit card information in Samsung Pay translate.
+
+227
+00:28:38,960 --> 00:28:43,600
+There are many ways to reach the data.
+
+228
+00:28:43,600 --> 00:28:50,680
+We can wait for the user to unlock their phone, as shown in the demo video.
+
+229
+00:28:50,680 --> 00:28:56,720
+Since we are in non-secure kernel mode, we also can destroy the request from non-secure
+
+230
+00:28:56,720 --> 00:29:04,960
+user mode to secure world.
+
+231
+00:29:04,960 --> 00:29:14,220
+Furthermore, it exposes an attacking service for us.
+
+232
+00:29:14,220 --> 00:29:21,060
+Since the last bit is safe, the data stored in secure world still existed.
+
+233
+00:29:21,060 --> 00:29:27,460
+There are many more vulnerabilities that we can exploit to get into the secure world.
+
+234
+00:29:27,460 --> 00:29:35,820
+Our team found more than 10 vulnerabilities in 2019 and still find others in 2020.
+
+235
+00:29:35,820 --> 00:29:43,100
+Outside of our team, there are 10 times more vulnerabilities found by other researchers.
+
+236
+00:29:43,100 --> 00:29:51,980
+All of these vulnerabilities need at least economic privilege in non-secure world.
+
+237
+00:29:51,980 --> 00:29:58,860
+For example, we can attack the gatekeeper translate to decrypt the storage.
+
+238
+00:29:58,860 --> 00:30:05,720
+In May 2019, we reported a vulnerability in gatekeeper translate, which allows us to
+
+239
+00:30:05,720 --> 00:30:09,420
+brute force the screen passcode.
+
+240
+00:30:09,420 --> 00:30:17,780
+According to our test, it takes only a few hours to try all possible pattern calls.
+
+241
+00:30:17,780 --> 00:30:22,980
+Combined with the vulnerability in gatekeep translate, we can unlock the phone and reach
+
+242
+00:30:22,980 --> 00:30:27,920
+the sensitive data.
+
+243
+00:30:27,920 --> 00:30:35,080
+In conclusion, even if the data is stored in the secure world, it still doesn't mean
+
+244
+00:30:35,080 --> 00:30:45,080
+is 100 percent secure. But it actually made exploiting harder. We need multiple vulnerabilities
+
+245
+00:30:45,080 --> 00:30:53,720
+to retrieve the protected data. We need a landing exploit, maybe remote call execution,
+
+246
+00:30:54,280 --> 00:31:00,280
+or local secure boot exploit, followed by a kernel exploit to achieve privileged
+
+247
+00:31:00,280 --> 00:31:05,320
+escalation to non-secure wall kernel mode.
+
+248
+00:31:05,320 --> 00:31:11,320
+After getting the root privilege, we still need a vulnerability in trusset to break into
+
+249
+00:31:11,320 --> 00:31:15,440
+secure wall exception level 0.
+
+250
+00:31:15,440 --> 00:31:23,720
+If we want to get all sensitive data instead of one specific piece, we need a secure OS
+
+251
+00:31:23,720 --> 00:31:29,280
+vulnerability to control the full device.
+
+252
+00:31:29,280 --> 00:31:38,920
+Without all of this, the data in the phone is still safe.
+
+253
+00:31:38,920 --> 00:31:50,720
+This is a timeline for all the report times and page dates.
+
+254
+00:31:50,720 --> 00:31:52,720
+Thanks everyone.
+
+255
+00:31:52,720 --> 00:31:54,460
+Thank you for listening.
+
+256
+00:31:54,460 --> 00:32:03,020
+And if you have any questions, please don't hesitate to ask me or reach out to me by email
+
+257
+00:32:03,020 --> 00:32:04,020
+in the future.
+
+258
+00:32:04,020 --> 00:32:05,140
+Thank you.
+
+259
+00:32:24,460 --> 00:32:31,460
+What's the base for you say the model?
+
+260
+00:32:39,460 --> 00:32:43,460
+Let me see the other questions.
+
+261
+00:32:43,460 --> 00:32:50,460
+If a user reboot their device, will the device properly reboot the original framework?
+
+262
+00:32:50,460 --> 00:33:00,460
+We don't change the firmware, so if the device reboots, it will reboot the original firmware.
+
+263
+00:33:09,460 --> 00:33:15,460
+What were the two SVs on the next two slides?
+
+264
+00:33:16,460 --> 00:33:19,460
+Let me check the slides.
+
+265
+00:33:20,460 --> 00:33:38,960
+Sorry, I cannot find which SVE you mentioned.
+
+266
+00:33:38,960 --> 00:33:44,960
+John, can you ask again?
+
+267
+00:33:44,960 --> 00:34:09,960
+Oh, for Kelly's questions, Samsung builds multiple versions of their phones with different
+
+268
+00:34:09,960 --> 00:34:11,360
+hardware.
+
+269
+00:34:11,360 --> 00:34:16,360
+we exploit the hardware with in USA.
+
+270
+00:34:18,640 --> 00:34:23,640
+I think for, yeah, the S10, S9, S8,
+
+271
+00:34:29,720 --> 00:34:33,920
+with Xenose models, all affected by the vulnerabilities.
+
+272
+00:34:37,500 --> 00:34:40,440
+And for the TICOS question,
+
+273
+00:34:40,440 --> 00:34:43,440
+How were you able to view the boot information?
+
+274
+00:34:44,460 --> 00:34:46,580
+Just reverse the boot image.
+
+275
+00:34:48,940 --> 00:34:53,560
+Yeah, just reverse the boot image as secure boot.
+
+276
+00:35:04,400 --> 00:35:05,820
+In demo video.
+
+277
+00:35:10,440 --> 00:35:24,940
+In demo video, we just enter the audio mode and we can view the booting mode information.
+
+278
+00:35:24,940 --> 00:35:39,880
+And for John's questions, let me check.
+
+279
+00:35:39,880 --> 00:35:42,940
+Oh, I will answer you in the test box.
+
+280
+00:36:02,820 --> 00:36:04,160
+Any other questions?
+
+281
+00:36:09,880 --> 00:36:34,360
+Okay, thank you, thanks everyone.
+

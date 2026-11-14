@@ -1,0 +1,1574 @@
+WEBVTT
+
+00:00.000 --> 00:10.020
+all right thank you all for coming here I know it's the last talk of the day and I just hope
+
+00:10.020 --> 00:17.340
+you'll enjoy it as much as I will let me show you the darkest corners of bootloader security
+
+00:17.340 --> 00:23.940
+my name is Ferdi I'm part of a group in Google clouds that actually performs low-level attacks
+
+00:23.940 --> 00:30.020
+on hardware and firmware and i usually do this by basically doing a penetration test
+
+00:30.580 --> 00:37.220
+that means i get all sorts of devices and i get to open them up i you know study the pcbs
+
+00:38.020 --> 00:47.780
+look at each chip try and reverse engineer firmware and basically try and uncover any low
+
+00:47.780 --> 00:54.980
+level firmware and hardware vulnerabilities that there might be hidden and the goal is to find
+
+00:54.980 --> 01:01.540
+vulnerabilities that we can actually exploit that's useful for demonstrating risk and the idea
+
+01:01.540 --> 01:10.020
+there is that hopefully you know we can we can report these and and and you know find these
+
+01:10.020 --> 01:15.940
+vulnerabilities and report them responsibly that's that's the idea but these vulnerabilities are
+
+01:15.940 --> 01:19.780
+actually a little bit different than regular software vulnerabilities so let me say a couple
+
+01:19.780 --> 01:26.660
+words on the context in which they're exploitable so if you have an embedded device or just any
+
+01:26.660 --> 01:31.060
+device really you have a supply chain right because your device has to be manufactured
+
+01:31.060 --> 01:36.260
+it has to be built and it consists of parts that you know come together and when that all has
+
+01:36.260 --> 01:41.940
+happened it's actually shipped and there's a lot of hands touching the device even before it is
+
+01:41.940 --> 01:48.180
+actually deployed. That means attackers will have time-limited access, but they will have
+
+01:48.180 --> 01:53.300
+physical access to the device. And time-limited in this sense can already be in the order of days,
+
+01:53.300 --> 01:59.460
+so you can pull off quite a lot of nice hardware and firmware attacks during that time. And then
+
+01:59.460 --> 02:04.100
+even when it's deployed and, you know, even assuming you have a perfect supply chain,
+
+02:04.660 --> 02:10.900
+there's legitimate use cases to access the device, either remotely with credentials or physically
+
+02:10.900 --> 02:17.620
+to do some repairs maybe so in that case attackers might also be able to physically access the device
+
+02:17.620 --> 02:23.220
+and perform some attacks and it gets even more interesting if you consider bare metal clouds
+
+02:23.220 --> 02:30.180
+offerings in these scenarios you know there's nothing that stands you know between an attacker
+
+02:30.180 --> 02:35.700
+that's already privileged on the device and you know they might want to mess with the hardware
+
+02:35.700 --> 02:42.420
+and firmware a bit so what's important in these scenarios is that you can actually bring back the
+
+02:42.420 --> 02:47.300
+device into a trustworthy state that's what we're trying to do that's why we need hardware security
+
+02:47.300 --> 02:52.500
+and of course once the tenant leaves the device you also want to make sure that you can return
+
+02:52.500 --> 02:59.060
+the device into a trustworthy state and you know there's many definitions of trustworthy but for
+
+02:59.060 --> 03:03.820
+For sure, what you want to avoid is some persistence.
+
+03:03.820 --> 03:09.580
+Persistence in firmware, persistence in flash or peripheral devices.
+
+03:09.580 --> 03:12.380
+And I find this work very interesting.
+
+03:12.380 --> 03:18.840
+I will show some of our findings to you today.
+
+03:18.840 --> 03:21.080
+All of this has, of course, been reported responsibly.
+
+03:21.080 --> 03:25.100
+Our idea is that this low-level perspective can contribute to all of the other good stuff
+
+03:25.100 --> 03:29.980
+that's already happening in the security community and standard bodies and the idea is that hopefully
+
+03:29.980 --> 03:33.740
+we can protect not just google clouds infrastructure but that of the entire world because
+
+03:33.740 --> 03:39.660
+a lot of this work is published and i actually you know would like to thank everyone who's worked on
+
+03:39.660 --> 03:48.220
+this and allow me to present my findings here today so i said bottom up right we we open up
+
+03:48.220 --> 03:54.300
+devices we start with looking at chips at debugging interfaces and and reverse engineering some
+
+03:54.300 --> 04:00.240
+hardware, and eventually you end up reverse engineering firmware, and once you did that,
+
+04:00.240 --> 04:01.840
+there's no way around bootloaders.
+
+04:01.840 --> 04:06.420
+This is what I'll be showing you today.
+
+04:06.420 --> 04:14.340
+Bootloaders often have a security critical role in all sorts of devices, and yeah, we
+
+04:14.340 --> 04:15.340
+will have a look at this.
+
+04:15.340 --> 04:21.400
+I will basically show you two critical vulnerabilities that I identified, and then I'm going to tell
+
+04:21.400 --> 04:26.440
+how to fix it all because I hope that we'll be interested in fixing it and I think this is
+
+04:26.440 --> 04:32.440
+actually a good chance to do so across a wide range of devices. And just some fun facts for you.
+
+04:33.240 --> 04:38.120
+We have reviewed more than 15 different device types and these devices were using open source
+
+04:38.120 --> 04:43.160
+bootloaders and all of them have been affected by bootloader vulnerabilities at some point.
+
+04:44.120 --> 04:49.160
+What does that mean? A bootloader vulnerability in this case would have allowed an attacker
+
+04:49.160 --> 04:56.200
+to gain code execution in the bootloader context that's usually very very privileged and basically
+
+04:56.200 --> 05:01.800
+allows you to compromise all further boot stages or the operating system and i think this is a
+
+05:01.800 --> 05:09.480
+concern um i i hope this is a chance for me to you know present this and point at the gaps that i can
+
+05:09.480 --> 05:14.760
+see and show you some of the examples now you might be wondering what kind of device types
+
+05:14.760 --> 05:20.380
+that we look at this was usually related to data center equipment so compute
+
+05:20.380 --> 05:24.940
+platforms like servers but also appliances security appliances and even
+
+05:24.940 --> 05:31.460
+HSMs so this is a wide range and I'm actually convinced that the bootloaders
+
+05:31.460 --> 05:37.380
+that we will talk about here will actually extend and cover a wider range
+
+05:37.380 --> 05:43.800
+of devices like IOT and cars and most likely you will be recognizing some of
+
+05:43.800 --> 05:50.840
+open source bootloaders as well. Now I will kick this off with one of the first vulnerabilities
+
+05:50.840 --> 06:00.680
+that I found in Cisco devices. So this is a Cisco Nexus N9000 series switch. There's different
+
+06:00.680 --> 06:08.120
+variations, different port counts, but inside they all look similar if you open them up, because
+
+06:08.840 --> 06:13.320
+there's a lot of specialized hardware like ASICs that handle network traffic of course.
+
+06:13.800 --> 06:17.120
+But it's all bootstrapped by this, what I call the management board,
+
+06:17.780 --> 06:19.760
+shown here on the right-hand picture.
+
+06:20.900 --> 06:25.160
+So in this picture, you should be able to see an SSD down there.
+
+06:25.620 --> 06:28.300
+And under the heatsink, there's an Intel processor.
+
+06:29.400 --> 06:33.580
+And Cisco actually invested, you know, some resources there
+
+06:33.580 --> 06:34.980
+and hardened the boot chain.
+
+06:35.440 --> 06:37.180
+So this device has a secure boot chain.
+
+06:37.180 --> 06:38.740
+It has a root-of-trust chip.
+
+06:39.860 --> 06:43.620
+And, yeah, you could consider it state-of-the-art, in my opinion.
+
+06:43.800 --> 06:48.320
+And, well, of course, I as an attacker don't like this.
+
+06:48.320 --> 06:50.720
+I want to run my own software on this.
+
+06:50.720 --> 06:53.680
+I want to run Doom or whatever.
+
+06:53.680 --> 06:58.000
+And since it's an Intel processor, I would expect to find Intel firmware.
+
+06:58.000 --> 06:59.440
+And actually, that's what I did.
+
+06:59.440 --> 07:03.160
+So I took out the mainboard, turned it around, and there it is.
+
+07:03.160 --> 07:06.240
+There you have your small SPI flash chip.
+
+07:06.240 --> 07:09.560
+This is very common in these types of devices.
+
+07:09.560 --> 07:15.120
+And when you dump it and open it in UEFI tool, you find that this is a firmware volume.
+
+07:15.440 --> 07:20.240
+There's a couple of firmware volumes on there with all sorts of drivers and EDK2-based firmware.
+
+07:20.580 --> 07:22.860
+And one of them is actually called Cisco Grub.
+
+07:23.200 --> 07:30.480
+And since I already knew they had implemented secure boot, I thought maybe Cisco Grub actually is the bootloader.
+
+07:30.480 --> 07:36.380
+And maybe it's involved in enforcing secure boot and signature checks for the operating system image.
+
+07:36.380 --> 07:46.580
+So I fired up Ghidra, loaded up this binary, and what I found were some strings that seemed a little odd, right?
+
+07:46.760 --> 07:50.860
+And it actually seemed like they had just taken grub.
+
+07:51.280 --> 07:57.440
+But I expected to see grub too, which is like the modern version of it and the one that all Linux distribution use nowadays.
+
+07:58.000 --> 08:05.280
+But instead, after googling some of the strings, I found that they had actually forked grub legacy, the one from the 90s.
+
+08:05.280 --> 08:08.320
+and that was surprising.
+
+08:09.160 --> 08:10.920
+So then I thought, you know,
+
+08:12.020 --> 08:14.700
+how on earth did they actually implement Secure Boot
+
+08:14.700 --> 08:16.020
+with such an old bootloader?
+
+08:16.300 --> 08:17.960
+Grub legacy didn't support Secure Boot.
+
+08:17.960 --> 08:21.640
+So the way that this works is Cisco Grub
+
+08:21.640 --> 08:23.860
+will identify all kinds of boot devices.
+
+08:24.420 --> 08:25.900
+This is mostly the internal flash
+
+08:25.900 --> 08:28.560
+that you saw on the previous image,
+
+08:28.820 --> 08:30.500
+but it could also be a USB drive
+
+08:30.500 --> 08:32.700
+that you plug into the front of the device.
+
+08:32.700 --> 08:38.700
+And once it's identified a bootable device, it will try and identify OS images.
+
+08:38.700 --> 08:41.700
+They always kind of look the same and have some signatures on them.
+
+08:41.700 --> 08:49.700
+And once it's loaded in an operating system image, it will verify the signature and execute it, if it's proper.
+
+08:49.700 --> 08:55.700
+This first part here, this actually requires interacting with a file system.
+
+08:55.700 --> 09:11.860
+And the way that this is commonly solved today in modern firmware is that you use EDK2 or load image which hooks into the EFI firmware where someone else has implemented a way to interact with some file system and load a file.
+
+09:12.540 --> 09:17.100
+But Grub Legacy didn't have all that because it's from the 90s, right?
+
+09:17.100 --> 09:19.380
+So they implemented all kinds of file system drivers.
+
+09:19.380 --> 09:24.000
+and what actually happens here is that there's a big loop
+
+09:24.000 --> 09:27.400
+that basically brute forces all available file system backends
+
+09:27.400 --> 09:29.940
+and the first one that mounts successfully
+
+09:29.940 --> 09:33.780
+will actually be used to try and find an operating system image.
+
+09:36.100 --> 09:40.500
+My idea was maybe I can find a bug in such a file system
+
+09:40.500 --> 09:43.920
+because at the time they had around 12 or 13
+
+09:43.920 --> 09:47.380
+like random file systems like even RyzaFS
+
+09:47.380 --> 09:51.360
+So I thought, okay, there might be actually a chance for me to find a vulnerability.
+
+09:52.000 --> 09:58.720
+And looking at the XFS driver, I found this function that's responsible for listing files.
+
+09:59.460 --> 10:05.620
+And here you can see there's this link buff, stack allocated buffer, that has a size.
+
+10:05.740 --> 10:08.800
+And its size is controlled by a variable in the super block.
+
+10:09.180 --> 10:12.340
+And you need to remember that the super block is actually stored externally.
+
+10:12.760 --> 10:15.980
+It's stored on a USB drive or the internal SSD.
+
+10:15.980 --> 10:20.980
+And of course, if I have physical access, or maybe even remote access with a root shell,
+
+10:20.980 --> 10:26.020
+I can just modify that superblock, set its size to zero, which will make the next length
+
+10:26.020 --> 10:34.600
+check here succeed, and end up calling memcopy into my zero size link buff buffer with an
+
+10:34.600 --> 10:36.120
+attacker-controlled size.
+
+10:36.120 --> 10:40.120
+So this is a textbook example of a buffer overflow.
+
+10:40.120 --> 10:44.000
+Of course, there's no exploit mitigations or anything like that.
+
+10:44.000 --> 10:48.560
+And I think there's two scenarios in which you can exploit this.
+
+10:48.560 --> 10:54.820
+The first one is what I've hinted at already, like you can plug a USB drive that you prepared
+
+10:54.820 --> 11:00.520
+into the front of the device that's shown here on this picture and, you know, just walk
+
+11:00.520 --> 11:06.400
+up to it, plug it in, and the next time the device will reboot, it could trigger the vulnerability.
+
+11:06.400 --> 11:11.200
+Or you could do that remotely, you know, maybe you have administrative credentials or another
+
+11:11.200 --> 11:14.080
+a vulnerability, you can get a shell.
+
+11:14.080 --> 11:15.360
+This is actually a feature.
+
+11:15.360 --> 11:18.160
+You can just ask the device to give you a shell
+
+11:18.160 --> 11:20.900
+and then use that shell to write the malicious XFF partition
+
+11:20.900 --> 11:22.480
+to disk and reboot.
+
+11:22.480 --> 11:25.760
+And what happens then is that Grub will, or Cisco Grub,
+
+11:25.760 --> 11:27.740
+will open a well-known file.
+
+11:27.740 --> 11:30.100
+And you can use that to exploit the buffer overflow, get code
+
+11:30.100 --> 11:34.260
+execution, bypass the signature checks, and so on.
+
+11:34.260 --> 11:37.300
+If you actually do this, it would look similar to this.
+
+11:37.300 --> 11:39.100
+I did this for demonstration purposes here.
+
+11:39.100 --> 11:40.960
+This is actually in an emulator, where
+
+11:40.960 --> 11:43.100
+you get a nice register dump at the end.
+
+11:43.100 --> 11:45.860
+But basically, I set the storage device.
+
+11:45.860 --> 11:49.400
+I list a file, and this triggers the buffer overflow
+
+11:49.400 --> 11:52.940
+in the XFS file system backend.
+
+11:52.940 --> 11:53.440
+Cool.
+
+11:56.500 --> 11:58.500
+What does this allow you to do?
+
+11:58.500 --> 12:02.560
+You get code execution in the context of Cisco Grub.
+
+12:02.560 --> 12:03.500
+That's very privileged.
+
+12:03.500 --> 12:05.300
+There's no exploit mitigations.
+
+12:05.300 --> 12:07.480
+I find this very hard to detect, honestly,
+
+12:07.480 --> 12:10.880
+because the device doesn't really give you that many ways
+
+12:10.880 --> 12:12.800
+that you could detect an attack like that.
+
+12:12.800 --> 12:14.800
+Yes, they have a root of trust chip,
+
+12:14.800 --> 12:19.760
+but even if it did gather measurements or hashes
+
+12:19.760 --> 12:22.600
+of the firmware and stores them in a safe place,
+
+12:22.600 --> 12:24.280
+there's no software interface that you can use
+
+12:24.280 --> 12:27.520
+to interface with that root of trust chip yet.
+
+12:27.520 --> 12:33.440
+And also, all recovery functions that this device provides
+
+12:33.440 --> 12:38.440
+are based or implemented in either Grub itself,
+
+12:38.440 --> 12:40.940
+maybe some other drivers, but that's unlikely,
+
+12:40.940 --> 12:44.580
+or most of it actually lives in the Linux operating system
+
+12:44.580 --> 12:47.000
+that has started after you already compromised Grub.
+
+12:47.000 --> 12:49.900
+So if you're smart about it, you could potentially
+
+12:49.900 --> 12:52.100
+try and hook into these recovery functions as well
+
+12:52.100 --> 12:55.700
+and gain a stealthy foothold to whichever network
+
+12:55.700 --> 12:57.700
+that device is deployed in.
+
+12:57.700 --> 12:59.720
+Or often these devices are also used
+
+12:59.720 --> 13:02.720
+to run certain applications that have credentials.
+
+13:02.720 --> 13:09.320
+And, yeah, this is cool as long as you, again, have credentials to the device or physical access.
+
+13:10.040 --> 13:11.520
+And it really doesn't take that long.
+
+13:11.660 --> 13:14.380
+Like, plugging in a USB drive and letting it boot takes, like, three minutes.
+
+13:15.760 --> 13:19.900
+I would like to thank Cisco for addressing these vulnerabilities and fixing them.
+
+13:20.680 --> 13:22.180
+We had a CVE assigned.
+
+13:22.900 --> 13:27.720
+But what actually surprised me was that I googled the vulnerable code,
+
+13:27.720 --> 13:30.500
+and it showed up in a bunch of other places.
+
+13:30.500 --> 13:36.740
+because actually thinking about it now makes kind of sense to me because they
+
+13:36.740 --> 13:43.100
+like grub legacy had a very easy to use minimal implementation of all these
+
+13:43.100 --> 13:47.540
+fault systems that you can just drop into your projects without including any
+
+13:47.540 --> 13:51.900
+other libraries so it ended up you being used in some tools that the Zen
+
+13:51.900 --> 13:56.900
+hypervisor it has and actually in some other bootloader in core boot filo
+
+13:56.900 --> 14:02.940
+payload, and we had security advisories published and CVs assigned for that as well.
+
+14:02.940 --> 14:07.240
+Thanks to all the maintainers who have patched this, this is not a problem anymore.
+
+14:07.240 --> 14:10.420
+But of course, it kind of makes you wonder.
+
+14:10.420 --> 14:17.280
+It certainly made me wonder, which is why I then went to the next project in which I
+
+14:17.280 --> 14:20.760
+looked at a Dell system.
+
+14:20.760 --> 14:30.620
+So on these systems, you know, what you have to remember is that, of course, the likelihood
+
+14:30.620 --> 14:35.940
+that another project was reusing drop legacy was different, but you can see the same patterns
+
+14:35.940 --> 14:36.940
+here.
+
+14:36.940 --> 14:41.980
+Like Dell will also have a secure boot chain, and yeah, we will also have some nice memory
+
+14:41.980 --> 14:51.980
+corruption vulnerability there, which I will talk about in a second.
+
+14:51.980 --> 15:00.600
+So Dell Enterprise products have a remote management function called iDRAC.
+
+15:00.600 --> 15:05.380
+It's the first thing that starts when you power on a PowerEdge server, for example.
+
+15:05.380 --> 15:10.080
+It has its own processor, its own SoC with dedicated storage with, you know, a bunch
+
+15:10.080 --> 15:17.320
+of RAM and so on. And yeah, it's a baseboard management controller called iDRAC. Its current
+
+15:17.320 --> 15:21.700
+version iDRAC 9 is what I reviewed, and it's used across all sorts of products. So I'm
+
+15:21.700 --> 15:25.280
+going to refer to servers, I'm going to show you pictures of servers, but actually this
+
+15:25.280 --> 15:30.440
+is also used in storage appliances and all sorts of other things, and they reused a lot
+
+15:30.440 --> 15:37.820
+of it, actually the same SOC, and the amount of reuse is really nice for me as an attacker
+
+15:37.820 --> 15:44.320
+of course, but of course underlines the criticality of this device actually executing only code
+
+15:44.320 --> 15:46.680
+that was signed by Dell.
+
+15:46.680 --> 15:53.460
+So they implemented secure boot where, again, each stage verifies the next one, and yeah,
+
+15:53.460 --> 16:00.400
+then hopefully you end up running Linux on this separate system that, you know, has signatures
+
+16:00.400 --> 16:05.060
+and even integrity enforced by the fault system.
+
+16:05.060 --> 16:13.520
+Now, it turns out that they are using an SOC dedicated to BMC use cases created by Nuvotan.
+
+16:14.300 --> 16:18.220
+And Nuvotan also wrote what's called a first-stage bootloader called BootBlock.
+
+16:18.460 --> 16:19.820
+That's just their project name.
+
+16:21.160 --> 16:22.760
+And I found a vulnerability in BootBlock.
+
+16:23.760 --> 16:28.740
+So there's one function, basically, that has a lot of the business logic.
+
+16:28.740 --> 16:36.620
+A first-stage bootloader basically has one job, and that is to bring the system into
+
+16:36.620 --> 16:40.260
+a state where a more capable bootloader can execute.
+
+16:40.260 --> 16:46.940
+So this function here tries to locate the image of that next more capable bootloader
+
+16:46.940 --> 16:54.120
+in external memory, in an SPI flash, load it into DRAM, verify signature, and then execute
+
+16:54.120 --> 16:55.120
+it.
+
+16:55.120 --> 16:57.560
+That's what this function is supposed to do.
+
+16:57.560 --> 17:04.060
+So as you can see here, I've already highlighted that there's different locations in memory
+
+17:04.060 --> 17:05.800
+where you could put this bootloader.
+
+17:05.800 --> 17:10.320
+Maybe the next bootloader prefers to be executed from a specific address, well in that case
+
+17:10.320 --> 17:15.880
+you just modify the image header of that bootloader such that it is copied by bootblock into that
+
+17:15.880 --> 17:17.600
+particular address.
+
+17:17.600 --> 17:23.220
+And well, I as an attacker end up controlling that address because it's stored in the external
+
+17:23.220 --> 17:26.000
+SPI flash, and the signature of that whole thing
+
+17:26.000 --> 17:30.500
+is only verified after it has been loaded to that destination
+
+17:30.500 --> 17:31.220
+address.
+
+17:31.220 --> 17:37.220
+So my idea here was that I could try and fool boot
+
+17:37.220 --> 17:40.840
+block into overriding itself with my payload.
+
+17:40.840 --> 17:44.780
+So you need to know that SRAM is just a different type
+
+17:44.780 --> 17:48.780
+of memory that's addressable like any other memory in the SOC.
+
+17:48.780 --> 17:50.520
+That's where boot block lives.
+
+17:50.520 --> 17:53.780
+Boot block will execute the check image copy and jump function.
+
+17:53.780 --> 17:59.000
+It will read the header from external memory that I control.
+
+17:59.000 --> 18:02.700
+I can guess the address of boot block in memory
+
+18:02.700 --> 18:05.400
+and have mem copy overwrite the rest of boot block.
+
+18:05.400 --> 18:06.240
+Why does this work?
+
+18:06.240 --> 18:08.860
+Because here, actually, conveniently, mem copy
+
+18:08.860 --> 18:10.380
+lives at a very high address.
+
+18:10.380 --> 18:13.260
+So I can basically overwrite the rest of boot block
+
+18:13.260 --> 18:14.940
+without actually overwriting mem copy,
+
+18:14.940 --> 18:16.760
+because sometimes this creates issues.
+
+18:16.760 --> 18:19.060
+In this case, it was not an issue.
+
+18:19.060 --> 18:23.240
+There were a couple of other issues, but if you experiment a bit,
+
+18:23.240 --> 18:24.460
+you can get this attack right.
+
+18:24.460 --> 18:29.260
+And when memcopy returns, you can return to your own payload.
+
+18:29.260 --> 18:34.540
+Because this is exactly the image that you store in external memory.
+
+18:34.540 --> 18:37.760
+Yeah, and as you can see, DRAM here is not used at all.
+
+18:37.760 --> 18:43.060
+In practice, as an attacker, you would go to a server, open it up,
+
+18:43.060 --> 18:47.060
+and find iDrag's SPI flash,
+
+18:47.060 --> 18:50.000
+which is indicated by this blue arrow here.
+
+18:50.000 --> 18:53.900
+And the right-hand picture shows my experimental setup
+
+18:53.900 --> 18:56.300
+to work with this vulnerability.
+
+18:56.300 --> 19:00.320
+I basically removed the SPI flash and put it on an adapter.
+
+19:00.320 --> 19:02.400
+Yeah, of course, finding the exploit and vulnerability
+
+19:02.400 --> 19:05.900
+was super fun, but I hated this adapter at the end
+
+19:05.900 --> 19:09.820
+because I had to literally write to the flash a gazillion times,
+
+19:09.820 --> 19:12.300
+and I also had to use a logic analyzer
+
+19:12.300 --> 19:14.160
+to debug some of the aspects of the system.
+
+19:14.160 --> 19:17.160
+Because on a production server, this actually
+
+19:17.160 --> 19:20.740
+doesn't give you a UART console or anything like that.
+
+19:20.740 --> 19:21.900
+You're completely blind.
+
+19:21.900 --> 19:29.460
+So what I ended up doing is executing my exploits,
+
+19:29.460 --> 19:33.520
+which would look like this.
+
+19:33.520 --> 19:34.440
+Yeah, there you go.
+
+19:38.340 --> 19:41.920
+I compiled my own U-boot for this particular chip.
+
+19:41.920 --> 19:44.640
+and made it print a funny string.
+
+19:44.640 --> 19:47.060
+And I had to do all this over a logic analyzer
+
+19:47.060 --> 19:49.600
+because, again, I couldn't actually get a UART shell.
+
+19:49.600 --> 19:53.860
+I had to invent some other way to exfiltrate some data from this.
+
+19:53.860 --> 19:58.060
+And, yeah, this is very similar to the Cisco case,
+
+19:58.060 --> 20:01.060
+where if you're prepared and you manage
+
+20:01.060 --> 20:04.160
+to manipulate this SPI flash, it happens
+
+20:04.160 --> 20:05.400
+without any user interaction.
+
+20:05.400 --> 20:08.220
+You just turn on the system, and it will execute your UBoot.
+
+20:08.220 --> 20:10.280
+In this case, there's plenty of space
+
+20:10.280 --> 20:12.280
+where you could also put a kernel image.
+
+20:12.280 --> 20:15.140
+But if I were an attacker, I would probably
+
+20:15.140 --> 20:20.180
+try and load the original kernel image
+
+20:20.180 --> 20:23.220
+that Dell has stored on the MMC, modify it, patch it up
+
+20:23.220 --> 20:26.620
+a little bit, which brings us in a very similar situation
+
+20:26.620 --> 20:30.180
+as with the Cisco vulnerability, where you would get persistence
+
+20:30.180 --> 20:34.400
+for sure, but also a very hard to detect foothold
+
+20:34.400 --> 20:36.060
+on this device.
+
+20:36.060 --> 20:38.660
+Of course, the BMC in every server and every system
+
+20:38.660 --> 20:44.580
+usually very privileged. From there you can mount other attacks, compromising the host potentially.
+
+20:47.460 --> 20:52.980
+You can do this also on using a programmer. Sometimes it requires soldering, removing the
+
+20:52.980 --> 20:58.020
+SPI chip, programming it, putting it back into the system. But on other systems that I've tested,
+
+20:58.020 --> 21:05.300
+it can be done using a $20 chip clip. You just clip on the flash, provide your image.
+
+21:05.300 --> 21:12.920
+and because they're reusing the system so much it's it's it's doable to to you
+
+21:12.920 --> 21:17.060
+know just prepare an image that would trigger the exploits or the
+
+21:17.060 --> 21:22.820
+vulnerability and and you know use a more capable environment like you would
+
+21:22.820 --> 21:29.080
+to mount other attacks I would also like to thank Dell for fixing this we have
+
+21:29.080 --> 21:32.360
+worked together on fixing this they have released their advisory we have released
+
+21:32.360 --> 21:39.320
+our advisory. Well, and this brings us to my favorite part of this talk, which is
+
+21:40.520 --> 21:45.560
+discussing how to fix this. I think these are issues. They all have similarities, not just
+
+21:46.360 --> 21:50.920
+you know, within the two examples that I showed you, but also with other vulnerabilities that
+
+21:50.920 --> 21:57.480
+we've seen in the last couple of years. I'm actually convinced that we can address this
+
+21:57.480 --> 22:02.700
+using a layered approach in security we really like layers so I also like layers
+
+22:02.700 --> 22:07.680
+and you know here I would actually start with changing the threat models because
+
+22:07.680 --> 22:14.200
+I don't really think that the vendors or the bootloader maintainers are you know
+
+22:14.200 --> 22:19.980
+doing this on purpose instead I think that they had certain assumptions when
+
+22:19.980 --> 22:23.640
+they built these devices or made these bootloader projects of course grub
+
+22:23.640 --> 22:26.520
+legacy is an exception because it's abandoned for a long time and in the
+
+22:26.520 --> 22:33.580
+90s you had different problems like Y2K for example. But in general, if you remember the
+
+22:33.580 --> 22:38.680
+first slides that I showed you, you know, you could really start to think and say physical
+
+22:38.680 --> 22:44.820
+security is a lie. It's maybe one layer that you use for defense in depth, but you can't really
+
+22:44.820 --> 22:51.880
+assume that your device is protected from attacks that involve physical attacks. And if you bake
+
+22:51.880 --> 22:55.960
+this in in the design phase if you think about it when threat modeling I would
+
+22:55.960 --> 22:59.980
+really hope that some of these attacks were not possible anymore or at least
+
+22:59.980 --> 23:05.140
+very hard to pull off. This also means that users or workloads cannot be
+
+23:05.140 --> 23:09.940
+inherently trusted. Think about bare metal cloud use cases but also use cases
+
+23:09.940 --> 23:13.840
+where there's maybe another more powerful vulnerability like something
+
+23:13.840 --> 23:21.280
+wormable that could then crack open the shell of such a device and try to gain
+
+23:21.280 --> 23:26.020
+and persistence on them that's really hard to get rid of.
+
+23:26.020 --> 23:29.320
+Again, I actually think that these assumptions should not
+
+23:29.320 --> 23:33.100
+play or should be questioned when threat modeling.
+
+23:33.100 --> 23:36.460
+And no matter what firmware you're building,
+
+23:36.460 --> 23:39.440
+if you're building any device, you'll have firmware for sure,
+
+23:39.440 --> 23:42.580
+you should consider the attack surface.
+
+23:42.580 --> 23:44.500
+I tried to map the attack surface
+
+23:44.500 --> 23:46.780
+that I could see from my perspective.
+
+23:46.780 --> 23:48.020
+It looks a little bit like this.
+
+23:48.020 --> 23:50.080
+You can separate it into remote attack surface
+
+23:50.080 --> 23:52.960
+and local attack surface, and while most of it
+
+23:52.960 --> 23:56.020
+is specific to bootloaders, this could affect
+
+23:56.020 --> 24:00.460
+to other types of firmware as well, maybe loaders or libraries
+
+24:00.460 --> 24:02.620
+that are used in firmware.
+
+24:02.620 --> 24:06.840
+And really, the job of these projects often
+
+24:06.840 --> 24:09.100
+is to load an operating system.
+
+24:09.100 --> 24:09.800
+That's the goal.
+
+24:09.800 --> 24:12.140
+We want to execute something nice.
+
+24:12.140 --> 24:16.940
+And just to illustrate what's going on here,
+
+24:16.940 --> 24:18.900
+and just to illustrate that this is a theme,
+
+24:18.900 --> 24:24.500
+collected some of the other vulnerabilities that others have found for example here on the remotely
+
+24:24.500 --> 24:32.420
+exploitable sites there was a vulnerability in shim shim is a small bootloader project
+
+24:33.380 --> 24:40.820
+it's also open source it's used by a lot of linux distributions to run to run linux or other
+
+24:40.820 --> 24:47.060
+other bootloaders that were not signed by the standard UEFI CAs.
+
+24:47.060 --> 24:51.160
+And for some reason, it also supported HTTP.
+
+24:51.160 --> 24:57.420
+So then someone found a parsing bug in HTTP with out-of-bounds write primitives, which
+
+24:57.420 --> 25:02.620
+as we have seen can be quite dangerous and powerful in firmware land.
+
+25:02.620 --> 25:09.120
+But looking at the local side, even in some of the most fundamental firmware projects
+
+25:09.120 --> 25:16.960
+like edk2 you have heat buffer overflows here found by mark beethoff and actually this is a
+
+25:16.960 --> 25:23.120
+security related function this function is supposed to measure a partition table from a storage
+
+25:23.120 --> 25:32.960
+device into you know a pcr for example in a security chip and it also has a denial of service
+
+25:32.960 --> 25:40.480
+vulnerability, so nothing to see here, I guess. And then, of course, whatever I showed here also
+
+25:40.480 --> 25:45.120
+affected the local end of the attack surface with fault systems and image format parsing.
+
+25:45.600 --> 25:51.680
+Very classic parser bugs. Yeah, so I think the location of these vulnerabilities is interesting.
+
+25:51.680 --> 25:57.840
+It might be a text surface that has not been publicly covered that much, but the nature of
+
+25:57.840 --> 26:04.480
+the bugs is is very classic i think so these are puzzle bugs that you know cause memory corruption
+
+26:04.480 --> 26:10.720
+issues which brings us to the next point that even if we have perfect threat modeling we probably
+
+26:10.720 --> 26:15.920
+want our hardware to support this a little bit we want to use modern hardware security features
+
+26:15.920 --> 26:21.920
+that we can use to our advantage as defenders which means that you know secure boot is nice
+
+26:21.920 --> 26:31.180
+But over time, there will be bugs in any firmware, in any bootloader perhaps, and it's important
+
+26:31.180 --> 26:37.740
+that we actually have a way to manage the versions that are running in our fleets.
+
+26:37.740 --> 26:40.320
+And downgrade protection is one way that you can do this.
+
+26:40.320 --> 26:47.300
+Imagine if here version 1.1 was affected by critical vulnerability, downgrade protection
+
+26:47.300 --> 26:50.920
+could help us prevent an attacker with physical access
+
+26:50.920 --> 26:54.860
+to just flash back the old vulnerable firmware
+
+26:54.860 --> 26:56.460
+onto the devices.
+
+26:56.460 --> 26:59.280
+Remember the examples that I showed you?
+
+26:59.280 --> 27:00.540
+All of them have been fixed.
+
+27:00.540 --> 27:03.920
+But without downgrade protection or some of the other stuff
+
+27:03.920 --> 27:07.120
+that I'll show, it's actually a challenge
+
+27:07.120 --> 27:09.600
+to completely roll out the possibility of this ever
+
+27:09.600 --> 27:11.200
+being exploited in your fleet.
+
+27:11.200 --> 27:16.460
+And these are devices that are deployed for years, right?
+
+27:16.460 --> 27:18.460
+It's one way to solve it.
+
+27:18.460 --> 27:23.640
+There is possibly other cases that actually
+
+27:23.640 --> 27:25.900
+lead you to want to downgrade.
+
+27:25.900 --> 27:29.640
+So it would be nice if this was configurable as a user.
+
+27:29.640 --> 27:31.700
+Currently, this is not the case with any device
+
+27:31.700 --> 27:32.380
+that we have reviewed.
+
+27:35.100 --> 27:36.800
+Another option that would allow you
+
+27:36.800 --> 27:41.100
+to manage your firmware vulnerability footprint
+
+27:41.100 --> 27:44.240
+or version footprint would be remote attestation.
+
+27:44.240 --> 27:48.060
+So secure boot works in the way that one stage verifies the next one.
+
+27:48.440 --> 27:48.940
+It's simple.
+
+27:49.200 --> 27:53.120
+If the next stage signature doesn't match, if there's something wrong going on,
+
+27:53.500 --> 27:55.120
+it would just not execute that.
+
+27:55.120 --> 27:56.980
+And this is an important property.
+
+27:57.120 --> 27:57.920
+This is strong.
+
+27:58.780 --> 28:01.820
+But at the end, if the device actually boots,
+
+28:02.500 --> 28:05.240
+you kind of need to infer that it's in a trustworthy state
+
+28:05.240 --> 28:07.240
+just from the fact that it booted.
+
+28:07.760 --> 28:10.820
+And I think that's a little weak.
+
+28:10.920 --> 28:12.200
+I think that it could be better.
+
+28:12.200 --> 28:16.320
+and remote attestation is one way that you can use to address this.
+
+28:16.500 --> 28:21.960
+You can have each stage not just verify the signature of the next stage.
+
+28:22.140 --> 28:23.420
+You can still do that if you like.
+
+28:23.840 --> 28:27.040
+But instead, in what's called measured boot,
+
+28:27.240 --> 28:34.020
+each stage would collect some evidence of whatever configuration or binary it executes next.
+
+28:34.980 --> 28:40.420
+And this evidence, it's usually a hash that you put in a temper-resistant environment
+
+28:40.420 --> 28:44.420
+like a root of trust chip or a security chip, some area in your SOC, whatever,
+
+28:45.140 --> 28:50.340
+and combined with an identity, a cryptographic identity, you can create proof.
+
+28:50.340 --> 28:55.620
+And this proof can then be made, you know, maybe challenged with some freshness
+
+28:55.620 --> 29:01.540
+and then used by your credential infrastructure to not just get some evidence of what versions
+
+29:01.540 --> 29:04.420
+and what types of firmware and binaries you're running in your fleet,
+
+29:04.420 --> 29:08.900
+but also, you know, see if a downgrade actually happens.
+
+29:08.900 --> 29:14.680
+because often you just see the changes, and it's not easy to predict what type of evidence you have.
+
+29:15.200 --> 29:17.400
+At the end of the day, you just have a bunch of hashes.
+
+29:17.880 --> 29:21.080
+So there's a lot of practical hurdles with this,
+
+29:21.720 --> 29:27.760
+and maybe one way that we can improve this is by asking vendors to actually make this usable.
+
+29:28.300 --> 29:31.540
+In almost all devices that we reviewed, it's actually not usable,
+
+29:31.680 --> 29:34.160
+even though the hardware theoretically supports it.
+
+29:34.160 --> 29:39.600
+And then if it is usable, it would be nice if it was usable for everyone
+
+29:39.600 --> 29:46.040
+and not just large enterprises who already have some kind of credential infrastructure,
+
+29:46.040 --> 29:49.640
+who already know what remote attestation is and how it works and so on.
+
+29:51.160 --> 29:53.800
+But it is certainly a way to address some of the issues
+
+29:53.800 --> 29:57.120
+and to deal with the vulnerabilities that I showed you in particular.
+
+29:58.800 --> 30:03.200
+Finally, to top it all off, I think that you could just go
+
+30:03.200 --> 30:09.760
+look for all the bugs and all the bootloaders. Why not? I think, you know, eventually you find these
+
+30:09.760 --> 30:16.960
+bugs and it's actually surprising how few exploit mitigations exist for firmware in general.
+
+30:16.960 --> 30:22.000
+This is nothing new. Many others have mentioned that in the embedded space, for example, there's
+
+30:22.000 --> 30:26.800
+still a lot of work to do to port known good classic exploit mitigations like
+
+30:26.800 --> 30:32.000
+secondaries or control flow integrity to embedded systems but even beyond that even in
+
+30:32.960 --> 30:39.600
+you know compute platform firmware if you want you usually don't see exploit mitigations that much
+
+30:40.720 --> 30:45.280
+there's nothing to invent there i think it's it's just about practically applying this asking for
+
+30:45.280 --> 30:52.320
+it if you get the chance to do that also in in the root block case i think if you use the hardware's
+
+30:52.320 --> 30:57.120
+memory management unit you could actually make this less exploitable because here the issue was
+
+30:57.120 --> 31:04.160
+that you can overwrite a previous boot stage with the next one if you just make it read only then
+
+31:04.160 --> 31:11.920
+this could have prevented entirely i actually charted all the bootloaders that i like all the
+
+31:11.920 --> 31:18.080
+ones that i found were important and this is not an exhausted list there's not all bootloaders on
+
+31:18.080 --> 31:24.020
+here, of course, but there's a lot of open source bootloader projects there that I think
+
+31:24.020 --> 31:27.320
+are influential, and most of them are security-critical.
+
+31:27.320 --> 31:34.620
+So Grub legacy is not really security-critical, except for that one case, but the rest is.
+
+31:34.620 --> 31:36.920
+So you certainly know Grub, right?
+
+31:36.920 --> 31:42.020
+And if you look at whether these projects are using memory-safe languages or whether
+
+31:42.020 --> 31:47.880
+they actually have implemented exploit mitigations, you will find that they don't.
+
+31:47.880 --> 31:54.540
+And you will also find that only very few projects here are being fast actively.
+
+31:54.540 --> 31:58.720
+And those that are fast might, you know, they could have better coverage, they might not
+
+31:58.720 --> 32:01.840
+be covering all the attack surface that I showed you earlier.
+
+32:01.840 --> 32:06.160
+So there's for sure some work to do, and I really think this is danger territory.
+
+32:06.160 --> 32:10.560
+Because, you know, secure boot is the way that a lot of devices try to protect their
+
+32:10.560 --> 32:16.320
+firmware today, and eventually it will depend on one of these projects.
+
+32:16.320 --> 32:19.200
+So what can we do?
+
+32:19.200 --> 32:24.000
+Like I said, these are not super large software projects.
+
+32:24.000 --> 32:28.120
+This is not your browser or JavaScript running JavaScript engine.
+
+32:28.120 --> 32:33.280
+You could try and just find a lot of vulnerabilities here and put a lot of eyeballs looking at
+
+32:33.280 --> 32:34.600
+the code.
+
+32:34.600 --> 32:35.600
+I tried that.
+
+32:35.600 --> 32:36.600
+I used a code scanner.
+
+32:36.600 --> 32:40.800
+I used some LLMs and tried to find new vulnerabilities beyond what I showed you.
+
+32:40.800 --> 32:48.080
+And I have to say, a code scanner would have caught these two vulnerabilities 100%.
+
+32:48.080 --> 32:53.180
+And LLM would have caught these vulnerabilities 100%.
+
+32:53.180 --> 32:54.640
+They didn't cover much more.
+
+32:54.640 --> 32:59.860
+I found it then a little bit hard to work with them because they're not really good
+
+32:59.860 --> 33:04.860
+at inferring which parts of the code are actually active and which parts of the code might be
+
+33:04.860 --> 33:07.280
+processing attacker-controlled data.
+
+33:07.280 --> 33:11.840
+But what I think here should really work well is using fuzzing.
+
+33:11.840 --> 33:16.420
+Because a crash is a crash, it's either an issue in your harness or in the code.
+
+33:16.420 --> 33:21.820
+And we actually have infrastructure that allows you to integrate these into your open source
+
+33:21.820 --> 33:22.820
+project.
+
+33:22.820 --> 33:24.140
+It's called OSS Fuzz.
+
+33:24.140 --> 33:28.600
+And while I'm not actively part of the OSS Fuzz project, I did talk to the maintainers
+
+33:28.600 --> 33:34.400
+and made sure that the popular bootloaders are actually considered critical.
+
+33:34.400 --> 33:43.800
+So they are eligible for a US$15,000 reward that you will receive if you integrate one
+
+33:43.800 --> 33:46.540
+of these critical open source bootloaders.
+
+33:46.540 --> 33:49.500
+And the rest is handled by the OSS Fuzz infrastructure.
+
+33:49.500 --> 33:54.020
+I have already started putting U-Boot into OSS Fuzz, but if you're a bootloader developer
+
+33:54.020 --> 34:01.120
+or if you're creating board support packages that are distributed with your chips, for
+
+34:01.120 --> 34:04.180
+For example, maybe you are forking one of the bootloaders
+
+34:04.180 --> 34:08.000
+and you want to integrate these into OSS fuzz as well.
+
+34:08.000 --> 34:11.500
+Because the idea here is that once you have the integration,
+
+34:11.500 --> 34:14.260
+the fuzzers are going to run on each and every commit
+
+34:14.260 --> 34:16.300
+that are made to the project, or at least
+
+34:16.300 --> 34:18.380
+on the critical branches.
+
+34:18.380 --> 34:21.800
+And then if you find a crash, you
+
+34:21.800 --> 34:24.580
+can notify the people who are actually working on it,
+
+34:24.580 --> 34:27.300
+and they will usually know what to do.
+
+34:27.300 --> 34:28.820
+So please reach out.
+
+34:28.820 --> 34:31.620
+I will try and help wherever I can, of course.
+
+34:31.620 --> 34:35.780
+And I think, together, we can actually really
+
+34:35.780 --> 34:38.540
+make an impact here for all kinds of devices.
+
+34:38.540 --> 34:40.240
+That's my main message.
+
+34:40.240 --> 34:43.820
+So if you are developing a product, a chip,
+
+34:43.820 --> 34:47.880
+or maintaining a bootloader, please reach out.
+
+34:47.880 --> 34:49.720
+That's all from my side.
+
+34:49.720 --> 34:51.060
+I would like to thank everyone who's
+
+34:51.060 --> 34:53.440
+helped me put together this presentation, especially
+
+34:53.440 --> 34:55.700
+Lydia and my girlfriend, who really
+
+34:55.700 --> 34:57.820
+helped me make the most out of this talk.
+
+34:57.820 --> 35:00.760
+And I have linked here all the advisories that I mentioned
+
+35:00.760 --> 35:02.500
+so that when you download the slides later,
+
+35:02.500 --> 35:05.340
+you can just click on it and have a link
+
+35:05.340 --> 35:07.480
+or a look at the advisories because there's
+
+35:07.480 --> 35:12.260
+a lot more details in the advisories themselves.
+
+35:12.260 --> 35:13.200
+Thank you very much.
+
+35:13.200 --> 35:15.260
+I think we will have time for a couple of questions.
+
+35:23.780 --> 35:26.580
+So if you have questions, please use the microphones that
+
+35:26.580 --> 35:34.820
+in the aisles here. And if you don't, that's fine, too. It's been a long day, and I'll
+
+35:34.820 --> 35:40.260
+be around, and I hope I can talk to some of you for sure. Oh, we have one question.
+
+35:40.260 --> 35:45.760
+Yeah, thank you for the presentation. It was great. One question regarding memory-safe
+
+35:45.760 --> 35:51.980
+languages. You mentioned that it's not off. I mean, that is possible, because one of the
+
+35:51.980 --> 35:57.180
+solution was implementing that if i understand correctly but why is it discarded most of the
+
+35:57.180 --> 36:03.340
+time is it for performance reasons is it something that is doable i think it's legacy i think a lot
+
+36:03.340 --> 36:09.820
+of these projects have evolved over many many many years and just taking grub2 and uboot these are
+
+36:09.820 --> 36:15.020
+super popular bootloaders right and i'm i'm actually not too sure if it's a good idea to
+
+36:15.020 --> 36:20.860
+go ahead and just replace them all because of what i said you know there's many other
+
+36:20.860 --> 36:25.500
+known good approaches that you can use to harden the ones that exist there's exploit mitigations
+
+36:25.500 --> 36:32.460
+and so on yeah there's good examples like the calypter firmware that's actually a cross vendor
+
+36:32.460 --> 36:37.980
+efforts an open source project that implements not just memory safe languages but also exploit
+
+36:37.980 --> 36:43.340
+mitigations in the memory safe language which i think is a great example but i i definitely
+
+36:43.340 --> 36:48.860
+understand that you know these these projects have a legacy and a lot of people that just work
+
+36:48.860 --> 36:55.280
+on them every day you know if you're in a better systems engineer you just know
+
+36:55.280 --> 36:58.580
+how to bring up a board with you would that's that's just what people have done
+
+36:58.580 --> 37:00.980
+for years
+
+37:00.980 --> 37:05.740
+A quick question.
+
+37:05.740 --> 37:08.020
+You mentioned in the beginning of the presentation
+
+37:08.020 --> 37:11.780
+there were 15 types of devices you looked at.
+
+37:11.780 --> 37:12.660
+You showed us a couple.
+
+37:12.660 --> 37:14.880
+What were the other speeds?
+
+37:14.880 --> 37:17.580
+Yeah, so in general, we have looked
+
+37:17.580 --> 37:20.100
+at all kinds of data center-related devices,
+
+37:20.100 --> 37:24.400
+such as network devices that you saw, compute platforms.
+
+37:24.400 --> 37:27.020
+Yeah, but honestly, the point here
+
+37:27.020 --> 37:29.860
+was to talk about the broader bootloaders in general,
+
+37:29.860 --> 37:33.520
+and not these particular bootloaders.
+
+37:33.520 --> 37:36.960
+It's a theme that we've seen in every review.
+
+37:36.960 --> 37:39.180
+And I'm sure that over time, we will
+
+37:39.180 --> 37:41.800
+be able to tell you more and show you more devices
+
+37:41.800 --> 37:43.400
+that we've reviewed.
+
+37:43.400 --> 37:46.860
+Those were the two that I brought to today's presentation.
+
+37:59.860 --> 38:03.580
+Well, if there's any other questions, I'll be around for a while.
+
+38:03.580 --> 38:07.620
+And again, thank you so much for having me here and for staying for my car.
+

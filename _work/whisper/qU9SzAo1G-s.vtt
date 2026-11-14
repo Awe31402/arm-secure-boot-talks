@@ -1,0 +1,1121 @@
+WEBVTT
+
+00:00.000 --> 00:08.440
+Hello everyone. Good to see so many of you today attending our talk. We are very excited
+
+00:08.440 --> 00:13.960
+to be here at Black Hat and to present our research on how we attacked the boot chain
+
+00:13.960 --> 00:20.060
+of some Samsung devices from the Galaxy A family. So today we will show you a chain
+
+00:20.060 --> 00:25.720
+of bugs that allow us to take control over the device through the USB ports and ultimately
+
+00:25.720 --> 00:31.880
+to leak secrets that are stored in the secure world on the device and this research started
+
+00:31.880 --> 00:38.600
+last year at quarks lab and so yeah today on stage you have rafael and myself maxim but we
+
+00:38.600 --> 00:43.320
+will we want also to thank our colleagues damiano and gabrielle who helped us on this project
+
+00:45.480 --> 00:52.840
+so um last year at recon represented this research we asked ourselves how android protects the user
+
+00:52.840 --> 01:00.040
+data through its encryption scheme and for that we bought a device called the one you see here
+
+01:00.040 --> 01:07.960
+samsung galaxy a22 and this device is known to have a boot run vulnerability that can be exploited
+
+01:07.960 --> 01:13.240
+with an open source tool called mck client so using this tool we were able to bypass the first
+
+01:13.240 --> 01:17.800
+stage of the secure boots and from there we patched the rest of the system so that we could
+
+01:18.680 --> 01:22.440
+extract all the ingredients required to brute force the credentials of the user
+
+01:23.800 --> 01:28.600
+so this is the device i'm talking about as you can see it's a rather cheap device and
+
+01:29.320 --> 01:34.760
+it is based on a mediatek system on chip so it runs under it but you will also find a mix of
+
+01:34.760 --> 01:40.840
+close close source components from mediatek and samsung for example the trazon os here is tigris
+
+01:41.480 --> 01:46.040
+which is designed by samsung and as i said we have this boot run vulnerability that we can
+
+01:46.040 --> 01:53.560
+exploit using mtk client and it was quite quite nice to have it in order to debug the exploit
+
+01:53.560 --> 01:59.400
+that we will present today so we focused on this device because we had it so all the bugs we will
+
+01:59.400 --> 02:04.040
+present today works on this device but they also apply to other devices from the same family of
+
+02:04.040 --> 02:09.240
+device even some of them for which the the vulnerability in the boot rom has been fixed
+
+02:10.600 --> 02:15.480
+so before we get to the actual bugs we need a bit of background on how the the secure boot
+
+02:15.480 --> 02:20.920
+works on mediatek system on chips so when the cpu starts it will run a read-only piece of code that
+
+02:20.920 --> 02:26.760
+is called the boot run and it will run with the highest privileges in the secure world with the
+
+02:26.760 --> 02:32.520
+el3 privilege level then the boot run will start a second state boot loader called the preloader
+
+02:33.480 --> 02:39.480
+and the preloader will then start the arm trusted firmware that is also called the secure monitor
+
+02:40.280 --> 02:45.400
+and it is the piece of software that will run with the highest privileges on the device once
+
+02:45.400 --> 02:51.000
+it's fully booted the pre-order will then start the threshold environment which is degrees and
+
+02:51.000 --> 02:58.360
+finally a third stage bootloader called little kernel here we call it lk so this bootloader is
+
+02:58.360 --> 03:02.200
+in charge of booting android and it's actually the component we will look into right now
+
+03:03.480 --> 03:08.520
+so little kernel is open source originally and it's very common in the android ecosystem as a
+
+03:08.520 --> 03:14.680
+bootloader and as i said it will start android and for that it will verify the android images
+
+03:14.680 --> 03:20.040
+using a feature called android verified boots which is the standard that you will find implemented
+
+03:20.040 --> 03:26.120
+in a similar way in other devices now the little kernel bootloader we have here is a cluster
+
+03:26.120 --> 03:31.400
+version that was modified by samsung they added a couple of features such as odin which is a
+
+03:31.400 --> 03:38.280
+recovery protocol that allows to flash partitions through usb we also have the nox security bits
+
+03:38.280 --> 03:43.160
+it's a way to avoid the warranty of the device when the bootloader is unlocked so it's security
+
+03:43.160 --> 03:48.520
+for samsung rather than for the the actual user and yeah you have a bunch of little features like
+
+03:48.520 --> 03:53.000
+this and one that was particularly interesting for us is a jpeg parser that is used to show
+
+03:53.000 --> 04:00.040
+logos on screen of the device and error messages as the one you see here and it raised our interest
+
+04:00.040 --> 04:04.840
+because these jpegs are placed into a tar archive that you will find in the upper arm partition
+
+04:05.400 --> 04:10.920
+and this archive is signed but is never checked at boot so anyone capable of modifying the
+
+04:10.920 --> 04:16.200
+internal memory of the device can actually change these jpegs and as we all know parsing jpegs can
+
+04:16.200 --> 04:21.480
+be a difficult task here we are citing logo fail research by bannerly they presented it
+
+04:21.480 --> 04:26.200
+last year and they basically found many vulnerabilities impacting various image
+
+04:26.200 --> 04:33.240
+parsers and in many boot chains so it's a good reminder of that so to target this jpeg loader
+
+04:33.240 --> 04:39.080
+we first need to understand how it is loaded in little kernel and this is the code responsible
+
+04:39.080 --> 04:45.480
+for that so the first part of the code actually allocates a constant size buffer on the heap
+
+04:46.200 --> 04:50.600
+then we have a function that we call the read jpeg file it's the name we gave but you get the
+
+04:50.600 --> 04:56.040
+id this function takes a file name as a first argument it will look in the archive using this
+
+04:56.040 --> 05:00.920
+file name and it will read the jpeg and place the content in the buffer we previously allocated
+
+05:00.920 --> 05:06.280
+and finally we have this p image function that will pass and render the jpeg on screen
+
+05:06.280 --> 05:10.440
+now some of you might wonder why do we have a zero as a third argument
+
+05:10.440 --> 05:17.320
+this function and the third argument here is supposed to be a maximum size so when the system
+
+05:17.320 --> 05:23.860
+before it reads the the file it will look in the tar header for the the size of the file and it
+
+05:23.860 --> 05:28.200
+will compare it to the size provided so if it's bigger it will trigger an error and it will stop
+
+05:28.200 --> 05:36.640
+reading the file. Unless the size provided is zero, which in this case, the test is ignored and the
+
+05:36.640 --> 05:41.380
+file is read anyway. So we have a first vulnerability, a heap overflow here. It was rather
+
+05:41.380 --> 05:47.780
+quick. And the question we ask ourselves now is, is it exploitable? So to answer that question,
+
+05:47.780 --> 05:52.120
+we need to understand a bit how the heap algorithm works. In this case, it is called
+
+05:52.120 --> 05:58.760
+mini heap and it relies on a doubly linked list you have three chunks that's all members of this
+
+05:58.760 --> 06:03.160
+list they are all placed in the same memory pool and they all start with the same header that you
+
+06:03.160 --> 06:09.080
+see on the right so you have a first pointer pointing to the next the previous the previous
+
+06:09.080 --> 06:13.320
+chunk followed by another pointer pointing to the next chunk followed by the size and followed by
+
+06:13.320 --> 06:20.440
+the actual content of the chunk so if another flow happens we may overwrite the metadata of
+
+06:20.440 --> 06:25.080
+the header of the next chunk and there is a way to turn another flow into an arbitrary write
+
+06:25.640 --> 06:33.240
+and this is because how the allocation algorithm works so after an allocation a chunk is removed
+
+06:33.240 --> 06:38.600
+from the free list and to do so the system will dereference the next and prep pointers of the
+
+06:38.600 --> 06:45.160
+chunk being allocated in order to access the next and previous chunks and in turn modify the next
+
+06:45.160 --> 06:49.080
+and breadth pointers so that they point to each other and not to the trunk being allocated.
+
+06:49.960 --> 06:55.240
+So long story short, if we control the header of a trunk that is being allocated,
+
+06:55.240 --> 07:00.840
+we have a write what were primitive with the only constraint that both values must be writeable
+
+07:00.840 --> 07:08.200
+addresses. Now a few words about the mitigations in iter-kernel. As you can see, there are not many,
+
+07:08.200 --> 07:14.080
+none, we can say, no ESL or no canaries and more importantly the heap is
+
+07:14.080 --> 07:18.880
+executable, which makes the exploit strategy rather simple. We use a
+
+07:18.880 --> 07:23.260
+primitive to overwrite the pointer that the code will jump to, in this case it's
+
+07:23.260 --> 07:29.360
+the return address in the stack, and we will make its points to a shell code
+
+07:29.360 --> 07:34.520
+that we place in our JPEG buffer. So here is a representation of the free list
+
+07:34.520 --> 07:40.340
+and in purple you see the jpeg buffer that was just allocated so the system will read the file
+
+07:40.340 --> 07:45.300
+and it will fill the buffer with it until it overflows and overwrites the next free chunk
+
+07:45.300 --> 07:51.100
+and we will replace this next free chunk with a fake chunk where the next pointer points to the
+
+07:51.100 --> 07:56.320
+return address in the stack and the previous pointer points to the shell code inside our jpeg
+
+07:56.320 --> 08:01.860
+buffer and so that when the next allocation happens the system will dereference the next
+
+08:01.860 --> 08:07.560
+pointer of the fake chunk, and we'll replace the return address with the one of the shellcode,
+
+08:07.620 --> 08:13.780
+so the one that was present in the next, in the prev pointer. And when the function returns,
+
+08:14.120 --> 08:18.960
+we have our shellcode being executed. So, we have a first vulnerability here
+
+08:18.960 --> 08:27.300
+that leads to a code execution in little kernel. It's persistent. It will survive both reboots
+
+08:27.300 --> 08:33.460
+and factory reset and this is because the the partition containing the JPEGs on is never wiped
+
+08:34.100 --> 08:40.420
+even when you factory reset the device so we have code execution in little kernel but since little
+
+08:40.420 --> 08:46.580
+kernel loads android and with a little bit of work and patching the system the firmware the
+
+08:46.580 --> 08:51.620
+code of the little kernel we can take control over android so basically we control the full
+
+08:51.620 --> 08:58.740
+normal world both el1 and el0 regarding the impacts um all the samsung devices based on
+
+08:58.740 --> 09:04.420
+mediatek system on chips or at least all of those we looked into are vulnerable and which includes
+
+09:04.420 --> 09:09.220
+the the ones where uh the boot run vulnerability i presented at the beginning has been fixed
+
+09:10.180 --> 09:15.380
+so that's that's nice we have a code execution in little kernel but now we need a way to flash
+
+09:15.380 --> 09:21.620
+the the malicious jpegs on the on the flash memory without being already privileged and that is the
+
+09:21.620 --> 09:27.380
+question we will try to answer now and for that we will take a look at odin the recovery protocol
+
+09:27.380 --> 09:33.300
+that is implemented by samsung that allows to flash partition through usb and it's also
+
+09:33.300 --> 09:38.260
+implemented in little kernel and we have two uh clients that are available one that is the
+
+09:38.260 --> 09:42.820
+official one not super practical and close source and there is an open source client called amdell
+
+09:42.820 --> 09:49.820
+model that we actually use in our proof of concept.
+
+09:49.820 --> 09:54.640
+So internally, Odin, before flashing an image, it will authenticate it.
+
+09:54.640 --> 09:58.860
+So you need to have a signature as a footer in every image.
+
+09:58.860 --> 10:01.380
+You have an example of a signature here.
+
+10:01.380 --> 10:04.080
+And for that, it will rely on two internal structures.
+
+10:04.080 --> 10:08.180
+The first one being the partition information table that we will call the pit.
+
+10:08.180 --> 10:13.380
+second one being a global structure that's a global array that indicates how the partitions
+
+10:13.380 --> 10:20.180
+should be authenticated and the pit is actually stored in a fixed address in the emmc it indicates
+
+10:22.180 --> 10:26.260
+how i mean it gives information about the the partitions you have an example of entry on the
+
+10:26.260 --> 10:30.900
+right so you have a couple of fields such as the block counts the name of the partition and so on
+
+10:30.900 --> 10:36.740
+and it's interesting to note that a partition not present in the pits cannot be flashed through odin
+
+10:36.740 --> 10:41.780
+the pit can be updated though but it requires a signed image. Now regarding
+
+10:41.780 --> 10:46.640
+the authentication we have this global array that indicates how an image should
+
+10:46.640 --> 10:51.300
+be authenticated and in this case if an image is not present in this array it
+
+10:51.300 --> 10:55.620
+will not be authenticated. So if we compare the pits and this global array
+
+10:55.620 --> 11:01.060
+we get a list of partitions that can be flashed without authentication and this
+
+11:01.060 --> 11:04.760
+is the list you see here. The first thing we can say is that a param is not part
+
+11:04.760 --> 11:08.760
+of the images we can flash, because it is actually authenticated.
+
+11:08.760 --> 11:11.560
+But there are other interesting partitions that we can play with.
+
+11:11.560 --> 11:14.000
+And it's the case of PGPT and SGPT.
+
+11:14.000 --> 11:19.800
+They're both points to the header of the GPT, so the GYD partition table.
+
+11:19.800 --> 11:24.500
+And this GPT is similar to the PIT in a sense that it describes the partition.
+
+11:24.500 --> 11:27.000
+So we have quite an interesting primitive here.
+
+11:27.000 --> 11:29.020
+Without authentication through the USB cable,
+
+11:29.020 --> 11:33.860
+we can reshape the partition table of this device.
+
+11:33.860 --> 11:37.520
+Now, a few words about GPT and PITs because they are doing more or less the same things.
+
+11:37.640 --> 11:39.520
+Why do we need these two structures?
+
+11:40.100 --> 11:45.420
+So, the PIT is actually used for Samsung features such as Odin and such as the JPEG loading.
+
+11:45.420 --> 11:51.080
+So, the upparam partition containing the JPEGs is actually retrieved from the PIT, I mean, using the PIT.
+
+11:51.960 --> 11:55.720
+So, we can simply mess with it through the GPT table.
+
+11:56.360 --> 11:59.160
+And the GPT table, on the other hand, is used the rest of the time.
+
+11:59.260 --> 12:01.420
+For example, when loading the Android images.
+
+12:01.420 --> 12:07.940
+so we have a nice primitive but what we can what can we do with it and first let's take a look at
+
+12:07.940 --> 12:15.080
+how the pit is loaded so this piece of code is running when this the bootloader starts and as
+
+12:15.080 --> 12:21.700
+i said already the the system will try to retrieve the pit when it starts from a default address but
+
+12:21.700 --> 12:26.940
+we also have this routine that is quite interesting the system will look for a partition called pit
+
+12:26.940 --> 12:32.740
+in a partition table and if it exists it will load it from there and what is good for us is that
+
+12:32.740 --> 12:38.420
+these two functions relies on the gpt table and we can change the gpt table so basically we can
+
+12:38.420 --> 12:43.000
+add an entry called pit and the system should load the pit not from the original location but
+
+12:43.000 --> 12:47.980
+from the new one so we came up with the following strategy here you have a representation of the
+
+12:47.980 --> 12:53.280
+flash memory and you have the gpt and the pits pointing to more or less the same partitions
+
+12:53.280 --> 12:59.220
+and the first partition here is called md5 hdn hdr i'm not sure if you recall but it's one of those
+
+12:59.220 --> 13:04.280
+we can flash without authentication so we will replace it with a new uparam partition that
+
+13:04.280 --> 13:09.900
+contains the malicious jpegs the next partition is called vbimita vendor it's also one that we
+
+13:09.900 --> 13:15.460
+can flash without authentication and here we will replace it with a new pit that is a copy of the
+
+13:15.460 --> 13:23.500
+original one. Sorry. Except that we will rename FD5HDR into upParam and we do the other way around
+
+13:23.500 --> 13:29.960
+with upParam. And the final step is that we modify the GPT table and we will rename the PIT,
+
+13:30.420 --> 13:39.320
+the VB metaVendor partition into PIT, such that at next boot, the new PIT is taken into account
+
+13:39.320 --> 13:43.820
+and not the original one. And when the system is asked to load a JPEG, it will load it from the
+
+13:43.820 --> 13:48.740
+new upper RAM partition and it actually works as you see here we see on the
+
+13:48.740 --> 13:52.460
+screen dodge showing up it means the exploit worked so yeah so we have a
+
+13:52.460 --> 13:57.980
+second vulnerability that is a authentication bypass is Odin that we
+
+13:57.980 --> 14:02.420
+allows us to from the USB to flash anything on the eMMC including the JPEGs
+
+14:02.420 --> 14:08.000
+in the upper RAM partition and similarly to the previous one this this
+
+14:08.000 --> 14:12.680
+vulnerability impacts Samsung devices based on MediaTek system and chips so we
+
+14:12.680 --> 14:23.160
+a little demo. Let's try it. So, we have here a device that is a Samsung A22 5F.
+
+14:24.920 --> 14:29.720
+And what I want to show you first is that I'm connecting to a 3DB to the device
+
+14:30.360 --> 14:35.480
+and the SU binary is not there. That's the expected behavior for the standard Android device.
+
+14:35.480 --> 14:37.840
+all right
+
+14:37.840 --> 14:46.120
+so what i'm going to do now is that i will shut down the device
+
+14:46.120 --> 14:53.120
+here i'm unlocking the the interface but it can be shut down by pressing all the buttons
+
+14:53.120 --> 15:00.180
+all together for a couple of seconds so then i'm booting the device in the odin mode
+
+15:00.180 --> 15:11.220
+And once it's done, we are ready to launch the exploit
+
+15:11.220 --> 15:15.560
+So basically, we are going to flash the partitions as I explained
+
+15:15.560 --> 15:19.300
+There is a little trick happening right now
+
+15:19.300 --> 15:21.520
+The device is rebooting again in the download mode
+
+15:21.520 --> 15:23.860
+And it's because we want to take control over Android
+
+15:23.860 --> 15:25.460
+So we are flashing another partition
+
+15:25.460 --> 15:29.980
+The boot partition that we modified with Magisk to get root privileges
+
+15:29.980 --> 15:37.900
+so the image quality is a bit poor but i'm not sure if you can recognize the
+
+15:37.900 --> 15:43.300
+dodge that is showing up on screen so it's a good sign it means that probably the exploit worked
+
+15:43.300 --> 15:47.700
+now we have to wait for the device to boot to to get the proof and
+
+15:47.700 --> 15:53.300
+that's one of the things samsung can improve on this device is the the boot time
+
+15:53.300 --> 16:04.580
+okay so normally Raphael is gonna tell a joke
+
+16:08.180 --> 16:14.500
+okay so the device seems to have booted and i'm connected to adb can we see yes
+
+16:15.300 --> 16:19.460
+let's try essu oh it works we are roots
+
+16:23.300 --> 16:30.740
+okay so
+
+16:30.740 --> 16:40.380
+yes okay so to conclude on the first part of this presentation we have shown a chain of two
+
+16:40.380 --> 16:46.880
+bugs that leads to code execution in little kernel it is persistent and um and yeah it's
+
+16:46.880 --> 16:52.840
+in fact many samsung devices based on media tech system on chips and we can trigger these
+
+16:52.840 --> 16:57.100
+vulnerability through USB and it will give full control over the normal world
+
+16:57.100 --> 17:01.460
+so we have full control over Android we are roots we can do we can already do
+
+17:01.460 --> 17:05.720
+many things we can read the messages look at the pictures and so on but there
+
+17:05.720 --> 17:11.080
+are some some secrets that are protected by Android by design they are stored in
+
+17:11.080 --> 17:15.160
+the secure world and we still don't have access to these secrets so I'm gonna let
+
+17:15.160 --> 17:19.960
+Raphael tell you how to retrieve the secrets that are still hidden from us
+
+17:19.960 --> 17:21.960
+Thank you, Max.
+
+17:23.960 --> 17:27.960
+Alright, so now that we have full control over the normal world,
+
+17:27.960 --> 17:31.960
+with both little kernel and Android being compromised,
+
+17:31.960 --> 17:34.960
+we are ready to step into the secure world.
+
+17:34.960 --> 17:40.960
+And our next target to do that will be the ARM Trusted Firmware, or ATF.
+
+17:40.960 --> 17:42.960
+So what is ATF?
+
+17:42.960 --> 17:48.960
+ATF is the secure monitor used to reach the secure world from the normal world.
+
+17:48.960 --> 17:52.000
+So as you can see on this picture, it stands right in the middle.
+
+17:52.860 --> 18:03.740
+When you are in, let's say, a regular Android application and that you want to use the secure world to perform maybe crypto operations,
+
+18:04.400 --> 18:09.880
+you ask for ATF to transfer your request to the secure world.
+
+18:09.880 --> 18:18.520
+And to do that, we use a special ARM instruction called SMC, which stands for Secure Monitor Call.
+
+18:18.960 --> 18:30.800
+And what this instruction does is that it triggers an exception handled by the EL3 monitor, which is ATF in our case.
+
+18:31.480 --> 18:41.360
+Then the monitor decides what to do based on the ID of the SMC and also the parameters that are passed through the registers.
+
+18:42.480 --> 18:45.380
+So why do vulnerability research on ATF?
+
+18:45.380 --> 18:51.020
+well as you have seen before it runs in EL3 which is the highest privileged
+
+18:51.020 --> 18:56.740
+level on the device so finding a bug here can definitely be devastating we
+
+18:56.740 --> 19:00.800
+can reach it from normal world through the SMCs we need to have kernel access
+
+19:00.800 --> 19:05.060
+but we were roots on the device so that's not a problem the code is fairly
+
+19:05.060 --> 19:12.520
+simple so reversing is gonna be simple yes however it interacts a lot with
+
+19:12.520 --> 19:18.520
+hardware through unknown registers so maybe doing fuzzing might not be the
+
+19:18.520 --> 19:25.080
+right idea as we won't be able to properly emulate these behaviors so we
+
+19:25.080 --> 19:32.380
+will just focus on static analysis for now so the first step is extracting ATF
+
+19:32.380 --> 19:39.040
+so inside a regular Android ROM image you have several partitions and one of
+
+19:39.040 --> 19:46.240
+them is named teeverified.img it contains a lot of interesting things such as the tigris kernel
+
+19:46.240 --> 19:53.360
+but also the atf which is what we want so if we open this file using an hex editor this is what we
+
+19:53.360 --> 20:01.840
+get so the way this file is structured it is it has several entries and each entry has its own
+
+20:01.840 --> 20:08.720
+header so at offset zero you have the first header of the first entry in red you have a magic byte
+
+20:08.720 --> 20:14.720
+in green you have the size of the entry and in blue you have the name of the entry and as you
+
+20:14.720 --> 20:21.120
+can see the first entry at offset zero is atf so we are lucky we won't have to search for it
+
+20:22.320 --> 20:29.360
+the header is 0x200 byte long so we just skip to this offset and highlighted in purple you can see
+
+20:29.360 --> 20:36.800
+the magic string mtkt but in reverse this is the start of atf so we have the offset and we have
+
+20:36.800 --> 20:44.160
+the size we can extract it and load it into our favorite disassembler or in this case the compiler
+
+20:44.800 --> 20:52.320
+and look for the different smc handlers so here we have two handlers one for the secure world and
+
+20:52.320 --> 21:00.560
+one for the normal world the second one and this is uh what we're gonna dive into as you can see
+
+21:00.560 --> 21:07.520
+here are the arguments of the smc they directly come from the normal world so we control them
+
+21:07.520 --> 21:13.600
+the first one is the smc id and then the rest is depending on the smc
+
+21:16.800 --> 21:24.320
+one interesting smc that we found was this one as you can see it uses a global array which is
+
+21:24.320 --> 21:32.480
+is initialized to a hard-coded memory address and then we retrieve in the out
+
+21:32.480 --> 21:39.740
+value variable a value from this global array using the first argument that we
+
+21:39.740 --> 21:44.180
+control because it comes from the normal world the problem here is that we never
+
+21:44.180 --> 21:49.820
+check this argument so it can be whatever index that we want so basically
+
+21:49.820 --> 21:56.860
+this is an out-of-bound read bug and we are able to read any address that we want in atf
+
+21:58.620 --> 22:05.020
+so we are able to leak four bytes from the atf virtual address space which means that we can
+
+22:05.020 --> 22:12.940
+dump all atf data but we can't leak anything from other software components such as chigris for
+
+22:12.940 --> 22:18.780
+example or a trusted applications so at this point it could be really great if you could
+
+22:18.780 --> 22:27.340
+and map any address we want right so let's for let's search for a mean to do that a second smc
+
+22:27.340 --> 22:32.460
+that we found interesting is this one it calls a function that we named spm actions we don't
+
+22:32.460 --> 22:39.900
+really know what it does but as you can see eventually we reach an mmap function so this
+
+22:39.900 --> 22:47.100
+looks interesting right we could maybe use it to map a memory range from the secure world
+
+22:47.100 --> 22:55.380
+so to reach this function we need to set the command id to 1 which is not difficult
+
+22:55.380 --> 23:04.160
+we need to have a size less than 1 megabyte we can do that and the last parameter is the address
+
+23:04.160 --> 23:11.260
+and once again we have no checks whatsoever on this parameter so this means that we are able to
+
+23:11.260 --> 23:19.420
+mmap any address that we want and if we further dive in the mmapwrap function we discover that
+
+23:19.420 --> 23:26.220
+it is actually a physical address so thanks to this bug we are now able to
+
+23:27.820 --> 23:35.180
+map any physical address into the atf virtual virtual address space and if we combine this
+
+23:35.180 --> 23:43.180
+to our bug and the leak bug we are able to leak anything from the secure world including the
+
+23:43.180 --> 23:50.860
+tigris kernel including trusted applications the only limit to this is that we are limited
+
+23:50.860 --> 23:57.660
+to eight consecutive end maps if we do let's say nine the device crashes so this means that
+
+23:57.660 --> 24:07.580
+because one end map is one megabyte of one megabyte of memory we are able to leak up to eight megabytes
+
+24:07.580 --> 24:14.860
+of data but we will see that it's more than enough for what we are going to do so the important
+
+24:14.860 --> 24:21.260
+question here is can we use this vulnerability to leak keystore keys for example first we need
+
+24:21.260 --> 24:28.300
+to understand what is the android key store system and this system is used is used for key storage
+
+24:28.300 --> 24:35.340
+and provide crypto services to the normal world the keys are stored as encrypted key blobs inside
+
+24:35.340 --> 24:45.020
+the android file system so android has no mean to process the raw key material only the secure world
+
+24:45.020 --> 24:51.820
+is able to decrypt this there are three protection levels and the one that is interesting for us is
+
+24:51.820 --> 24:58.460
+the TEE one which is also the default one and yeah raw key material should never leave the protected
+
+24:58.460 --> 25:05.660
+environment provided by the trust zone so those are the different steps that are performed under
+
+25:05.660 --> 25:13.900
+the hood first from the normal world we send a begin operation request including our key blob
+
+25:14.780 --> 25:20.460
+then in the secure world here it's the key master trusted application in charge
+
+25:20.460 --> 25:25.660
+it will be able to decrypt this key blob and extract the raw key into secure memory
+
+25:26.700 --> 25:34.700
+and then we are able to send several update operations so let's say for example choose the
+
+25:34.700 --> 25:44.540
+algorithm the different options and so on here we need the key to be in memory so
+
+25:47.180 --> 25:53.820
+this is very important because if we are to use our bugs we need to to use them only after the
+
+25:53.820 --> 26:00.860
+begin operation to be sure that the key is still in memory after that the trust application returns
+
+26:00.860 --> 26:07.740
+the output and then the key is flushed from memory so our proof of concept will be simple
+
+26:07.740 --> 26:13.980
+we will import a key into the android key store then we will encrypt something using using that
+
+26:13.980 --> 26:21.260
+key then we stop the execution after the begin operation is called and the key is in secure
+
+26:21.260 --> 26:30.540
+memory and we use our bugs our two bugs to leak the right region of memory then because we will
+
+26:30.540 --> 26:39.100
+have a 8 megabytes dump of data we try all possible keys to decrypt the ciphertext so
+
+26:39.980 --> 26:46.380
+here is a little demo so to do this demo we are going to use a tool called frida
+
+26:47.420 --> 26:56.540
+frida will allow us to hook functions into the normal world to halt the execution and when the
+
+26:56.540 --> 27:05.100
+execution is stopped after the begin operation we will have a script that will trigger our bugs
+
+27:05.100 --> 27:15.740
+to leak the secure word memory and hopefully the key will be in our dump of data we also watch for
+
+27:15.740 --> 27:23.660
+the logcat logs because our demo applications will send us the encrypted ciphertext inside it
+
+27:26.540 --> 27:37.280
+All right, so we will send the QuarksLab string to be encrypted into the secure world.
+
+27:37.280 --> 27:47.960
+As you can see our script on the left is dumping the secure world memory because the begin
+
+27:47.960 --> 27:52.480
+operation function has been triggered in Frida.
+
+27:52.480 --> 27:58.720
+this can take a bit of time because we are only able to leak four bytes of data so basically what
+
+27:58.720 --> 28:06.720
+we're doing here is we are dumping four bytes at a time by sending multiple smc
+
+28:09.600 --> 28:16.000
+all right so as you can see in the log we have our ciphertext which is the Quartzlab string
+
+28:16.000 --> 28:25.280
+encrypted. And we have the dump of data in the file named leakkey1. So now we are going to be
+
+28:25.280 --> 28:34.800
+able to try every possible key inside the leakkey1 file dump and hopefully we will find the key that
+
+28:34.800 --> 28:45.920
+is able to decipher our encrypted text so of course we could we could have packed every
+
+28:47.040 --> 28:55.280
+steps into one application or one script but for the purpose of this demo it is better to do
+
+28:55.280 --> 29:08.700
+do the different steps to be able to see how it works.
+
+29:08.700 --> 29:12.400
+So we will try to find the key now.
+
+29:12.400 --> 29:16.140
+It can take a bit of time.
+
+29:16.140 --> 29:17.840
+And we found the key.
+
+29:17.840 --> 29:24.460
+So here, for demonstration purpose, we imported the key only made of A's.
+
+29:25.260 --> 29:28.860
+if we generated a key it would have worked also.
+
+29:36.700 --> 29:37.100
+Thank you.
+
+29:39.900 --> 29:46.780
+All right, so what's next? Actually, it could be the end of this presentation and it was the end
+
+29:46.780 --> 29:53.500
+of what we presented at OffensiveCon a couple of months ago, but we received interesting questions
+
+29:53.500 --> 29:59.740
+and one of them was what about the key attestation so the key attestation in android relies on the
+
+29:59.740 --> 30:05.420
+android key store and it proves that a keeper is stored in the secure hardware either the trust
+
+30:05.420 --> 30:10.860
+zone or a security chip and along with that proof comes a bunch of information regarding the device
+
+30:10.860 --> 30:17.180
+such as the status of the boot loader is it locked or not the status of the the boot state is it
+
+30:17.180 --> 30:24.300
+verified correctly you have a bunch of ids such as the emei and so on and this key attestation is
+
+30:24.300 --> 30:29.820
+used by safety net and other frameworks that are similar to safety net so safety net is the one
+
+30:29.820 --> 30:36.460
+made by google and it's used to tell if a device has been compromised for example if you have a
+
+30:36.460 --> 30:42.540
+bug application the developers of this application may not want it to run on rooted device because
+
+30:42.540 --> 30:47.980
+it can be debugged instrumented or whatever so they may use this mechanism for detecting
+
+30:48.540 --> 30:52.220
+if the environment is compromised and decide not to run if it's the case
+
+30:53.100 --> 30:59.260
+so we didn't know much about the key attestation and for the sake of this research we took an
+
+30:59.260 --> 31:04.540
+open source application that will generate the attestation on the device and will pass the
+
+31:04.540 --> 31:10.380
+results to make sure it's done correctly and the first thing we notice is that everything seems
+
+31:10.380 --> 31:15.900
+fine the exploit seems not to be detected so we tried again with another app that is also open
+
+31:15.900 --> 31:22.140
+source that can be found on github this time it relies on safety net and here what we see is that
+
+31:22.140 --> 31:28.060
+it fails basically detects that the environment is compromised so safety net is a research topic
+
+31:28.060 --> 31:32.060
+on its own there are too many things to to say regarding safety net so it's not something we
+
+31:32.060 --> 31:40.300
+will cover today but it is known that it has heuristics to detect some famous routing frameworks
+
+31:40.300 --> 31:46.300
+such as Magisk, which we used in our exploits. So it may be the things that were detected here,
+
+31:46.300 --> 31:52.460
+but it's still unclear precisely what was detected. So if we come back to the key attestation,
+
+31:53.420 --> 31:58.540
+under the hood it relies on a certificate chain, and at the bottom you see there is a
+
+31:58.540 --> 32:03.260
+root certificate that is self-signed. And the private key corresponding to this
+
+32:03.260 --> 32:07.740
+root certificate is owned by Google. And the other certificates part of this chain
+
+32:07.740 --> 32:14.040
+have their private keys stored on the device inside the key store now we have
+
+32:14.040 --> 32:18.600
+the first key here is the GAK for Google authenticated key and it's actually the
+
+32:18.600 --> 32:24.300
+same across many different devices at least all the Samsung A22 5f what we
+
+32:24.300 --> 32:28.980
+looked in two devices but we believe that it's gonna be the same or across
+
+32:28.980 --> 32:33.780
+all these devices so they are sharing the same key basically then in orange
+
+32:33.780 --> 32:37.480
+you have the Android key store key which is unique per device and finally the
+
+32:37.480 --> 32:43.980
+application key that is generated along with the attestation and as I said you
+
+32:43.980 --> 32:50.860
+have a bunch of information that comes with this this attestation that
+
+32:50.860 --> 32:57.640
+they'll basically unique per device I mean they represent the device for
+
+32:57.640 --> 33:01.820
+example you have the version of the OS and you have a couple of fields I'm not
+
+33:01.820 --> 33:06.640
+sure you can read from here but you have the hash of the boot partition this might
+
+33:06.640 --> 33:11.680
+be one of the things safety net detected because we modified the boot partition so the hash may
+
+33:11.680 --> 33:19.920
+have may have changed so the one thing that could be nice is to be able to generate attestations
+
+33:19.920 --> 33:25.600
+but decide i mean from the attacker point of view but decide what to put inside these fields
+
+33:25.600 --> 33:30.640
+and we if we were able to leak one of the private keys involved in this certificate chain
+
+33:30.640 --> 33:36.560
+we might be able to generate valid attestations and decide what to put inside and the key that
+
+33:36.560 --> 33:42.800
+makes more sense for that is the GAK because it is the same key shared across different devices so
+
+33:42.800 --> 33:47.600
+if you leak it once you can produce valid attestations for many different devices so
+
+33:49.280 --> 33:55.040
+so we looked into this key and we discovered that it is stored in the android file system
+
+33:55.040 --> 33:59.840
+in the e-key format so it's basically the standard format for keys that are
+
+33:59.840 --> 34:04.300
+stored in the key store and it's the same format as any other keys and same as
+
+34:04.300 --> 34:09.800
+the keys that we leaked with the proof of concept that Rafael showed you so we
+
+34:09.800 --> 34:13.700
+came up with a strategy that is more or less the same as the previous one the
+
+34:13.700 --> 34:17.960
+idea is to forge a valid begin request with this key then we send it to the
+
+34:17.960 --> 34:21.680
+secure world we stop the execution and from there we use the vulnerabilities to
+
+34:21.680 --> 34:29.800
+leak the memory and finally from the dump we try all the possible private keys and this time we
+
+34:29.800 --> 34:34.740
+don't use encryption or signature we try to generate the public key out of it simply because
+
+34:34.740 --> 34:41.640
+it's faster it's a multiplication but this is a theory and it's still work in progress sadly
+
+34:41.640 --> 34:47.480
+because we are still stuck in step one it requires more reverse generating at the moment to better
+
+34:47.480 --> 34:53.160
+understand how to forge this begin request that is at least a begin request that is valid so it's
+
+34:53.160 --> 35:01.400
+not a failure it's the unfinished business right all right so um that was the last thing we wanted
+
+35:01.400 --> 35:06.680
+to share with you uh regarding this presentation so now a few takeaways uh so we're presenting a
+
+35:06.680 --> 35:11.160
+chain of four vulnerabilities that led to authentication bypass in odin thanks to that
+
+35:11.160 --> 35:18.360
+we can from the usb cable trigger another vulnerability a code execution in little kernel
+
+35:18.360 --> 35:24.280
+with persistency and we have shown that using the other vulnerabilities we can leak the memory from
+
+35:24.280 --> 35:29.000
+the secure world which include the keystone keys and yes it's still unclear if we can leak the
+
+35:29.000 --> 35:34.360
+attestation keys at the moment now regarding the impact all the samsung devices based on media
+
+35:34.360 --> 35:39.640
+tech socks seems to be vulnerable so mainly low and middle hand devices and we have seen the
+
+35:39.640 --> 35:44.400
+the vulnerabilities are quite simple. They could have been easily spotted through code
+
+35:44.400 --> 35:49.740
+reviews and maybe fuzzing for some of them. But yet they are very impactful. And this
+
+35:49.740 --> 35:56.400
+is also probably because of the lack of mitigation in Detail Kernel and ATF. So we reported all
+
+35:56.400 --> 36:01.520
+these vulnerabilities to Samsung and they are all fixed today. And we would like to thank
+
+36:01.520 --> 36:08.360
+Samsung security team for how they handled the reports we sent. And they made it so they
+
+36:08.360 --> 36:12.320
+worked quickly so that we could disclose the vulnerabilities in conferences such
+
+36:12.320 --> 36:16.740
+as this one so thanks to them and thanks to you for listening to our
+
+36:16.740 --> 36:21.260
+presentation and I'm not sure we have two minutes for questions so if you have
+
+36:21.260 --> 36:37.740
+some please step forward yeah there should be a microphone just over
+
+36:37.740 --> 36:56.740
+Yeah, thanks for your presentation. I saw the conclusion is only in fact the low and middle level of the phone. How about the premium phones?
+
+36:56.740 --> 37:04.740
+um well these bugs only applies to phones based on mediatek system on chip so i'm not sure they
+
+37:04.740 --> 37:10.660
+have premium phones based on this system and chips so maybe that's a topic for another research
+
+37:11.540 --> 37:18.820
+i would be happy to show more bugs on premium phones next time maybe okay so the due to this
+
+37:18.820 --> 37:28.180
+only happened to the leader check uh so say right the problem yeah yeah and then they also patched
+
+37:28.180 --> 37:33.460
+fixed the problem and they all fixed yeah you should update the the firmware yeah thank you
+
+37:34.500 --> 37:40.660
+hi all thanks for the presentation was a blast uh does mediatic planning on releasing uh like
+
+37:40.660 --> 37:46.660
+mitigations you said like there weren't any mitigation active and so will they install any
+
+37:46.660 --> 37:53.140
+mitigations at all on all those sorry i didn't get it remember can you step a bit can you speak
+
+37:53.140 --> 37:59.220
+closer to the mic yeah okay can you hear me now yeah yeah are mediatack planning on releasing
+
+37:59.220 --> 38:07.060
+mitigations like acr all kind of stuff there's something they will do in the future so it's hard
+
+38:07.060 --> 38:12.340
+to speak in their names i think it's that's something i would expect maybe but i don't know
+
+38:12.340 --> 38:18.580
+for this this device i think it's already implemented in some high-end devices for example so yeah
+
+38:24.500 --> 38:28.580
+okay well i think that's it thank you everyone
+

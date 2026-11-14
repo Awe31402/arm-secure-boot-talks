@@ -1,0 +1,2219 @@
+WEBVTT
+
+00:00.000 --> 00:01.060
+Good morning, everybody.
+
+00:02.540 --> 00:03.420
+Yeah, good morning.
+
+00:03.800 --> 00:06.400
+So thank you for attending our presentation.
+
+00:07.160 --> 00:10.900
+So I'm Milene, and with my colleague, Quentin,
+
+00:11.240 --> 00:13.300
+we will present you the secure boot.
+
+00:15.900 --> 00:17.320
+A short presentation.
+
+00:17.760 --> 00:20.700
+So we are embedded Linux engineer at Bootlin,
+
+00:21.080 --> 00:23.120
+formerly Free Electrons,
+
+00:23.540 --> 00:27.320
+but due to some trademark dispute,
+
+00:27.320 --> 00:29.460
+we changed our company name,
+
+00:29.460 --> 00:35.060
+but that's it. We just changed the company name. We are still the same engineers, the same team,
+
+00:35.060 --> 00:43.620
+and still we have a strong open source focus. For our customer, we implemented a full chain
+
+00:43.620 --> 00:53.220
+of trust on a custom IMX6 board, and we wanted to share it in case it can help other people. So
+
+00:53.220 --> 00:58.220
+So this is what we are going to talk in this presentation.
+
+01:01.100 --> 01:05.440
+Short disclaimer, we are definitely not a security expert.
+
+01:06.340 --> 01:11.340
+And we are presenting you one way to verify both
+
+01:11.800 --> 01:16.220
+on a board based on a specific family of SOCs,
+
+01:16.220 --> 01:21.220
+but some parts can be applied to other boards.
+
+01:21.220 --> 01:31.700
+And a container will tell you when there is some specificity on IAMX SOC.
+
+01:31.700 --> 01:41.220
+So first, in introduction, who wants to verify the boot sequence and why?
+
+01:41.220 --> 01:43.500
+So there is product vendors.
+
+01:43.500 --> 01:49.780
+They want to make sure that the devices are used in the same way they should be and not
+
+01:49.780 --> 01:57.780
+for a different purpose. Also not for running inappropriate software. So for
+
+01:57.780 --> 02:08.760
+example, a company may have some software limitation and would need license for
+
+02:08.760 --> 02:15.400
+customer to have a fully featured software. So it can be used with the
+
+02:15.400 --> 02:17.940
+chain of trust to be sure that the user
+
+02:17.940 --> 02:23.720
+are using the fully-featured software with a license.
+
+02:23.720 --> 02:27.900
+And of course, to protect customers
+
+02:27.900 --> 02:32.680
+without having some malwares on your system.
+
+02:32.680 --> 02:34.460
+There is also end users.
+
+02:34.460 --> 02:37.980
+They may want to make sure that the system has not
+
+02:37.980 --> 02:40.500
+been tampered with.
+
+02:40.500 --> 02:44.520
+So basically, it's to make sure that the binaries you are
+
+02:44.520 --> 02:53.700
+trying to load, boot, or execute by a person that you trust.
+
+02:53.700 --> 02:56.460
+So how does it work?
+
+02:56.460 --> 03:00.720
+Everything is based on digital signature verification, which
+
+03:00.720 --> 03:03.180
+is different from encryption.
+
+03:03.180 --> 03:06.080
+So Quentin will show you in the next slides
+
+03:06.080 --> 03:11.940
+the difference between signature verification and encryption.
+
+03:11.940 --> 03:15.440
+So in fact, the first element in the boot process
+
+03:15.440 --> 03:17.560
+authenticate the second one.
+
+03:17.560 --> 03:20.280
+The second one will authenticate the third one,
+
+03:20.280 --> 03:21.420
+et cetera, et cetera.
+
+03:21.420 --> 03:24.720
+And that's why it's called a chain of trust,
+
+03:24.720 --> 03:28.680
+because you have this chain mechanism.
+
+03:28.680 --> 03:32.400
+And if any element is authenticated,
+
+03:32.400 --> 03:36.560
+but not sufficiently locked down, so for example,
+
+03:36.560 --> 03:40.260
+if you let console access in bootloader
+
+03:40.260 --> 03:46.700
+or with access in user space, the device is not verified anymore.
+
+03:46.700 --> 03:49.620
+And so you will break the chain of trust.
+
+03:53.400 --> 03:59.300
+So this is how the chain of trust looks like.
+
+03:59.300 --> 04:01.580
+So you have the ROM code.
+
+04:01.580 --> 04:03.940
+It has a public key.
+
+04:03.940 --> 04:08.580
+It uses this public key to perform a signature verification
+
+04:08.580 --> 04:10.100
+on the bootloader.
+
+04:10.100 --> 04:13.220
+Then the root loader have a public key
+
+04:13.220 --> 04:17.880
+and it will perform signature verification on the kernel.
+
+04:17.880 --> 04:19.860
+And the kernel will have a digest
+
+04:19.860 --> 04:23.880
+to perform a hash verification on the root file system.
+
+04:25.080 --> 04:27.580
+So every component is verified using
+
+04:27.580 --> 04:31.340
+its digital signature and a public key.
+
+04:32.340 --> 04:34.140
+The root file system integrity is verified
+
+04:34.140 --> 04:35.640
+using a hash mechanism.
+
+04:35.640 --> 04:40.640
+We'll see later in next slides how it works.
+
+04:40.640 --> 04:43.800
+And our experience, so as I said before,
+
+04:43.800 --> 04:47.960
+we implemented it on a custom IAMX6 board.
+
+04:49.000 --> 04:51.960
+Content work on the chain of trust
+
+04:51.960 --> 04:55.160
+from room code to the kernel,
+
+04:55.160 --> 04:58.020
+and I worked on the root file system parts.
+
+04:59.620 --> 05:04.680
+Okay, so now a little bit of, well,
+
+05:04.680 --> 05:07.420
+explanation on what are the differences between encryption
+
+05:07.420 --> 05:08.680
+and signature.
+
+05:08.680 --> 05:12.740
+So as Milan told you, the verified boot sequence,
+
+05:12.740 --> 05:15.460
+or a secure boot, as it's called,
+
+05:15.460 --> 05:18.180
+is based on signature and not encryption.
+
+05:18.180 --> 05:21.680
+These are different things, but they are compatible.
+
+05:21.680 --> 05:25.540
+You can actually have encrypted data that is also signed.
+
+05:25.540 --> 05:30.060
+So here is the monetary Alice and Bob example about encryption.
+
+05:30.060 --> 05:33.600
+So the point of encryption is to be
+
+05:33.600 --> 05:40.780
+able to send some data that is unreadable for anyone else
+
+05:40.780 --> 05:43.480
+that isn't supposed to receive, for example, the mail.
+
+05:43.480 --> 05:46.980
+So here, we want to be sure that the mail Alice is sending
+
+05:46.980 --> 05:52.720
+to Bob when it can only be read by Bob.
+
+05:52.720 --> 05:56.880
+So you have as input the data and the public key of Bob,
+
+05:56.880 --> 05:59.640
+which is the input to a math function.
+
+05:59.640 --> 06:03.300
+So we don't care what is it, but it's math function.
+
+06:03.300 --> 06:06.180
+And then it outputs the encrypted data.
+
+06:06.180 --> 06:07.500
+You send it over the internet.
+
+06:07.500 --> 06:10.000
+Nobody can read it except Bob.
+
+06:10.000 --> 06:13.500
+Bob receives the encrypted data, and it
+
+06:13.500 --> 06:20.360
+put it into a math function along with his private key,
+
+06:20.360 --> 06:23.120
+which is the only one to own.
+
+06:23.120 --> 06:25.980
+Of course, it's his private key.
+
+06:25.980 --> 06:29.160
+into my function, and then you have the decrypted data.
+
+06:29.160 --> 06:31.500
+And you're sure Bob is the only one
+
+06:31.500 --> 06:33.920
+who is able to read this data.
+
+06:33.920 --> 06:38.140
+The next one is actually the signature verification.
+
+06:38.140 --> 06:41.280
+So here is a different purpose.
+
+06:41.280 --> 06:44.160
+Here, you want to be sure that Alice,
+
+06:44.160 --> 06:47.980
+so the one who sent the mail to Bob is actually Alice
+
+06:47.980 --> 06:50.440
+and not somebody else.
+
+06:50.440 --> 06:54.860
+The data is unencrypted, so everybody can read it.
+
+06:54.860 --> 07:01.040
+So basically, Alice will take her private key and her data,
+
+07:01.040 --> 07:02.900
+put it into a math function.
+
+07:02.900 --> 07:04.500
+It will output assigned data.
+
+07:04.500 --> 07:06.760
+It's readable by anyone.
+
+07:06.760 --> 07:09.440
+It's a very important concept.
+
+07:09.440 --> 07:11.540
+Everybody can read it.
+
+07:11.540 --> 07:15.420
+And go through the internet, and Bob receives it.
+
+07:15.420 --> 07:16.460
+He can read it.
+
+07:16.460 --> 07:21.040
+And to attest that Alice is the one who sent the mail,
+
+07:21.040 --> 07:23.420
+Well, it will use the public key of Alice
+
+07:23.420 --> 07:27.300
+to actually verify the signature.
+
+07:27.300 --> 07:29.720
+Goes into a math function again, a different one,
+
+07:29.720 --> 07:32.500
+and, well, the data is verified or not.
+
+07:32.500 --> 07:36.700
+So we can attest it's actually Alice who has sent the mail.
+
+07:36.700 --> 07:39.240
+So that's it for the differences between encryption
+
+07:39.240 --> 07:40.920
+and signature.
+
+07:40.920 --> 07:47.340
+So now you have to know that, well, the secure boot sequence,
+
+07:47.340 --> 07:49.720
+it has consequences, of course.
+
+07:49.720 --> 07:54.880
+It's costly in terms of setting up
+
+07:54.880 --> 07:57.640
+the whole architecture for managing your keys,
+
+07:57.640 --> 08:01.360
+creating your keys, signing all your binaries, et cetera.
+
+08:01.360 --> 08:07.780
+So of course, it's a bit longer to handle all those cases.
+
+08:07.780 --> 08:10.740
+You have some added complexity to your workflow
+
+08:10.740 --> 08:14.480
+for developers, because once your platform is locked down
+
+08:14.480 --> 08:18.000
+and can only boot verified binaries,
+
+08:18.000 --> 08:22.900
+you have to sign those binaries to test them.
+
+08:22.900 --> 08:24.960
+And of course, the boot time is, well,
+
+08:24.960 --> 08:28.200
+increased because, well, you have a bunch of authentication
+
+08:28.200 --> 08:33.120
+along the way to the prompt boot, to the Linux prompt, sorry.
+
+08:33.120 --> 08:36.060
+And well, last but not least, you really
+
+08:36.060 --> 08:37.920
+have to be careful with your private keys
+
+08:37.920 --> 08:40.800
+because if one gets stolen or leaked,
+
+08:40.800 --> 08:42.660
+then, well, you're pretty much screwed up
+
+08:42.660 --> 08:46.760
+because, well, anyone can sign your binaries
+
+08:46.760 --> 08:49.400
+and then it's not secure anymore.
+
+08:49.400 --> 08:51.220
+So that was it for the introduction.
+
+08:51.220 --> 08:53.520
+And now we can go to the first element of the chain
+
+08:53.520 --> 08:57.920
+of trust, the RAM card, or as it's called, the root of trust.
+
+08:57.920 --> 09:03.420
+So this is really the main point of your chain of trust.
+
+09:03.420 --> 09:05.720
+It's very specific to the SOC.
+
+09:05.720 --> 09:07.440
+So it depends on your vendors.
+
+09:07.440 --> 09:11.340
+Not all SOCs support secure booting.
+
+09:11.340 --> 09:14.840
+And well, as I told you before, you
+
+09:14.840 --> 09:17.880
+need the public key to be able to verify the signature
+
+09:17.880 --> 09:19.100
+of binary.
+
+09:19.100 --> 09:22.380
+So you need a way to securely store it somewhere
+
+09:22.380 --> 09:24.580
+that the ROM code can look at.
+
+09:24.580 --> 09:30.080
+And well, that depends on every vendor implementation.
+
+09:30.080 --> 09:33.900
+And it's definitely embedded in the ROM code,
+
+09:33.900 --> 09:35.300
+so you don't have access to it.
+
+09:35.300 --> 09:37.280
+You have to trace your vendor.
+
+09:37.280 --> 09:39.640
+And there are definitely different vendors that
+
+09:39.640 --> 09:41.560
+implement some kind of secure boot.
+
+09:41.560 --> 09:44.240
+So these are the main one, I would say.
+
+09:44.240 --> 09:50.260
+Xilinx, Tegra, NXP, et cetera, and missing some shortly.
+
+09:50.260 --> 09:54.480
+So now you have to have a way to store your public keys.
+
+09:54.480 --> 09:58.720
+So this is very the specific way for NXP
+
+09:58.720 --> 10:00.860
+to handle the public keys.
+
+10:00.860 --> 10:04.820
+So basically, it's a non-volatile memory, of course,
+
+10:04.820 --> 10:10.160
+because you need it to be up when the bootstrum starts.
+
+10:10.160 --> 10:14.100
+NXP uses OTP, so one-time programmable fuses.
+
+10:14.100 --> 10:22.920
+So basically a fuse, eFuse also, is, well, we could illustrate it with a wire.
+
+10:22.920 --> 10:27.940
+And when the current path through the wire, then it's a binary one.
+
+10:27.940 --> 10:32.840
+And you apply a very, very, very high current to it, and it disrupts the wire.
+
+10:32.840 --> 10:35.140
+And then you're going to get a binary zero.
+
+10:35.140 --> 10:36.620
+That's how it works.
+
+10:36.620 --> 10:38.460
+And it's irreversible.
+
+10:38.460 --> 10:43.200
+So once you have blown a fuse, then, well,
+
+10:43.200 --> 10:45.900
+never gets wired again.
+
+10:45.900 --> 10:48.280
+Otifix uses are really, really expensive
+
+10:48.280 --> 10:51.900
+in terms of size occupied on your PCB.
+
+10:51.900 --> 10:56.400
+And whereas the public is already at least 1 kilobyte,
+
+10:56.400 --> 11:00.600
+and sometimes up to 4 kilobytes,
+
+11:00.600 --> 11:03.900
+so maybe a good idea would be to actually store
+
+11:03.900 --> 11:07.500
+the hash of this key, which is way, way smaller,
+
+11:07.500 --> 11:13.620
+into the OTP and have the public key in another place.
+
+11:13.620 --> 11:16.660
+For example, in the binary, you're going to load.
+
+11:16.660 --> 11:19.680
+That way, you just have to check the hash of the public key
+
+11:19.680 --> 11:21.940
+that is embedded somewhere else.
+
+11:21.940 --> 11:25.380
+And if it matches, then you're good to go.
+
+11:25.380 --> 11:28.080
+Well, now we have plenty of space,
+
+11:28.080 --> 11:32.980
+so why not using maybe four keys so that we can actually
+
+11:32.980 --> 11:38.160
+revoke some if some get stolen or, well, lost.
+
+11:38.160 --> 11:42.600
+So that way, you can just revoke one key and just say,
+
+11:42.600 --> 11:44.680
+well, this one, we don't want to use it anymore.
+
+11:44.680 --> 11:49.080
+We can use any of the three remaining ones.
+
+11:49.080 --> 11:51.560
+So that's it.
+
+11:51.560 --> 11:54.440
+For the next slide, yeah, thank you.
+
+11:54.440 --> 11:57.380
+The ROM code, so basically the process
+
+11:57.380 --> 12:01.660
+is to load the bootloader in a secure space
+
+12:01.660 --> 12:03.440
+to avoid physical attacks.
+
+12:03.440 --> 12:07.740
+So the point is here, if you load your bootloader
+
+12:07.740 --> 12:11.440
+and authenticate it from a space that is unsecure,
+
+12:11.440 --> 12:15.160
+the problem is, once you have to actually boot,
+
+12:15.160 --> 12:19.520
+execute the binary, well, this is a time frame
+
+12:19.520 --> 12:22.140
+where an attacker can actually change the binary
+
+12:22.140 --> 12:25.560
+and make it like it was authenticated
+
+12:25.560 --> 12:29.260
+while it was definitely not.
+
+12:29.260 --> 12:37.220
+Then it loads the embedded public key, which is in the bootloader binary, for example.
+
+12:37.220 --> 12:41.620
+It checks the hash of the public key, which is embedded in the binary of the bootloader
+
+12:41.620 --> 12:48.400
+against the one which is in the hash table, made of different OTPs, fuses.
+
+12:48.400 --> 12:53.880
+You check the public key, then you execute the bootloader binary if it matches.
+
+12:53.880 --> 13:05.380
+And on NXP for IMX, et cetera, SOC family, it's called HAB for High Insurance Boot.
+
+13:05.380 --> 13:08.260
+So how do you set it up for your board?
+
+13:08.260 --> 13:11.380
+It's, again, very specific to your vendor.
+
+13:11.380 --> 13:18.980
+Here, you use code signing tools, so CST, for creating the keys, so the private keys
+
+13:18.980 --> 13:20.860
+and certificates.
+
+13:20.860 --> 13:27.280
+You flush the fuses using working and verified uBoot,
+
+13:27.280 --> 13:31.480
+again, using NXP-specific code, which is Fuse Flush or something
+
+13:31.480 --> 13:35.020
+like that, Fuse Prog, I think, with the Fuse table written
+
+13:35.020 --> 13:36.620
+by CST.
+
+13:36.620 --> 13:39.320
+You sign the bootloader using, again, CST,
+
+13:39.320 --> 13:41.620
+and you check the status of the bootloader,
+
+13:41.620 --> 13:44.620
+H-I-B underscore status, from the bootloader,
+
+13:44.620 --> 13:49.500
+so from uBoot, with a signed uBoot, which is also NXP-specific.
+
+13:49.500 --> 13:53.100
+And if you have reached this step successfully,
+
+13:53.100 --> 13:55.260
+then you can decide to lock down your bootloader
+
+13:55.260 --> 13:59.820
+to actually restrict the loading of the bootloader to one
+
+13:59.820 --> 14:02.980
+which is authenticated, so verified.
+
+14:02.980 --> 14:07.200
+And well, if you just screwed one of the previous item
+
+14:07.200 --> 14:10.180
+and you blow the locking fuse, then you screwed up.
+
+14:10.180 --> 14:14.940
+So be sure you are doing the right thing.
+
+14:14.940 --> 14:19.620
+So this is the two examples of the results of HAB status
+
+14:19.620 --> 14:21.060
+from your boot.
+
+14:21.060 --> 14:24.140
+The first example, you have the first line,
+
+14:24.140 --> 14:25.420
+which is secure boot disabled.
+
+14:25.420 --> 14:28.820
+This is because I haven't blown, actually, the locking fuse.
+
+14:28.820 --> 14:31.440
+When it's blown, then it's secure boot enabled.
+
+14:31.440 --> 14:35.000
+If you have any HAB event following this line,
+
+14:35.000 --> 14:38.560
+it means that your bootloader hasn't been authenticated.
+
+14:38.560 --> 14:40.540
+So it failed.
+
+14:40.540 --> 14:44.020
+In the next example, you can see no HAB events found.
+
+14:44.020 --> 14:47.260
+well, you successfully authenticated your bootloader.
+
+14:47.260 --> 14:49.800
+So that was it for the ROM code part,
+
+14:49.800 --> 14:52.660
+to authenticate the bootloader.
+
+14:52.660 --> 14:56.480
+But now you have to authenticate your kernel.
+
+14:56.480 --> 14:59.340
+So trust no one.
+
+14:59.340 --> 15:00.740
+Believe me, trust no one.
+
+15:00.740 --> 15:03.380
+So there is no point of having a secure bootloader
+
+15:03.380 --> 15:06.840
+if it's not authenticated by the ROM code.
+
+15:06.840 --> 15:09.820
+So by that, I mean if you can actually
+
+15:09.820 --> 15:14.080
+switch the bootloader with something that isn't
+
+15:14.080 --> 15:18.960
+authenticated, then there is no point actually
+
+15:18.960 --> 15:20.740
+taking the time to authenticate it.
+
+15:20.740 --> 15:25.100
+Because with a not-authenticated bootloader,
+
+15:25.100 --> 15:28.580
+you can boot whatever you want after that.
+
+15:28.580 --> 15:30.820
+The bootloader has to be sufficiently locked down.
+
+15:30.820 --> 15:34.060
+So it depends on the bootloader binary you're booting.
+
+15:34.060 --> 15:38.460
+And there is a very specific use case,
+
+15:38.460 --> 15:41.820
+Well, example for U-boot in mainline.
+
+15:41.820 --> 15:45.560
+U-boot in mainline has environment variable called
+
+15:45.560 --> 15:46.860
+verify.
+
+15:46.860 --> 15:49.940
+If it's set to no, U-boot stops to verify
+
+15:49.940 --> 15:52.000
+the signature of images.
+
+15:52.000 --> 15:56.140
+And that's, well, not what we want.
+
+15:56.140 --> 15:58.220
+So we definitely do not want any user
+
+15:58.220 --> 16:01.940
+to access the console to set the environment variable from there.
+
+16:01.940 --> 16:06.040
+So you have to disable the console at all.
+
+16:06.040 --> 16:08.620
+Well, very important point.
+
+16:08.620 --> 16:11.180
+You should, under no circumstances,
+
+16:11.180 --> 16:14.780
+trust anything that isn't in an authenticated binary.
+
+16:14.780 --> 16:17.180
+So that means that, well, environments
+
+16:17.180 --> 16:19.960
+are often on other mediums.
+
+16:19.960 --> 16:22.800
+But there, you can trust them, because you cannot authenticate
+
+16:22.800 --> 16:23.680
+them.
+
+16:23.680 --> 16:25.800
+So you should use the one which is definitely
+
+16:25.800 --> 16:28.520
+in the you would binary that was authenticated by the ROM
+
+16:28.520 --> 16:30.940
+code.
+
+16:30.940 --> 16:36.020
+Well, that doesn't really work with update software
+
+16:36.020 --> 16:40.800
+from Linux kernel, because they often interact
+
+16:40.800 --> 16:44.120
+with the uBoot environments to say,
+
+16:44.120 --> 16:47.320
+you should boot this image or this image.
+
+16:47.320 --> 16:49.960
+So I have a pending patch for uBoot
+
+16:49.960 --> 16:51.800
+to only load a handful of variables
+
+16:51.800 --> 16:59.260
+that you can control from the uBoot embedded environment
+
+16:59.260 --> 17:03.440
+binary, and it can load from whichever medium
+
+17:03.440 --> 17:07.540
+you want to load the environment from.
+
+17:07.540 --> 17:10.660
+So yeah, that's it.
+
+17:10.660 --> 17:12.820
+So now, how it actually works, you're
+
+17:12.820 --> 17:16.660
+going to use the device through blob, which is basically
+
+17:16.660 --> 17:20.060
+the same as it's in the kernel.
+
+17:20.060 --> 17:24.040
+It's used to actually embed the public key
+
+17:24.040 --> 17:26.660
+within the uBoot binary.
+
+17:26.660 --> 17:29.580
+And this public key will be used to check the signature
+
+17:29.580 --> 17:32.240
+of the kernel images.
+
+17:32.240 --> 17:35.680
+And because it's appended to the UBoot binary,
+
+17:35.680 --> 17:37.880
+it's also authenticated by the ROM card.
+
+17:37.880 --> 17:40.280
+So you can actually trust the public key, which
+
+17:40.280 --> 17:45.340
+is within the UBoot binary.
+
+17:45.340 --> 17:51.280
+So now, to be a bit more practical and simple to use,
+
+17:51.280 --> 17:54.760
+to check the signature of the different images,
+
+17:54.760 --> 17:55.700
+you have two choices.
+
+17:55.700 --> 17:58.560
+Either you load one image, and then its signature,
+
+17:58.560 --> 18:01.440
+and then the second image, and its signature, et cetera,
+
+18:01.440 --> 18:05.320
+or you use the fit image, which is basically a container
+
+18:05.320 --> 18:10.160
+storing a lot of different binaries and their hashes.
+
+18:10.160 --> 18:14.660
+And MKImage, so the tool to actually compile the fit image,
+
+18:14.660 --> 18:18.040
+has already built-in support for signing in while doing
+
+18:18.040 --> 18:19.100
+the binaries hash.
+
+18:19.100 --> 18:20.760
+So well, we're on luck.
+
+18:20.760 --> 18:23.260
+So better use this tool.
+
+18:23.260 --> 18:30.980
+So well, now in the process to get to the next chain
+
+18:30.980 --> 18:33.040
+in a chain of trust, you have to create actually
+
+18:33.040 --> 18:38.840
+your keys to verify the kernel to actually sign the bootloader.
+
+18:38.840 --> 18:39.340
+Sorry.
+
+18:39.340 --> 18:42.640
+To sign the kernel and verify it from the bootloader.
+
+18:42.640 --> 18:47.160
+So the first line is to create an RSA 4K key, which
+
+18:47.160 --> 18:49.080
+is called my underscore key.
+
+18:49.080 --> 18:50.180
+This is a private key.
+
+18:50.180 --> 18:51.860
+And then you create a certificate.
+
+18:51.860 --> 18:56.340
+Certificates is really close to a public key.
+
+18:56.340 --> 19:01.940
+So it's really MKMitch requires the use of certificates
+
+19:01.940 --> 19:03.320
+and not public keys.
+
+19:03.320 --> 19:04.900
+Well, it's a choice.
+
+19:04.900 --> 19:08.220
+And it's really, really important that your certificate
+
+19:08.220 --> 19:10.420
+and your private key are named the same.
+
+19:10.420 --> 19:12.600
+Otherwise, MKMitch doesn't work at all.
+
+19:15.920 --> 19:20.240
+So this is an example of a source file for the device
+
+19:20.240 --> 19:25.920
+tree used to embed the public key within the UBoot binary.
+
+19:25.920 --> 19:28.700
+So you have the signature device 3 node.
+
+19:28.700 --> 19:32.000
+If your board already has device 3,
+
+19:32.000 --> 19:34.360
+well, you should be able to use it and just add
+
+19:34.360 --> 19:36.840
+the signature device 3 node.
+
+19:36.840 --> 19:40.480
+Something to note is that key name hint and the suffix
+
+19:40.480 --> 19:46.660
+to key dash dt node has to be the same value or name
+
+19:46.660 --> 19:48.040
+as the one you have given to your key.
+
+19:48.040 --> 19:50.420
+So in the previous slide, it was my underscore key.
+
+19:50.420 --> 19:53.020
+You have to use the same.
+
+19:53.020 --> 19:57.520
+There is also a property, which is called required.
+
+19:57.520 --> 20:00.640
+It's either image or configuration.
+
+20:00.640 --> 20:03.500
+It depends on which level you want to actually
+
+20:03.500 --> 20:06.620
+do your signature verification.
+
+20:06.620 --> 20:11.980
+And you can find the explanation in the documentation here
+
+20:11.980 --> 20:14.220
+in the UBoot project.
+
+20:14.220 --> 20:16.380
+So what's a fit image?
+
+20:16.380 --> 20:18.000
+So let's say it's basically a container.
+
+20:18.000 --> 20:22.140
+So you have a set of images, different one, one, two,
+
+20:22.140 --> 20:24.400
+three, kernel, whatever.
+
+20:24.400 --> 20:26.840
+The same for device trees, you have also
+
+20:26.840 --> 20:31.100
+support for other kind of files like scripts.
+
+20:31.100 --> 20:33.440
+And then you have also configurations.
+
+20:33.440 --> 20:36.940
+So configurations are a way to force the user
+
+20:36.940 --> 20:40.920
+to load binaries together.
+
+20:40.920 --> 20:45.820
+So for example, here you have conf at one, so the red box,
+
+20:45.820 --> 20:48.240
+which force the user to load the first kernel, the third
+
+20:48.240 --> 20:51.800
+device tree, and the first .
+
+20:51.800 --> 20:54.560
+So that's a way to force your user
+
+20:54.560 --> 20:58.360
+to boot a certain configuration.
+
+20:58.360 --> 21:02.200
+It supports different architectures, OSCs, image
+
+21:02.200 --> 21:04.820
+types, and a lot of other things.
+
+21:04.820 --> 21:07.160
+And you can find all of them in the source code
+
+21:07.160 --> 21:10.660
+in command slash image.c.
+
+21:10.660 --> 21:14.580
+So this is really a quick example of a source file
+
+21:14.580 --> 21:23.420
+for FitImage. So we have the images device tree or node with all the different binaries
+
+21:23.420 --> 21:31.440
+where you can find them, where you can load your binaries, which key to use to sign each
+
+21:31.440 --> 21:38.440
+of the binaries. And you have the configurations on the right. And there is an important line
+
+21:38.440 --> 21:42.200
+which is default equals conf at one.
+
+21:42.200 --> 21:46.180
+And this will be important in the next upcoming slides.
+
+21:46.180 --> 21:50.480
+And you can see that the conf at one has kernel
+
+21:50.480 --> 21:52.100
+is equal to kernel at one.
+
+21:52.100 --> 21:54.460
+So it will be using the first kernel
+
+21:54.460 --> 21:58.680
+and the device reads, which is also the first one.
+
+21:58.680 --> 22:03.780
+So there is a little bit of tricks
+
+22:03.780 --> 22:07.020
+to do before compiling your uBoot binary.
+
+22:07.020 --> 22:13.180
+you have to actually compile your device which contains
+
+22:13.180 --> 22:18.800
+the embedded public key outside of your UBoot source
+
+22:18.800 --> 22:20.200
+repository.
+
+22:20.200 --> 22:24.760
+And this is because we need to use
+
+22:24.760 --> 22:26.900
+MKMet, which is a tool from UBoot,
+
+22:26.900 --> 22:29.780
+to actually embed the public key before we are going
+
+22:29.780 --> 22:32.580
+to build the UBoot binary.
+
+22:32.580 --> 22:37.380
+So you use DTC to do the first compilation
+
+22:37.380 --> 22:40.360
+of the uBoot public key, the DTB.
+
+22:40.360 --> 22:43.320
+Then you compile all the tools from uBoot.
+
+22:43.320 --> 22:47.200
+You run MKImage to actually build the fit image
+
+22:47.200 --> 22:49.480
+and at the same time embed the public key
+
+22:49.480 --> 22:52.240
+within the device tree.
+
+22:52.240 --> 22:53.740
+And then you compile the uBoot binary
+
+22:53.740 --> 22:55.880
+using the external device tree blob, which
+
+22:55.880 --> 23:00.080
+is called uBoot underscore public key.
+
+23:00.080 --> 23:03.020
+These are the, well, the configuration
+
+23:03.020 --> 23:08.240
+you have to put to enable the fit image signature
+
+23:08.240 --> 23:12.120
+verification in U-boot.
+
+23:12.120 --> 23:16.360
+They say config of control is for embedding, actually,
+
+23:16.360 --> 23:21.160
+using, actually, the device support in U-boot.
+
+23:21.160 --> 23:24.060
+And the first two items are NXP-specific.
+
+23:24.060 --> 23:33.040
+So this is actually what it looks like to boot a fit image
+
+23:33.040 --> 23:35.660
+with all the verification steps, et cetera.
+
+23:35.660 --> 23:40.200
+So provided you have a fit image loaded at 0x15, let's say,
+
+23:40.200 --> 23:44.920
+so you do boot m 0x15 pound conf at 1.
+
+23:44.920 --> 23:50.440
+But since the default in the configurations node
+
+23:50.440 --> 23:52.700
+in the source file of your fit image,
+
+23:52.700 --> 23:55.800
+you know that conf at 1 is the default one.
+
+23:55.800 --> 23:59.200
+So you can actually just keep the part after the pound.
+
+23:59.200 --> 24:02.580
+So bootem XORX 15 is fine.
+
+24:02.580 --> 24:05.200
+You can see that it's using conf at 1.
+
+24:05.200 --> 24:08.860
+It's trying to load the kernel at 1.
+
+24:08.860 --> 24:12.160
+It does all of those things and verify the hash integrity,
+
+24:12.160 --> 24:13.620
+which says, well, it's OK.
+
+24:13.620 --> 24:19.860
+So let's get to the next binary in the fit image,
+
+24:19.860 --> 24:22.260
+which is the .
+
+24:22.260 --> 24:26.880
+It checks it, well, it's fine, so let's get started with the kernel.
+
+24:26.880 --> 24:34.800
+But then, someone touched the device and, well, hopefully, it will get it and stops
+
+24:34.800 --> 24:35.800
+the boot.
+
+24:35.800 --> 24:39.780
+And that's what happened in the lower part of this slide.
+
+24:39.780 --> 24:41.220
+It's verifying the hash integrity.
+
+24:41.220 --> 24:43.380
+They say, no, I cannot verify it.
+
+24:43.380 --> 24:50.000
+So well, I'm stopping there, and I'm crashing you, but you shouldn't stop, stop here.
+
+24:50.000 --> 24:55.540
+So I think that was it for the part up to the root file system.
+
+24:55.540 --> 25:01.060
+So now we will present her part on the root file system.
+
+25:01.060 --> 25:06.720
+So it's the final part of the chain of trust.
+
+25:06.720 --> 25:14.120
+To have a verified root file system, we have chosen the following solution.
+
+25:14.120 --> 25:19.280
+You can have other kind of solution, but this is what we choose.
+
+25:19.280 --> 25:24.700
+So first of all, we wanted to have an unalterable file system.
+
+25:24.700 --> 25:31.920
+So we choose to have a read-only file system, so it's impossible to modify it.
+
+25:31.920 --> 25:38.480
+So we use a SquashFS image, which is a type for read-only file system.
+
+25:38.480 --> 25:44.520
+So this part is not really part of the secure board process, but it was important for us
+
+25:44.520 --> 25:47.700
+and for our customer.
+
+25:47.700 --> 25:55.860
+So the authentication of the root file system, so it's really the part of the chain of trust,
+
+25:55.860 --> 25:57.680
+we use DMVarity.
+
+25:57.680 --> 26:03.660
+So DMVarity, it's an infrastructure to check if the root file system is the one we are
+
+26:03.660 --> 26:05.960
+expecting to have.
+
+26:05.960 --> 26:10.760
+So in fact, it's the authentication of the SquashFS image.
+
+26:10.760 --> 26:17.140
+And DMVarity needs some user space application to authenticate the system.
+
+26:17.140 --> 26:22.840
+And so you need to have these tools available.
+
+26:22.840 --> 26:29.100
+So that's why we choose to have init1fs as a first file system.
+
+26:29.100 --> 26:38.420
+And in this init1fs, you will have the application tools to perform the authentication of the
+
+26:38.420 --> 26:41.500
+root file system.
+
+26:41.500 --> 26:44.240
+The init1fs is built in the kernel.
+
+26:44.240 --> 26:53.200
+So thanks to that, it doesn't break the chain of trust because, as Compton told you before,
+
+26:53.200 --> 27:00.840
+the kernel is already in the chain of trust using the fit image.
+
+27:00.840 --> 27:02.220
+So now DMVVT.
+
+27:02.220 --> 27:07.220
+So DM, it stands for device mapper.
+
+27:07.220 --> 27:14.500
+It's an infrastructure in the Linux kernel to create virtual layers on block devices.
+
+27:14.500 --> 27:22.700
+So device mapper Verity, it provides integrity checking of block devices using kernel crypto
+
+27:22.700 --> 27:23.700
+API.
+
+27:23.700 --> 27:33.320
+Then Verity could hash the whole block device and then compare the hash with an expected
+
+27:33.320 --> 27:35.480
+hash, but it's not doing that.
+
+27:35.480 --> 27:38.780
+Otherwise, the boot time will be very, very long.
+
+27:38.780 --> 27:44.620
+So instead of that, it's use cryptographic hash tree.
+
+27:44.620 --> 27:49.160
+And your block device will be split in small block,
+
+27:49.160 --> 27:52.760
+and each block will have its hash.
+
+27:52.760 --> 27:57.780
+And it will create a hash tree until the last hash,
+
+27:57.780 --> 27:59.460
+which is called root hash.
+
+27:59.460 --> 28:04.220
+we will use this root hash in the authentication mechanism.
+
+28:04.220 --> 28:08.080
+So we will see it in the next slides.
+
+28:08.080 --> 28:13.740
+And this block are hashed only on access.
+
+28:13.740 --> 28:18.120
+So instead of having a longer boot time,
+
+28:18.120 --> 28:26.080
+we will just have a smaller, long access on a block device.
+
+28:26.080 --> 28:31.880
+And as I said before, DMVT needs some user space application.
+
+28:31.880 --> 28:35.860
+So CryptSetup package provides different tools,
+
+28:35.860 --> 28:37.480
+such as VeritySetup.
+
+28:37.480 --> 28:39.320
+So we'll see in the next slide.
+
+28:39.320 --> 28:44.400
+VeritySetup is a tool to create the hash tree
+
+28:44.400 --> 28:46.480
+and also to authenticate the device.
+
+28:49.780 --> 28:55.740
+So DMVT in our case, so we have our kernel.
+
+28:55.740 --> 29:00.500
+DemVarity has some configuration in the kernel,
+
+29:00.500 --> 29:03.000
+so you need to enable this configuration
+
+29:03.000 --> 29:05.740
+to have DemVarity.
+
+29:05.740 --> 29:08.380
+And as I said before, we have a NeetromFS,
+
+29:08.380 --> 29:13.500
+and we created a script that will use a Verity Setup tool
+
+29:13.500 --> 29:17.900
+to perform the verification on our block device.
+
+29:17.900 --> 29:21.100
+For our use case, we use UBI block device,
+
+29:21.100 --> 29:24.420
+but it can be other kind of block device.
+
+29:25.300 --> 29:28.440
+If the verification is successful,
+
+29:28.440 --> 29:32.680
+then you can use mount command, for example,
+
+29:32.680 --> 29:37.680
+to have access of your squashfs that you verified.
+
+29:37.680 --> 29:39.180
+And if it's not the case,
+
+29:39.180 --> 29:43.100
+then it will fail to mount the squashfs
+
+29:43.100 --> 29:46.080
+and it will stop the init here.
+
+29:49.600 --> 29:53.500
+So now let's see how to create the hash tree
+
+29:53.500 --> 29:58.000
+that we have seen in previous slide.
+
+29:58.000 --> 30:05.960
+So Verity Setup can create the hash tree on device or images.
+
+30:05.960 --> 30:09.060
+In this example, it's on images, but you
+
+30:09.060 --> 30:11.780
+can do it on device node.
+
+30:11.780 --> 30:14.120
+So we have our SquashFS image.
+
+30:14.120 --> 30:18.500
+We perform Verity Setup format command.
+
+30:18.500 --> 30:22.560
+The resulting image is a hash image,
+
+30:22.560 --> 30:24.800
+and it's containing the hash tree
+
+30:24.800 --> 30:28.920
+that we will use to authenticate the device.
+
+30:28.920 --> 30:33.920
+And it also prints on your screen the root hash.
+
+30:33.920 --> 30:36.300
+And you need to keep it,
+
+30:36.300 --> 30:39.060
+because we will use it to authenticate the device
+
+30:39.060 --> 30:42.200
+to be sure that the SquashFS image
+
+30:42.200 --> 30:46.160
+that we've created the hash tree right now,
+
+30:46.160 --> 30:49.600
+it's the correct one that we want to authenticate.
+
+30:49.600 --> 31:00.620
+So by default, the DemVerity and VeritySetup expect to have a block device with data in
+
+31:00.620 --> 31:05.080
+there and another block device with the hash tree.
+
+31:05.080 --> 31:13.520
+So the command used is VeritySetup format, then the data device, and the hash device.
+
+31:13.520 --> 31:18.100
+But in fact, in our use case, we wanted to have only one device.
+
+31:18.100 --> 31:22.500
+So our block device will have the SquashFS image
+
+31:22.500 --> 31:26.340
+and also it will contain the hash tree.
+
+31:27.600 --> 31:29.980
+For that, we can contain the hash image
+
+31:29.980 --> 31:34.380
+at the end of the SquashFS image
+
+31:34.380 --> 31:39.380
+to have at the end final SquashFS containing also the hash tree.
+
+31:43.060 --> 31:45.400
+To do that, Verity Setup tool
+
+31:45.400 --> 31:50.400
+as an option, hash offset,
+
+31:52.120 --> 31:57.120
+and to say how to locate the hash area
+
+31:58.400 --> 32:01.160
+in the same device or image.
+
+32:01.160 --> 32:05.900
+So here's the example of the command,
+
+32:05.900 --> 32:09.660
+so verity setup format, then we set the offset,
+
+32:09.660 --> 32:11.740
+so where we can find the hash tree
+
+32:11.740 --> 32:14.920
+in the same device or image.
+
+32:16.400 --> 32:18.200
+Currently, in our example,
+
+32:19.380 --> 32:24.380
+because the hash tree is at the end of the SquashFS image,
+
+32:24.380 --> 32:28.300
+the offset is the size of the SquashFS image.
+
+32:29.580 --> 32:31.320
+And then the data device,
+
+32:31.320 --> 32:34.580
+so in our use case, it's the SquashFS image.
+
+32:34.580 --> 32:39.400
+And the final result, so it's the SquashFS image
+
+32:39.400 --> 32:43.000
+and also the hash image.
+
+32:45.380 --> 32:48.160
+So now we have created our hash tree.
+
+32:48.160 --> 32:50.740
+We have the root hash,
+
+32:50.740 --> 32:54.260
+and we will see how to authenticate the device.
+
+32:55.960 --> 32:58.200
+So now we are on our platform.
+
+32:58.200 --> 33:01.800
+We have flashed all the different images,
+
+33:01.800 --> 33:05.480
+and we have our block device
+
+33:05.480 --> 33:09.400
+that contains the SquashFS and the hash image.
+
+33:09.400 --> 33:12.260
+We use Verity Setup create command
+
+33:12.260 --> 33:17.260
+that we need the offset to know where to find the hash tree
+
+33:17.680 --> 33:19.360
+and also the root hash.
+
+33:20.600 --> 33:23.600
+If the hash corresponds to the one
+
+33:23.600 --> 33:26.640
+that is available in the hash tree,
+
+33:26.640 --> 33:31.640
+then you have a mapper device on the SquashFS verified.
+
+33:31.640 --> 33:38.280
+So at the end, you will have a slash dev, slash mapper, slash something.
+
+33:38.280 --> 33:45.920
+And on this device mapper, you can use the standard mount command to then have access
+
+33:45.920 --> 33:49.780
+to your verified SquashFS.
+
+33:49.780 --> 33:59.300
+So the command you use is a very tight setup create, then the name of the device mapper.
+
+33:59.300 --> 34:02.260
+So in our example, it's a root file system.
+
+34:02.260 --> 34:04.140
+It can be another one.
+
+34:06.000 --> 34:11.000
+Again, we use the hash offset option of Verity Setup
+
+34:12.140 --> 34:17.140
+to say where to locate the hash tree in the device block.
+
+34:21.380 --> 34:24.960
+Then there is a data device and the hash device.
+
+34:24.960 --> 34:27.960
+In our use case, it's the same one.
+
+34:27.960 --> 34:31.080
+and finally, the root hash.
+
+34:32.600 --> 34:35.920
+So because we use the same block device
+
+34:35.920 --> 34:40.920
+and it contains both data and hash image,
+
+34:41.280 --> 34:44.960
+we use UBI block zero twice.
+
+34:44.960 --> 34:48.000
+Of course, if you use a default mechanism,
+
+34:48.000 --> 34:53.000
+so if you have, for example, the data on UBI block zero
+
+34:53.600 --> 34:56.900
+and hash three on UBI block one,
+
+34:56.900 --> 35:00.580
+then you don't use hash offset parameters,
+
+35:00.580 --> 35:03.380
+and you will have block zero and block one
+
+35:03.380 --> 35:06.120
+in your command varity setup create.
+
+35:10.080 --> 35:14.140
+Yeah, so here you can see that we have the offset
+
+35:14.140 --> 35:16.660
+and the hash parameters,
+
+35:16.660 --> 35:21.660
+and we need a way to have it available in the kernel.
+
+35:22.160 --> 35:24.700
+So in fact, we use both args,
+
+35:25.600 --> 35:29.700
+And for that, we created a U-boot environment script.
+
+35:31.260 --> 35:34.740
+But this new component can be attacked.
+
+35:34.740 --> 35:37.880
+So to not again break the chain of trust,
+
+35:37.880 --> 35:40.380
+we add it in the fit image.
+
+35:40.380 --> 35:44.320
+So in the fit image, we have the U-boot environment script
+
+35:44.320 --> 35:46.260
+with the hash,
+
+35:48.140 --> 35:52.020
+which has the signature of the hash of the binary.
+
+35:52.020 --> 35:56.720
+Then u-boot checks the signature of this u-boot environment
+
+35:56.720 --> 35:58.000
+script.
+
+35:58.000 --> 36:04.260
+If the signature is matching, then it can source this script.
+
+36:04.260 --> 36:08.500
+And in this script, we have some variables
+
+36:08.500 --> 36:12.940
+to retrieve the offset and the hash.
+
+36:12.940 --> 36:16.520
+And also, of course, it sets the boot hash.
+
+36:16.520 --> 36:21.900
+Thanks to that, we can retrieve it in the kernel.
+
+36:21.900 --> 36:25.300
+So here, it's the final mechanism.
+
+36:25.300 --> 36:27.320
+So as I said before, we have uBoot.
+
+36:27.320 --> 36:31.760
+It checks the signature of the uBoot environment script.
+
+36:31.760 --> 36:36.120
+If it's not the correct one, it will fail to source it.
+
+36:36.120 --> 36:39.460
+If it's the correct one, it will source the script.
+
+36:39.460 --> 36:41.500
+Thanks to that, in the boot args,
+
+36:41.500 --> 36:45.400
+we will have the offset and the hash.
+
+36:45.400 --> 36:50.180
+Then we have our kernel with DMVVT enabled, our init1FS
+
+36:50.180 --> 36:54.760
+with the init script that will use the Verity Setup command
+
+36:54.760 --> 36:59.540
+to do the verification on the UBI block device.
+
+36:59.540 --> 37:02.900
+Of course, as we have seen before, Verity Setup command
+
+37:02.900 --> 37:05.280
+needs the hash and the offset.
+
+37:05.280 --> 37:08.860
+So thanks to the boot args, it can retrieve it.
+
+37:08.860 --> 37:12.020
+And if the verification is successful,
+
+37:12.020 --> 37:18.060
+then you have a device mapper, and you can do a switch route.
+
+37:18.060 --> 37:22.120
+So in our use case, we use switch routes instead of mount
+
+37:22.120 --> 37:26.040
+because we wanted to switch the root file system
+
+37:26.040 --> 37:29.880
+from the init1fs to the verified squashfs.
+
+37:29.880 --> 37:32.820
+Otherwise, our system will always
+
+37:32.820 --> 37:35.500
+be on the init1fs, and we don't want that.
+
+37:38.380 --> 37:41.840
+And to complete the chain of trust,
+
+37:41.840 --> 37:46.460
+so as we added a new component, so use a U-boot environment
+
+37:46.460 --> 37:49.440
+script, for example, we add it in the fit image
+
+37:49.440 --> 37:51.600
+to not break the chain of trust.
+
+37:55.040 --> 37:56.420
+Thanks, Milan.
+
+37:56.420 --> 38:03.100
+So now we have actually completed our chain of trust.
+
+38:03.100 --> 38:07.900
+So basically, now to summarize what
+
+38:07.900 --> 38:11.580
+has been done yet until now.
+
+38:11.580 --> 38:18.360
+So in the ROM code, you have up to four hash of public keys,
+
+38:18.360 --> 38:20.740
+which are used to verify the public key which
+
+38:20.740 --> 38:24.640
+is embedded in the binary of the bootloader.
+
+38:24.640 --> 38:27.180
+Then when it's verified, the public key,
+
+38:27.180 --> 38:28.880
+then you can use it to verify, actually,
+
+38:28.880 --> 38:30.620
+the signature of the bootloader.
+
+38:30.620 --> 38:32.880
+Once that's done, you have another public key
+
+38:32.880 --> 38:35.300
+in the uBoot binary, which is used
+
+38:35.300 --> 38:38.380
+to verify the signature of the kernel and the DTB,
+
+38:38.380 --> 38:40.380
+Well, basically the fit image, the whole fit image
+
+38:40.380 --> 38:44.920
+with the UBoot script presented just the slides before.
+
+38:44.920 --> 38:46.960
+And once that's done, you have the digest
+
+38:46.960 --> 38:49.720
+within the fit image, which is used to verify
+
+38:49.720 --> 38:52.600
+and authenticate the rootFS.
+
+38:52.600 --> 38:55.920
+So yeah, basically that's done.
+
+38:55.920 --> 38:59.220
+But now we really want some kind of, I would say,
+
+38:59.220 --> 39:02.400
+distribution as a rootFS.
+
+39:02.400 --> 39:04.720
+And we don't want to, well, do it manually.
+
+39:04.720 --> 39:08.860
+We can use build root, Yocto, whatever build system you want.
+
+39:08.860 --> 39:11.020
+But in our case, it was Yocto.
+
+39:11.020 --> 39:13.460
+But Yocto has a really specific way
+
+39:13.460 --> 39:17.060
+to create fit images.
+
+39:17.060 --> 39:20.500
+And currently, it's the kernel recipe
+
+39:20.500 --> 39:24.380
+that actually inherits the kernel fit image class.
+
+39:24.380 --> 39:31.760
+And that means that, well, it's done before the root
+
+39:31.760 --> 39:33.180
+has been created.
+
+39:33.180 --> 39:35.880
+And I think the point is that actually people
+
+39:35.880 --> 39:39.320
+want to have the fit image, the kernel, whatever,
+
+39:39.320 --> 39:42.900
+within the slash boot of the rootFS.
+
+39:42.900 --> 39:48.680
+But our script needs the rootFS to be actually compiled, built,
+
+39:48.680 --> 39:53.800
+so that we can compute the hash and put it in the U-boot script.
+
+39:53.800 --> 39:58.680
+But, well, we want it in the fit image, which
+
+39:58.680 --> 40:01.620
+is created before the rootFS.
+
+40:01.620 --> 40:04.520
+So basically, that's how we end up with a dependency loop
+
+40:04.520 --> 40:07.540
+in Yocto, and that's really hard to debug.
+
+40:07.540 --> 40:10.740
+So while we throw away the kernel feature image class
+
+40:10.740 --> 40:13.920
+and wrote a new image and class recipes
+
+40:13.920 --> 40:16.800
+to work around this issue, it's really, I would say,
+
+40:16.800 --> 40:20.440
+the level of draft or proof of concept.
+
+40:20.440 --> 40:24.320
+But that works, so that was it for us.
+
+40:24.320 --> 40:31.400
+So well, it was a very specific example we presented today.
+
+40:31.400 --> 40:35.180
+to have only read-only file system.
+
+40:35.180 --> 40:39.780
+But you definitely may want to have some read-only file
+
+40:39.780 --> 40:44.960
+system besides your read-only file system.
+
+40:44.960 --> 40:47.780
+So if it stores not critical data,
+
+40:47.780 --> 40:53.340
+well, just mount it alongside your read-only file system.
+
+40:53.340 --> 40:54.020
+That's fine.
+
+40:54.020 --> 40:56.360
+You can store blogs, user data.
+
+40:56.360 --> 40:57.640
+Well, you don't care.
+
+40:57.640 --> 41:02.260
+Well, if it's critical, well, we haven't really looked at it.
+
+41:02.260 --> 41:06.100
+But a hint would be to look at IMA EVM.
+
+41:06.100 --> 41:09.880
+We have provided a bit of toolings to look at it.
+
+41:09.880 --> 41:11.680
+I don't know how it works.
+
+41:11.680 --> 41:14.960
+Just have a look at it.
+
+41:14.960 --> 41:21.640
+So to end this talk, remember I told you to trust no one?
+
+41:21.640 --> 41:26.000
+Well, you cannot even trust the vendor of your SOC.
+
+41:26.000 --> 41:29.540
+So NXP had publicly disclosed about a year ago
+
+41:29.540 --> 41:34.460
+that they had secure boot vulnerabilities in their HAB
+
+41:34.460 --> 41:40.500
+verification code for IMX6 and the other family SoCs.
+
+41:40.500 --> 41:42.820
+But I think right now it should be fixed,
+
+41:42.820 --> 41:44.540
+so you should ask them if you want
+
+41:44.540 --> 41:46.680
+to base your product on it.
+
+41:46.680 --> 41:52.160
+And I attended, well, yesterday, a good talk
+
+41:52.160 --> 41:55.060
+on introduction to reverse engineering
+
+41:55.060 --> 41:57.140
+by Michael Anderson.
+
+41:57.140 --> 42:00.200
+And it was really interesting because, well,
+
+42:00.200 --> 42:02.540
+nothing is 100% secure.
+
+42:02.540 --> 42:06.760
+So what do you want to protect yourself from?
+
+42:06.760 --> 42:08.940
+So I'll end it with this.
+
+42:08.940 --> 42:15.860
+Look at his talk to see what can be done to actually break
+
+42:15.860 --> 42:17.580
+your thing.
+
+42:17.580 --> 42:18.900
+So that was it.
+
+42:18.900 --> 42:20.140
+Thank you for your attention.
+
+42:20.140 --> 42:22.540
+If you have any questions, I'll be in the audience
+
+42:22.540 --> 42:23.780
+to post you the microphone.
+
+42:23.780 --> 42:24.280
+Yeah.
+
+42:24.280 --> 42:25.280
+Thank you.
+
+42:36.960 --> 42:39.100
+Hello.
+
+42:39.100 --> 42:40.000
+Hello.
+
+42:40.000 --> 42:42.620
+How long did it take your team to implement all this?
+
+42:45.960 --> 42:47.360
+So actually, from the beginning
+
+42:47.360 --> 42:52.980
+to actually look at all the software, everything.
+
+42:52.980 --> 42:58.600
+I would say for both of us, it took like six months,
+
+42:58.600 --> 42:59.480
+but not full-time.
+
+42:59.480 --> 43:02.720
+So I would say month is, definitely.
+
+43:09.980 --> 43:10.680
+Two questions.
+
+43:10.680 --> 43:13.100
+One of all, I saw that you're using SHA-1.
+
+43:13.100 --> 43:16.780
+You probably shouldn't use that as a hash algorithm anymore.
+
+43:16.780 --> 43:19.220
+It's totally broken.
+
+43:19.220 --> 43:22.560
+Number two, where is your code that you actually talked about
+
+43:22.560 --> 43:25.640
+that works for doing the switch route thing
+
+43:25.640 --> 43:27.420
+so you don't get the dependency problem?
+
+43:30.080 --> 43:31.420
+Well, it's a bit different.
+
+43:35.580 --> 43:38.740
+The problem with the dependency loop is within Yocto.
+
+43:38.740 --> 43:43.200
+It does not have something to do with the final root of S.
+
+43:43.200 --> 43:46.280
+So it's only when you actually build the root of S
+
+43:46.280 --> 43:56.480
+is the problem. Well, it's a new, well, recipe, so that's how Yocto work. So the question
+
+43:56.480 --> 44:06.280
+is, is the recipe in Yocto yet? No. It's, well, in our Yocto, yeah. Yeah, no. But, well,
+
+44:06.280 --> 44:18.020
+definitely would want to work on it so I have two two questions to firstly how
+
+44:18.020 --> 44:23.860
+many boards do you actually break doing this and secondly is it emulator ball
+
+44:23.860 --> 44:31.660
+and sound like you emu so good question the first one of how many boards are we
+
+44:31.660 --> 44:40.960
+broken yet, so none. Yeah, there are a lot of tutorials on the internet, so luckily,
+
+44:40.960 --> 44:47.840
+we didn't have to break any boards, so, well, we're happy with this. And the next question
+
+44:47.840 --> 45:06.560
+was QMUs support I haven't yeah I don't know sorry you mentioned the performance
+
+45:06.560 --> 45:13.740
+impact of the verification? Did you actually measure how much it affected the boot time
+
+45:13.740 --> 45:21.740
+in your case? So I think there's not really a point
+
+45:21.740 --> 45:31.760
+measuring it because if you need a secure device, well, the latency, you don't care really.
+
+45:31.760 --> 45:38.600
+On the rootFS part, they pretend that the IO takes so much time compared to the hash
+
+45:38.600 --> 45:47.640
+computation that, well, you can ignore it.
+
+45:47.640 --> 45:53.540
+Any reason you do verification of your rootFS and kernel and not U-boot?
+
+45:53.540 --> 46:01.760
+So for example, can U-boot read this block device?
+
+46:01.760 --> 46:08.380
+So the question is where the verification of the rootfs is.
+
+46:08.380 --> 46:09.520
+Why not in your boot?
+
+46:09.520 --> 46:12.340
+There is no support for SquashFS, first.
+
+46:12.340 --> 46:19.440
+And second is that, oh, that was it.
+
+46:19.440 --> 46:24.260
+It's on two different mediums for media for our clients.
+
+46:24.260 --> 46:28.700
+So the first one is used to store the kernel, et cetera.
+
+46:28.700 --> 46:42.080
+And the rootFS is on another medium.
+
+46:42.080 --> 46:47.840
+So there is a really interesting remarks, and I forgot about it.
+
+46:47.840 --> 46:53.220
+It's actually done only on the read access of your data.
+
+46:53.220 --> 46:58.700
+So you cannot actually use the bootloader to verify your rootFS because it's done only
+
+46:58.700 --> 47:02.700
+when you access data, which is done only by the kernel.
+
+47:02.700 --> 47:06.700
+Yep.
+
+47:06.700 --> 47:10.700
+You have four public keys stored in your boot image.
+
+47:10.700 --> 47:14.700
+How do you revoke one if one's bad?
+
+47:14.700 --> 47:18.700
+The same way you actually flash the public key, so you blow a fuse.
+
+47:18.700 --> 47:22.700
+And this fuse just say, well, this one is revoked.
+
+47:22.700 --> 47:26.700
+That's it.
+
+47:26.700 --> 47:29.740
+Oh, from U-boot.
+
+47:29.740 --> 47:33.880
+So within U-boot, with your update scripts or whatever,
+
+47:33.880 --> 47:38.580
+you ask it to blow the fuse.
+
+47:38.580 --> 47:41.640
+But yeah, if it's already too late, then I'll be screwed.
+
+47:46.220 --> 47:47.220
+Anyone?
+
+47:47.220 --> 47:47.720
+No.
+
+47:47.720 --> 47:48.720
+Oh, again.
+
+47:48.720 --> 48:01.760
+I actually have an observation on an earlier comment, one-time verification of the Squash
+
+48:01.760 --> 48:07.780
+FS is not good enough, while Squash FS itself is read-only, it does not cache all your data.
+
+48:07.780 --> 48:12.480
+So if you're sneaky, you can go in and rewrite the data that's in the Squash FS.
+
+48:12.480 --> 48:17.060
+We found this because one of our clients accidentally ran their upgrade system against their currently
+
+48:17.060 --> 48:18.820
+running SquashFS.
+
+48:18.820 --> 48:22.820
+This makes the kernel very unhappy and crashes the system.
+
+48:32.960 --> 48:34.280
+When will the URL work?
+
+48:34.280 --> 48:38.040
+I tried it, and it returns file not found.
+
+48:38.040 --> 48:41.060
+The URL on up there, I tried it.
+
+48:41.060 --> 48:46.060
+Yeah, it's not up yet, but it's on the sked.org website.
+
+48:46.060 --> 48:53.840
+So it's going to be available, hopefully, next week, tops.
+
+48:53.840 --> 48:57.620
+Any other questions?
+
+48:57.620 --> 48:59.660
+Well, thank you, and bon appétit.
+

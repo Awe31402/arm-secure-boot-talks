@@ -1,0 +1,525 @@
+start	end	text
+0	10020	all right thank you all for coming here I know it's the last talk of the day and I just hope
+10020	17340	you'll enjoy it as much as I will let me show you the darkest corners of bootloader security
+17340	23940	my name is Ferdi I'm part of a group in Google clouds that actually performs low-level attacks
+23940	30020	on hardware and firmware and i usually do this by basically doing a penetration test
+30580	37220	that means i get all sorts of devices and i get to open them up i you know study the pcbs
+38020	47780	look at each chip try and reverse engineer firmware and basically try and uncover any low
+47780	54980	level firmware and hardware vulnerabilities that there might be hidden and the goal is to find
+54980	61540	vulnerabilities that we can actually exploit that's useful for demonstrating risk and the idea
+61540	70020	there is that hopefully you know we can we can report these and and and you know find these
+70020	75940	vulnerabilities and report them responsibly that's that's the idea but these vulnerabilities are
+75940	79780	actually a little bit different than regular software vulnerabilities so let me say a couple
+79780	86660	words on the context in which they're exploitable so if you have an embedded device or just any
+86660	91060	device really you have a supply chain right because your device has to be manufactured
+91060	96260	it has to be built and it consists of parts that you know come together and when that all has
+96260	101940	happened it's actually shipped and there's a lot of hands touching the device even before it is
+101940	108180	actually deployed. That means attackers will have time-limited access, but they will have
+108180	113300	physical access to the device. And time-limited in this sense can already be in the order of days,
+113300	119460	so you can pull off quite a lot of nice hardware and firmware attacks during that time. And then
+119460	124100	even when it's deployed and, you know, even assuming you have a perfect supply chain,
+124660	130900	there's legitimate use cases to access the device, either remotely with credentials or physically
+130900	137620	to do some repairs maybe so in that case attackers might also be able to physically access the device
+137620	143220	and perform some attacks and it gets even more interesting if you consider bare metal clouds
+143220	150180	offerings in these scenarios you know there's nothing that stands you know between an attacker
+150180	155700	that's already privileged on the device and you know they might want to mess with the hardware
+155700	162420	and firmware a bit so what's important in these scenarios is that you can actually bring back the
+162420	167300	device into a trustworthy state that's what we're trying to do that's why we need hardware security
+167300	172500	and of course once the tenant leaves the device you also want to make sure that you can return
+172500	179060	the device into a trustworthy state and you know there's many definitions of trustworthy but for
+179060	183820	For sure, what you want to avoid is some persistence.
+183820	189580	Persistence in firmware, persistence in flash or peripheral devices.
+189580	192380	And I find this work very interesting.
+192380	198840	I will show some of our findings to you today.
+198840	201080	All of this has, of course, been reported responsibly.
+201080	205100	Our idea is that this low-level perspective can contribute to all of the other good stuff
+205100	209980	that's already happening in the security community and standard bodies and the idea is that hopefully
+209980	213740	we can protect not just google clouds infrastructure but that of the entire world because
+213740	219660	a lot of this work is published and i actually you know would like to thank everyone who's worked on
+219660	228220	this and allow me to present my findings here today so i said bottom up right we we open up
+228220	234300	devices we start with looking at chips at debugging interfaces and and reverse engineering some
+234300	240240	hardware, and eventually you end up reverse engineering firmware, and once you did that,
+240240	241840	there's no way around bootloaders.
+241840	246420	This is what I'll be showing you today.
+246420	254340	Bootloaders often have a security critical role in all sorts of devices, and yeah, we
+254340	255340	will have a look at this.
+255340	261400	I will basically show you two critical vulnerabilities that I identified, and then I'm going to tell
+261400	266440	how to fix it all because I hope that we'll be interested in fixing it and I think this is
+266440	272440	actually a good chance to do so across a wide range of devices. And just some fun facts for you.
+273240	278120	We have reviewed more than 15 different device types and these devices were using open source
+278120	283160	bootloaders and all of them have been affected by bootloader vulnerabilities at some point.
+284120	289160	What does that mean? A bootloader vulnerability in this case would have allowed an attacker
+289160	296200	to gain code execution in the bootloader context that's usually very very privileged and basically
+296200	301800	allows you to compromise all further boot stages or the operating system and i think this is a
+301800	309480	concern um i i hope this is a chance for me to you know present this and point at the gaps that i can
+309480	314760	see and show you some of the examples now you might be wondering what kind of device types
+314760	320380	that we look at this was usually related to data center equipment so compute
+320380	324940	platforms like servers but also appliances security appliances and even
+324940	331460	HSMs so this is a wide range and I'm actually convinced that the bootloaders
+331460	337380	that we will talk about here will actually extend and cover a wider range
+337380	343800	of devices like IOT and cars and most likely you will be recognizing some of
+343800	350840	open source bootloaders as well. Now I will kick this off with one of the first vulnerabilities
+350840	360680	that I found in Cisco devices. So this is a Cisco Nexus N9000 series switch. There's different
+360680	368120	variations, different port counts, but inside they all look similar if you open them up, because
+368840	373320	there's a lot of specialized hardware like ASICs that handle network traffic of course.
+373800	377120	But it's all bootstrapped by this, what I call the management board,
+377780	379760	shown here on the right-hand picture.
+380900	385160	So in this picture, you should be able to see an SSD down there.
+385620	388300	And under the heatsink, there's an Intel processor.
+389400	393580	And Cisco actually invested, you know, some resources there
+393580	394980	and hardened the boot chain.
+395440	397180	So this device has a secure boot chain.
+397180	398740	It has a root-of-trust chip.
+399860	403620	And, yeah, you could consider it state-of-the-art, in my opinion.
+403800	408320	And, well, of course, I as an attacker don't like this.
+408320	410720	I want to run my own software on this.
+410720	413680	I want to run Doom or whatever.
+413680	418000	And since it's an Intel processor, I would expect to find Intel firmware.
+418000	419440	And actually, that's what I did.
+419440	423160	So I took out the mainboard, turned it around, and there it is.
+423160	426240	There you have your small SPI flash chip.
+426240	429560	This is very common in these types of devices.
+429560	435120	And when you dump it and open it in UEFI tool, you find that this is a firmware volume.
+435440	440240	There's a couple of firmware volumes on there with all sorts of drivers and EDK2-based firmware.
+440580	442860	And one of them is actually called Cisco Grub.
+443200	450480	And since I already knew they had implemented secure boot, I thought maybe Cisco Grub actually is the bootloader.
+450480	456380	And maybe it's involved in enforcing secure boot and signature checks for the operating system image.
+456380	466580	So I fired up Ghidra, loaded up this binary, and what I found were some strings that seemed a little odd, right?
+466760	470860	And it actually seemed like they had just taken grub.
+471280	477440	But I expected to see grub too, which is like the modern version of it and the one that all Linux distribution use nowadays.
+478000	485280	But instead, after googling some of the strings, I found that they had actually forked grub legacy, the one from the 90s.
+485280	488320	and that was surprising.
+489160	490920	So then I thought, you know,
+492020	494700	how on earth did they actually implement Secure Boot
+494700	496020	with such an old bootloader?
+496300	497960	Grub legacy didn't support Secure Boot.
+497960	501640	So the way that this works is Cisco Grub
+501640	503860	will identify all kinds of boot devices.
+504420	505900	This is mostly the internal flash
+505900	508560	that you saw on the previous image,
+508820	510500	but it could also be a USB drive
+510500	512700	that you plug into the front of the device.
+512700	518700	And once it's identified a bootable device, it will try and identify OS images.
+518700	521700	They always kind of look the same and have some signatures on them.
+521700	529700	And once it's loaded in an operating system image, it will verify the signature and execute it, if it's proper.
+529700	535700	This first part here, this actually requires interacting with a file system.
+535700	551860	And the way that this is commonly solved today in modern firmware is that you use EDK2 or load image which hooks into the EFI firmware where someone else has implemented a way to interact with some file system and load a file.
+552540	557100	But Grub Legacy didn't have all that because it's from the 90s, right?
+557100	559380	So they implemented all kinds of file system drivers.
+559380	564000	and what actually happens here is that there's a big loop
+564000	567400	that basically brute forces all available file system backends
+567400	569940	and the first one that mounts successfully
+569940	573780	will actually be used to try and find an operating system image.
+576100	580500	My idea was maybe I can find a bug in such a file system
+580500	583920	because at the time they had around 12 or 13
+583920	587380	like random file systems like even RyzaFS
+587380	591360	So I thought, okay, there might be actually a chance for me to find a vulnerability.
+592000	598720	And looking at the XFS driver, I found this function that's responsible for listing files.
+599460	605620	And here you can see there's this link buff, stack allocated buffer, that has a size.
+605740	608800	And its size is controlled by a variable in the super block.
+609180	612340	And you need to remember that the super block is actually stored externally.
+612760	615980	It's stored on a USB drive or the internal SSD.
+615980	620980	And of course, if I have physical access, or maybe even remote access with a root shell,
+620980	626020	I can just modify that superblock, set its size to zero, which will make the next length
+626020	634600	check here succeed, and end up calling memcopy into my zero size link buff buffer with an
+634600	636120	attacker-controlled size.
+636120	640120	So this is a textbook example of a buffer overflow.
+640120	644000	Of course, there's no exploit mitigations or anything like that.
+644000	648560	And I think there's two scenarios in which you can exploit this.
+648560	654820	The first one is what I've hinted at already, like you can plug a USB drive that you prepared
+654820	660520	into the front of the device that's shown here on this picture and, you know, just walk
+660520	666400	up to it, plug it in, and the next time the device will reboot, it could trigger the vulnerability.
+666400	671200	Or you could do that remotely, you know, maybe you have administrative credentials or another
+671200	674080	a vulnerability, you can get a shell.
+674080	675360	This is actually a feature.
+675360	678160	You can just ask the device to give you a shell
+678160	680900	and then use that shell to write the malicious XFF partition
+680900	682480	to disk and reboot.
+682480	685760	And what happens then is that Grub will, or Cisco Grub,
+685760	687740	will open a well-known file.
+687740	690100	And you can use that to exploit the buffer overflow, get code
+690100	694260	execution, bypass the signature checks, and so on.
+694260	697300	If you actually do this, it would look similar to this.
+697300	699100	I did this for demonstration purposes here.
+699100	700960	This is actually in an emulator, where
+700960	703100	you get a nice register dump at the end.
+703100	705860	But basically, I set the storage device.
+705860	709400	I list a file, and this triggers the buffer overflow
+709400	712940	in the XFS file system backend.
+712940	713440	Cool.
+716500	718500	What does this allow you to do?
+718500	722560	You get code execution in the context of Cisco Grub.
+722560	723500	That's very privileged.
+723500	725300	There's no exploit mitigations.
+725300	727480	I find this very hard to detect, honestly,
+727480	730880	because the device doesn't really give you that many ways
+730880	732800	that you could detect an attack like that.
+732800	734800	Yes, they have a root of trust chip,
+734800	739760	but even if it did gather measurements or hashes
+739760	742600	of the firmware and stores them in a safe place,
+742600	744280	there's no software interface that you can use
+744280	747520	to interface with that root of trust chip yet.
+747520	753440	And also, all recovery functions that this device provides
+753440	758440	are based or implemented in either Grub itself,
+758440	760940	maybe some other drivers, but that's unlikely,
+760940	764580	or most of it actually lives in the Linux operating system
+764580	767000	that has started after you already compromised Grub.
+767000	769900	So if you're smart about it, you could potentially
+769900	772100	try and hook into these recovery functions as well
+772100	775700	and gain a stealthy foothold to whichever network
+775700	777700	that device is deployed in.
+777700	779720	Or often these devices are also used
+779720	782720	to run certain applications that have credentials.
+782720	789320	And, yeah, this is cool as long as you, again, have credentials to the device or physical access.
+790040	791520	And it really doesn't take that long.
+791660	794380	Like, plugging in a USB drive and letting it boot takes, like, three minutes.
+795760	799900	I would like to thank Cisco for addressing these vulnerabilities and fixing them.
+800680	802180	We had a CVE assigned.
+802900	807720	But what actually surprised me was that I googled the vulnerable code,
+807720	810500	and it showed up in a bunch of other places.
+810500	816740	because actually thinking about it now makes kind of sense to me because they
+816740	823100	like grub legacy had a very easy to use minimal implementation of all these
+823100	827540	fault systems that you can just drop into your projects without including any
+827540	831900	other libraries so it ended up you being used in some tools that the Zen
+831900	836900	hypervisor it has and actually in some other bootloader in core boot filo
+836900	842940	payload, and we had security advisories published and CVs assigned for that as well.
+842940	847240	Thanks to all the maintainers who have patched this, this is not a problem anymore.
+847240	850420	But of course, it kind of makes you wonder.
+850420	857280	It certainly made me wonder, which is why I then went to the next project in which I
+857280	860760	looked at a Dell system.
+860760	870620	So on these systems, you know, what you have to remember is that, of course, the likelihood
+870620	875940	that another project was reusing drop legacy was different, but you can see the same patterns
+875940	876940	here.
+876940	881980	Like Dell will also have a secure boot chain, and yeah, we will also have some nice memory
+881980	891980	corruption vulnerability there, which I will talk about in a second.
+891980	900600	So Dell Enterprise products have a remote management function called iDRAC.
+900600	905380	It's the first thing that starts when you power on a PowerEdge server, for example.
+905380	910080	It has its own processor, its own SoC with dedicated storage with, you know, a bunch
+910080	917320	of RAM and so on. And yeah, it's a baseboard management controller called iDRAC. Its current
+917320	921700	version iDRAC 9 is what I reviewed, and it's used across all sorts of products. So I'm
+921700	925280	going to refer to servers, I'm going to show you pictures of servers, but actually this
+925280	930440	is also used in storage appliances and all sorts of other things, and they reused a lot
+930440	937820	of it, actually the same SOC, and the amount of reuse is really nice for me as an attacker
+937820	944320	of course, but of course underlines the criticality of this device actually executing only code
+944320	946680	that was signed by Dell.
+946680	953460	So they implemented secure boot where, again, each stage verifies the next one, and yeah,
+953460	960400	then hopefully you end up running Linux on this separate system that, you know, has signatures
+960400	965060	and even integrity enforced by the fault system.
+965060	973520	Now, it turns out that they are using an SOC dedicated to BMC use cases created by Nuvotan.
+974300	978220	And Nuvotan also wrote what's called a first-stage bootloader called BootBlock.
+978460	979820	That's just their project name.
+981160	982760	And I found a vulnerability in BootBlock.
+983760	988740	So there's one function, basically, that has a lot of the business logic.
+988740	996620	A first-stage bootloader basically has one job, and that is to bring the system into
+996620	1000260	a state where a more capable bootloader can execute.
+1000260	1006940	So this function here tries to locate the image of that next more capable bootloader
+1006940	1014120	in external memory, in an SPI flash, load it into DRAM, verify signature, and then execute
+1014120	1015120	it.
+1015120	1017560	That's what this function is supposed to do.
+1017560	1024060	So as you can see here, I've already highlighted that there's different locations in memory
+1024060	1025800	where you could put this bootloader.
+1025800	1030320	Maybe the next bootloader prefers to be executed from a specific address, well in that case
+1030320	1035880	you just modify the image header of that bootloader such that it is copied by bootblock into that
+1035880	1037600	particular address.
+1037600	1043220	And well, I as an attacker end up controlling that address because it's stored in the external
+1043220	1046000	SPI flash, and the signature of that whole thing
+1046000	1050500	is only verified after it has been loaded to that destination
+1050500	1051220	address.
+1051220	1057220	So my idea here was that I could try and fool boot
+1057220	1060840	block into overriding itself with my payload.
+1060840	1064780	So you need to know that SRAM is just a different type
+1064780	1068780	of memory that's addressable like any other memory in the SOC.
+1068780	1070520	That's where boot block lives.
+1070520	1073780	Boot block will execute the check image copy and jump function.
+1073780	1079000	It will read the header from external memory that I control.
+1079000	1082700	I can guess the address of boot block in memory
+1082700	1085400	and have mem copy overwrite the rest of boot block.
+1085400	1086240	Why does this work?
+1086240	1088860	Because here, actually, conveniently, mem copy
+1088860	1090380	lives at a very high address.
+1090380	1093260	So I can basically overwrite the rest of boot block
+1093260	1094940	without actually overwriting mem copy,
+1094940	1096760	because sometimes this creates issues.
+1096760	1099060	In this case, it was not an issue.
+1099060	1103240	There were a couple of other issues, but if you experiment a bit,
+1103240	1104460	you can get this attack right.
+1104460	1109260	And when memcopy returns, you can return to your own payload.
+1109260	1114540	Because this is exactly the image that you store in external memory.
+1114540	1117760	Yeah, and as you can see, DRAM here is not used at all.
+1117760	1123060	In practice, as an attacker, you would go to a server, open it up,
+1123060	1127060	and find iDrag's SPI flash,
+1127060	1130000	which is indicated by this blue arrow here.
+1130000	1133900	And the right-hand picture shows my experimental setup
+1133900	1136300	to work with this vulnerability.
+1136300	1140320	I basically removed the SPI flash and put it on an adapter.
+1140320	1142400	Yeah, of course, finding the exploit and vulnerability
+1142400	1145900	was super fun, but I hated this adapter at the end
+1145900	1149820	because I had to literally write to the flash a gazillion times,
+1149820	1152300	and I also had to use a logic analyzer
+1152300	1154160	to debug some of the aspects of the system.
+1154160	1157160	Because on a production server, this actually
+1157160	1160740	doesn't give you a UART console or anything like that.
+1160740	1161900	You're completely blind.
+1161900	1169460	So what I ended up doing is executing my exploits,
+1169460	1173520	which would look like this.
+1173520	1174440	Yeah, there you go.
+1178340	1181920	I compiled my own U-boot for this particular chip.
+1181920	1184640	and made it print a funny string.
+1184640	1187060	And I had to do all this over a logic analyzer
+1187060	1189600	because, again, I couldn't actually get a UART shell.
+1189600	1193860	I had to invent some other way to exfiltrate some data from this.
+1193860	1198060	And, yeah, this is very similar to the Cisco case,
+1198060	1201060	where if you're prepared and you manage
+1201060	1204160	to manipulate this SPI flash, it happens
+1204160	1205400	without any user interaction.
+1205400	1208220	You just turn on the system, and it will execute your UBoot.
+1208220	1210280	In this case, there's plenty of space
+1210280	1212280	where you could also put a kernel image.
+1212280	1215140	But if I were an attacker, I would probably
+1215140	1220180	try and load the original kernel image
+1220180	1223220	that Dell has stored on the MMC, modify it, patch it up
+1223220	1226620	a little bit, which brings us in a very similar situation
+1226620	1230180	as with the Cisco vulnerability, where you would get persistence
+1230180	1234400	for sure, but also a very hard to detect foothold
+1234400	1236060	on this device.
+1236060	1238660	Of course, the BMC in every server and every system
+1238660	1244580	usually very privileged. From there you can mount other attacks, compromising the host potentially.
+1247460	1252980	You can do this also on using a programmer. Sometimes it requires soldering, removing the
+1252980	1258020	SPI chip, programming it, putting it back into the system. But on other systems that I've tested,
+1258020	1265300	it can be done using a $20 chip clip. You just clip on the flash, provide your image.
+1265300	1272920	and because they're reusing the system so much it's it's it's doable to to you
+1272920	1277060	know just prepare an image that would trigger the exploits or the
+1277060	1282820	vulnerability and and you know use a more capable environment like you would
+1282820	1289080	to mount other attacks I would also like to thank Dell for fixing this we have
+1289080	1292360	worked together on fixing this they have released their advisory we have released
+1292360	1299320	our advisory. Well, and this brings us to my favorite part of this talk, which is
+1300520	1305560	discussing how to fix this. I think these are issues. They all have similarities, not just
+1306360	1310920	you know, within the two examples that I showed you, but also with other vulnerabilities that
+1310920	1317480	we've seen in the last couple of years. I'm actually convinced that we can address this
+1317480	1322700	using a layered approach in security we really like layers so I also like layers
+1322700	1327680	and you know here I would actually start with changing the threat models because
+1327680	1334200	I don't really think that the vendors or the bootloader maintainers are you know
+1334200	1339980	doing this on purpose instead I think that they had certain assumptions when
+1339980	1343640	they built these devices or made these bootloader projects of course grub
+1343640	1346520	legacy is an exception because it's abandoned for a long time and in the
+1346520	1353580	90s you had different problems like Y2K for example. But in general, if you remember the
+1353580	1358680	first slides that I showed you, you know, you could really start to think and say physical
+1358680	1364820	security is a lie. It's maybe one layer that you use for defense in depth, but you can't really
+1364820	1371880	assume that your device is protected from attacks that involve physical attacks. And if you bake
+1371880	1375960	this in in the design phase if you think about it when threat modeling I would
+1375960	1379980	really hope that some of these attacks were not possible anymore or at least
+1379980	1385140	very hard to pull off. This also means that users or workloads cannot be
+1385140	1389940	inherently trusted. Think about bare metal cloud use cases but also use cases
+1389940	1393840	where there's maybe another more powerful vulnerability like something
+1393840	1401280	wormable that could then crack open the shell of such a device and try to gain
+1401280	1406020	and persistence on them that's really hard to get rid of.
+1406020	1409320	Again, I actually think that these assumptions should not
+1409320	1413100	play or should be questioned when threat modeling.
+1413100	1416460	And no matter what firmware you're building,
+1416460	1419440	if you're building any device, you'll have firmware for sure,
+1419440	1422580	you should consider the attack surface.
+1422580	1424500	I tried to map the attack surface
+1424500	1426780	that I could see from my perspective.
+1426780	1428020	It looks a little bit like this.
+1428020	1430080	You can separate it into remote attack surface
+1430080	1432960	and local attack surface, and while most of it
+1432960	1436020	is specific to bootloaders, this could affect
+1436020	1440460	to other types of firmware as well, maybe loaders or libraries
+1440460	1442620	that are used in firmware.
+1442620	1446840	And really, the job of these projects often
+1446840	1449100	is to load an operating system.
+1449100	1449800	That's the goal.
+1449800	1452140	We want to execute something nice.
+1452140	1456940	And just to illustrate what's going on here,
+1456940	1458900	and just to illustrate that this is a theme,
+1458900	1464500	collected some of the other vulnerabilities that others have found for example here on the remotely
+1464500	1472420	exploitable sites there was a vulnerability in shim shim is a small bootloader project
+1473380	1480820	it's also open source it's used by a lot of linux distributions to run to run linux or other
+1480820	1487060	other bootloaders that were not signed by the standard UEFI CAs.
+1487060	1491160	And for some reason, it also supported HTTP.
+1491160	1497420	So then someone found a parsing bug in HTTP with out-of-bounds write primitives, which
+1497420	1502620	as we have seen can be quite dangerous and powerful in firmware land.
+1502620	1509120	But looking at the local side, even in some of the most fundamental firmware projects
+1509120	1516960	like edk2 you have heat buffer overflows here found by mark beethoff and actually this is a
+1516960	1523120	security related function this function is supposed to measure a partition table from a storage
+1523120	1532960	device into you know a pcr for example in a security chip and it also has a denial of service
+1532960	1540480	vulnerability, so nothing to see here, I guess. And then, of course, whatever I showed here also
+1540480	1545120	affected the local end of the attack surface with fault systems and image format parsing.
+1545600	1551680	Very classic parser bugs. Yeah, so I think the location of these vulnerabilities is interesting.
+1551680	1557840	It might be a text surface that has not been publicly covered that much, but the nature of
+1557840	1564480	the bugs is is very classic i think so these are puzzle bugs that you know cause memory corruption
+1564480	1570720	issues which brings us to the next point that even if we have perfect threat modeling we probably
+1570720	1575920	want our hardware to support this a little bit we want to use modern hardware security features
+1575920	1581920	that we can use to our advantage as defenders which means that you know secure boot is nice
+1581920	1591180	But over time, there will be bugs in any firmware, in any bootloader perhaps, and it's important
+1591180	1597740	that we actually have a way to manage the versions that are running in our fleets.
+1597740	1600320	And downgrade protection is one way that you can do this.
+1600320	1607300	Imagine if here version 1.1 was affected by critical vulnerability, downgrade protection
+1607300	1610920	could help us prevent an attacker with physical access
+1610920	1614860	to just flash back the old vulnerable firmware
+1614860	1616460	onto the devices.
+1616460	1619280	Remember the examples that I showed you?
+1619280	1620540	All of them have been fixed.
+1620540	1623920	But without downgrade protection or some of the other stuff
+1623920	1627120	that I'll show, it's actually a challenge
+1627120	1629600	to completely roll out the possibility of this ever
+1629600	1631200	being exploited in your fleet.
+1631200	1636460	And these are devices that are deployed for years, right?
+1636460	1638460	It's one way to solve it.
+1638460	1643640	There is possibly other cases that actually
+1643640	1645900	lead you to want to downgrade.
+1645900	1649640	So it would be nice if this was configurable as a user.
+1649640	1651700	Currently, this is not the case with any device
+1651700	1652380	that we have reviewed.
+1655100	1656800	Another option that would allow you
+1656800	1661100	to manage your firmware vulnerability footprint
+1661100	1664240	or version footprint would be remote attestation.
+1664240	1668060	So secure boot works in the way that one stage verifies the next one.
+1668440	1668940	It's simple.
+1669200	1673120	If the next stage signature doesn't match, if there's something wrong going on,
+1673500	1675120	it would just not execute that.
+1675120	1676980	And this is an important property.
+1677120	1677920	This is strong.
+1678780	1681820	But at the end, if the device actually boots,
+1682500	1685240	you kind of need to infer that it's in a trustworthy state
+1685240	1687240	just from the fact that it booted.
+1687760	1690820	And I think that's a little weak.
+1690920	1692200	I think that it could be better.
+1692200	1696320	and remote attestation is one way that you can use to address this.
+1696500	1701960	You can have each stage not just verify the signature of the next stage.
+1702140	1703420	You can still do that if you like.
+1703840	1707040	But instead, in what's called measured boot,
+1707240	1714020	each stage would collect some evidence of whatever configuration or binary it executes next.
+1714980	1720420	And this evidence, it's usually a hash that you put in a temper-resistant environment
+1720420	1724420	like a root of trust chip or a security chip, some area in your SOC, whatever,
+1725140	1730340	and combined with an identity, a cryptographic identity, you can create proof.
+1730340	1735620	And this proof can then be made, you know, maybe challenged with some freshness
+1735620	1741540	and then used by your credential infrastructure to not just get some evidence of what versions
+1741540	1744420	and what types of firmware and binaries you're running in your fleet,
+1744420	1748900	but also, you know, see if a downgrade actually happens.
+1748900	1754680	because often you just see the changes, and it's not easy to predict what type of evidence you have.
+1755200	1757400	At the end of the day, you just have a bunch of hashes.
+1757880	1761080	So there's a lot of practical hurdles with this,
+1761720	1767760	and maybe one way that we can improve this is by asking vendors to actually make this usable.
+1768300	1771540	In almost all devices that we reviewed, it's actually not usable,
+1771680	1774160	even though the hardware theoretically supports it.
+1774160	1779600	And then if it is usable, it would be nice if it was usable for everyone
+1779600	1786040	and not just large enterprises who already have some kind of credential infrastructure,
+1786040	1789640	who already know what remote attestation is and how it works and so on.
+1791160	1793800	But it is certainly a way to address some of the issues
+1793800	1797120	and to deal with the vulnerabilities that I showed you in particular.
+1798800	1803200	Finally, to top it all off, I think that you could just go
+1803200	1809760	look for all the bugs and all the bootloaders. Why not? I think, you know, eventually you find these
+1809760	1816960	bugs and it's actually surprising how few exploit mitigations exist for firmware in general.
+1816960	1822000	This is nothing new. Many others have mentioned that in the embedded space, for example, there's
+1822000	1826800	still a lot of work to do to port known good classic exploit mitigations like
+1826800	1832000	secondaries or control flow integrity to embedded systems but even beyond that even in
+1832960	1839600	you know compute platform firmware if you want you usually don't see exploit mitigations that much
+1840720	1845280	there's nothing to invent there i think it's it's just about practically applying this asking for
+1845280	1852320	it if you get the chance to do that also in in the root block case i think if you use the hardware's
+1852320	1857120	memory management unit you could actually make this less exploitable because here the issue was
+1857120	1864160	that you can overwrite a previous boot stage with the next one if you just make it read only then
+1864160	1871920	this could have prevented entirely i actually charted all the bootloaders that i like all the
+1871920	1878080	ones that i found were important and this is not an exhausted list there's not all bootloaders on
+1878080	1884020	here, of course, but there's a lot of open source bootloader projects there that I think
+1884020	1887320	are influential, and most of them are security-critical.
+1887320	1894620	So Grub legacy is not really security-critical, except for that one case, but the rest is.
+1894620	1896920	So you certainly know Grub, right?
+1896920	1902020	And if you look at whether these projects are using memory-safe languages or whether
+1902020	1907880	they actually have implemented exploit mitigations, you will find that they don't.
+1907880	1914540	And you will also find that only very few projects here are being fast actively.
+1914540	1918720	And those that are fast might, you know, they could have better coverage, they might not
+1918720	1921840	be covering all the attack surface that I showed you earlier.
+1921840	1926160	So there's for sure some work to do, and I really think this is danger territory.
+1926160	1930560	Because, you know, secure boot is the way that a lot of devices try to protect their
+1930560	1936320	firmware today, and eventually it will depend on one of these projects.
+1936320	1939200	So what can we do?
+1939200	1944000	Like I said, these are not super large software projects.
+1944000	1948120	This is not your browser or JavaScript running JavaScript engine.
+1948120	1953280	You could try and just find a lot of vulnerabilities here and put a lot of eyeballs looking at
+1953280	1954600	the code.
+1954600	1955600	I tried that.
+1955600	1956600	I used a code scanner.
+1956600	1960800	I used some LLMs and tried to find new vulnerabilities beyond what I showed you.
+1960800	1968080	And I have to say, a code scanner would have caught these two vulnerabilities 100%.
+1968080	1973180	And LLM would have caught these vulnerabilities 100%.
+1973180	1974640	They didn't cover much more.
+1974640	1979860	I found it then a little bit hard to work with them because they're not really good
+1979860	1984860	at inferring which parts of the code are actually active and which parts of the code might be
+1984860	1987280	processing attacker-controlled data.
+1987280	1991840	But what I think here should really work well is using fuzzing.
+1991840	1996420	Because a crash is a crash, it's either an issue in your harness or in the code.
+1996420	2001820	And we actually have infrastructure that allows you to integrate these into your open source
+2001820	2002820	project.
+2002820	2004140	It's called OSS Fuzz.
+2004140	2008600	And while I'm not actively part of the OSS Fuzz project, I did talk to the maintainers
+2008600	2014400	and made sure that the popular bootloaders are actually considered critical.
+2014400	2023800	So they are eligible for a US$15,000 reward that you will receive if you integrate one
+2023800	2026540	of these critical open source bootloaders.
+2026540	2029500	And the rest is handled by the OSS Fuzz infrastructure.
+2029500	2034020	I have already started putting U-Boot into OSS Fuzz, but if you're a bootloader developer
+2034020	2041120	or if you're creating board support packages that are distributed with your chips, for
+2041120	2044180	For example, maybe you are forking one of the bootloaders
+2044180	2048000	and you want to integrate these into OSS fuzz as well.
+2048000	2051500	Because the idea here is that once you have the integration,
+2051500	2054260	the fuzzers are going to run on each and every commit
+2054260	2056300	that are made to the project, or at least
+2056300	2058380	on the critical branches.
+2058380	2061800	And then if you find a crash, you
+2061800	2064580	can notify the people who are actually working on it,
+2064580	2067300	and they will usually know what to do.
+2067300	2068820	So please reach out.
+2068820	2071620	I will try and help wherever I can, of course.
+2071620	2075780	And I think, together, we can actually really
+2075780	2078540	make an impact here for all kinds of devices.
+2078540	2080240	That's my main message.
+2080240	2083820	So if you are developing a product, a chip,
+2083820	2087880	or maintaining a bootloader, please reach out.
+2087880	2089720	That's all from my side.
+2089720	2091060	I would like to thank everyone who's
+2091060	2093440	helped me put together this presentation, especially
+2093440	2095700	Lydia and my girlfriend, who really
+2095700	2097820	helped me make the most out of this talk.
+2097820	2100760	And I have linked here all the advisories that I mentioned
+2100760	2102500	so that when you download the slides later,
+2102500	2105340	you can just click on it and have a link
+2105340	2107480	or a look at the advisories because there's
+2107480	2112260	a lot more details in the advisories themselves.
+2112260	2113200	Thank you very much.
+2113200	2115260	I think we will have time for a couple of questions.
+2123780	2126580	So if you have questions, please use the microphones that
+2126580	2134820	in the aisles here. And if you don't, that's fine, too. It's been a long day, and I'll
+2134820	2140260	be around, and I hope I can talk to some of you for sure. Oh, we have one question.
+2140260	2145760	Yeah, thank you for the presentation. It was great. One question regarding memory-safe
+2145760	2151980	languages. You mentioned that it's not off. I mean, that is possible, because one of the
+2151980	2157180	solution was implementing that if i understand correctly but why is it discarded most of the
+2157180	2163340	time is it for performance reasons is it something that is doable i think it's legacy i think a lot
+2163340	2169820	of these projects have evolved over many many many years and just taking grub2 and uboot these are
+2169820	2175020	super popular bootloaders right and i'm i'm actually not too sure if it's a good idea to
+2175020	2180860	go ahead and just replace them all because of what i said you know there's many other
+2180860	2185500	known good approaches that you can use to harden the ones that exist there's exploit mitigations
+2185500	2192460	and so on yeah there's good examples like the calypter firmware that's actually a cross vendor
+2192460	2197980	efforts an open source project that implements not just memory safe languages but also exploit
+2197980	2203340	mitigations in the memory safe language which i think is a great example but i i definitely
+2203340	2208860	understand that you know these these projects have a legacy and a lot of people that just work
+2208860	2215280	on them every day you know if you're in a better systems engineer you just know
+2215280	2218580	how to bring up a board with you would that's that's just what people have done
+2218580	2220980	for years
+2220980	2225740	A quick question.
+2225740	2228020	You mentioned in the beginning of the presentation
+2228020	2231780	there were 15 types of devices you looked at.
+2231780	2232660	You showed us a couple.
+2232660	2234880	What were the other speeds?
+2234880	2237580	Yeah, so in general, we have looked
+2237580	2240100	at all kinds of data center-related devices,
+2240100	2244400	such as network devices that you saw, compute platforms.
+2244400	2247020	Yeah, but honestly, the point here
+2247020	2249860	was to talk about the broader bootloaders in general,
+2249860	2253520	and not these particular bootloaders.
+2253520	2256960	It's a theme that we've seen in every review.
+2256960	2259180	And I'm sure that over time, we will
+2259180	2261800	be able to tell you more and show you more devices
+2261800	2263400	that we've reviewed.
+2263400	2266860	Those were the two that I brought to today's presentation.
+2279860	2283580	Well, if there's any other questions, I'll be around for a while.
+2283580	2287620	And again, thank you so much for having me here and for staying for my car.

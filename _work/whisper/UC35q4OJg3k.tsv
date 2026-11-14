@@ -1,0 +1,605 @@
+start	end	text
+0	10320	welcome back everyone I hope you had a great coffee break so we're going to
+10320	17280	hear more about arm so Julius that's your stage and let's hear about trusted
+17280	25560	firmware okay thanks is this thing on okay great so hi everyone I'm Julius
+25560	31560	and I work for Google on Chrome OS firmware I'm also the core boot
+31560	36060	maintainer for ARM architectures and I also wanted to talk about trusted
+36060	39600	firmware today so when I signed up for this talk I actually didn't know that
+39600	42960	arm would also be here and talk about trusted firm as one of this some of this
+42960	49080	may be a little duplicate but my main focus for this talk is a broad
+49080	52440	introduction to people who have no idea what trusted firmwares who maybe know
+52440	58520	core boot and don't really know why the two have been like why core boot is using trusted firmware
+58520	66840	these days on arm64 systems actually when i thought about this talk first my intention was to do
+67640	73480	just a general core boot on arm64 talk two years ago in san francisco i already gave a talk about
+73480	79560	core boot on arm32 and this was supposed to be kind of the next situation of that but when i
+79560	84520	looked into this more closely i realized that in on the core boot side there's really not a lot of
+84520	89320	difference between 32 and 64-bit arm there's of course the isa is a little different there are
+89320	94120	some differences in the details but for the general core boot framework at all pretty much works the
+94120	100440	same and the differences compared to x86 core boot are also pretty much all the same so if you
+101000	107640	look at that old talk most of these things are still true for 64-bit um platforms the one real
+107640	111880	difference in how core boot works to stay on these platforms is the trusted firmware part so that's
+111880	118360	why i chose to focus on that and to start the motivation of what we why we even need this
+118360	124600	trusted firmware it actually has to do with the expectations that linux has to the firmware
+124600	131400	environment so this is a little excerpt from the device tree documentation in linux the device tree
+131400	136520	is this thing which is essentially a big table of hardware description that the firmware passes
+136520	143940	to the kernel so that the kernel knows how that particular hardware is laid out.
+143940	148760	As you can see here, this part talks about CPU runtime power management, so turning CPUs
+148760	152080	off and on to save power.
+152080	154040	On ARM32, that part was still optional.
+154040	160560	On ARM64, it's now required that we have this weird PSCI thing.
+160560	164340	In order to figure out what that is and how we get there, how we can support that with
+164340	172600	our firmware. You have to follow me on a journey through the trust zone. I mostly put this
+172600	176380	up because I sometimes get the impression that people who don't know the ARM architecture
+176380	181300	that well just have heard this term trust zone somewhere but don't really know what
+181300	186260	it means and think it's this kind of scary thing that runs the evil code that spies on
+186260	193600	you or the DRM stuff or something. So trying to take some of that fear away, it's really
+193600	197600	not that complicated because if so if you're running open source firmware essentially you can
+197600	203440	also run an open source trust zone it's really just uh an architectural feature to run code
+203440	209040	outside of the context of the kernel so whoever seen the previous talk this is a very similar
+209040	214880	slide essentially uh just telling you what this trust zone stuff is it's essentially
+215840	220720	comparable to system management mode on x86 with the difference that system management mode is a
+220720	227040	really ugly legacy thing. This is a much nicer and cleaner extension of the existing architecture.
+227040	233120	So you essentially just take the existing concept of kernel and user land and expand it to another
+233120	240000	level. In the same way user land makes system calls, the kernel can make these secure monitor
+240000	248080	calls to the next exception level up there. The whole trust zone isn't just the part down there,
+248080	252640	but it's the whole part on the right side so it's like a whole separate operating system and user
+252640	258320	land that can run these trusted applications that are secured from the uh from the rest of
+258320	264880	the operating system and this is this barrier is sort of a one-way street so the secure stuff can
+264880	270400	still access the non-secure stuff but not the other way around and there's also no true uh
+270400	276260	no true memory virtualization on this right side over here.
+276260	280680	So the SecureOS can actually access the SecureMonitor
+280680	282980	memory and thus attack the SecureMonitor,
+282980	284680	essentially, unless, of course, you
+284680	286120	have those new architectural features,
+286120	288640	which we just heard about in the previous talk.
+288640	293440	And the reason of that SecureMonitor down there
+293440	296340	is essentially to arbitrate between these trusted
+296340	298760	applications that run your DRM stuff or whatever
+298760	304360	want them to run and the main operating system that's why it's at the highest it's called exception
+304360	310040	level in arm 64 but that essentially also means privilege level so user land is level zero kernels
+310040	315240	level one hypervisors level two and then the secure monitor is the most privileged thing at level three
+316200	322440	and this the definition of this memory barrier is actually very completely soc specific so there's
+322440	326100	There's no architectural way in the ARM architecture
+326100	328840	to say which parts are secure memory
+328840	330600	and which parts are non-secure memory.
+330600	332640	Every SOC has its own thing for that.
+332640	334980	And usually, it's just some sort of range register
+334980	338060	where you say, OK, starting from this offset for this size,
+338060	340680	that memory area is part of secure memory.
+340680	342280	And it's not just memory.
+342280	343860	It's the whole physical address space, actually.
+343860	346020	So also, all the MMIO peripherals,
+346020	348560	you can say that they only belong to the secure world
+348560	351080	and then the non-secure world cannot access that particular
+351080	355180	I2C controller or something like that.
+355180	361900	If we want to figure out why we need this to support Linux,
+361900	364460	we've got to, again, go to the CPU power management stuff.
+364460	368000	So in case you know, in Linux, CPU power management
+368000	370500	called CPU idles, essentially turning off the CPU
+370500	372180	and you don't need it to save power.
+372180	375140	And if you ignore the slide for a second on ARM32,
+375140	377020	this was completely handled within Linux.
+377020	379940	So when Linux decides it doesn't want to use the CPU,
+379940	383440	then it turns the CPU off, turns all the power
+383440	386300	rails off that go to it, and runs the wait for interrupt
+386300	387800	instruction on that CPU.
+387800	389600	And then when the CPU wakes back up,
+389600	391040	it comes back right into Linux.
+391040	394100	And Linux does all the re-initialization for that.
+394100	396940	The problem is, if you have this trust zone on the side,
+396940	399620	you can't really do that, because the trust zone also
+399620	400700	needs the CPU.
+400700	402620	So first of all, you need something.
+402620	405560	When Linux decides, I don't want the CPU right now,
+405560	408860	then you need something else to ask the secure part
+408860	412860	it also doesn't need the CPU right now. Maybe you need to keep the CPU alive because the secure
+412860	419500	parts needs it. And the other thing is, if you turn the CPU completely off and then turn it back
+419500	424620	on, then it has lost all its state, of course. And some of that state is not accessible to the
+424620	429340	kernel. For example, the page table base address register, there's one for the kernel, but there's
+429340	434540	a separate one for the secure monitor. And of course, the kernel cannot write the page table
+434540	439980	base address of the secure monitor because that would violate the security model so in order to
+439980	446540	re-initialize the cpu after it was completely off those parts that belong to the secure monitor also
+446540	452380	have to be re-initialized by the secure monitor and that's why every cpu on off and on cycle
+452380	455820	essentially has to go all the way through the secure monitor and back down to the kernel
+456460	462700	and um has defined an interface a standardized interface for this called psci power state
+462700	468540	coordination interface which builds upon these secure monitor calls which are essentially
+468540	476380	like system calls just going to the secure monitor exception level and now you could ask so one
+476380	481820	one interesting thing is that this trust zone architecture already existed on arm 32 it was sort
+481820	487580	of bolted on in some of the later stages of the iterations of the architecture but you could also
+487580	493820	have it there and you would already have the same problems there but the thing is since this evolved
+493820	500780	alongside linux linux always supported systems that just didn't choose to use it and in core boot
+500780	505500	we just never really had a need for secure so secure applications and that's why we just ignored
+505500	512140	it and used linux ability to work without that but for arm 64 linux essentially decided to have a
+512140	517580	a clean break and now they say all the systems are going to have this trust on stuff anyway so
+517580	522700	we can just rely on it being there and we don't need to implement all this cpu power management
+522700	529740	ourselves anymore so the real reason why arm 64 devices need to provide this psci stuff now is
+529740	533820	essentially because linux just got lazy and they just decided they don't want to implement the cpu
+533820	538620	power management themselves anymore so now we got to give this to them in order to host a full
+539260	541820	linux platform even if we don't want to use the secure part
+544140	548220	now we could implement all of this ourselves in co-boot but before we do all that's where
+548220	553420	that work let's maybe look around to see what other options there are so what is this trusted
+553420	557500	firmware thing anyway for those of you who've been in the previous talk already most of this
+557500	562860	is the same it's a full firmware stack it's sort of a reference implementation by arm for the
+562860	569660	all the firmware you need both booting and runtime firmware and if we look from the core boot point
+569660	573740	of view core boot is already the boot firmware essentially so we don't need that part but we
+573740	578060	are really interested in this runtime part thankfully trusted firmware is already split
+578060	583500	out into these separate stages and the one called b031 is the one that really interests us because
+583500	588220	that is the part where all this runtime power management stuff is hosted that is the secure
+588220	595500	monitor that needs to stay resident across the whole lifetime of the system and if we compare it
+595500	599820	with what core boot already has it has a bunch of these nice features that core boot traditionally
+599820	605500	didn't provide for example right now on core boot in the arm architectures we have no multi-processing
+605500	609820	support at all we just use the one cpu core we boot with and do everything with that which makes
+609820	614940	it really nice and easy for us but of course if you want to provide these services that turn cpus
+614940	619820	off and on you need to do some multiprocessing you need to handle coherency and mutexing and all
+619820	626460	that sort of stuff it also has a lot of nice cpu core support so for every cpu core that arm releases
+626460	633660	a53 a57 a70 whatever they're called um all of these have a lot of their own little quirks and
+633660	638380	they have the little erratas that you need to support so it's really nice to have a code base
+638380	643740	where the cpu vendor itself already programmed all of that stuff so you can just use it for them you
+643740	646580	and you don't have to keep up with all the new Iwata
+646580	648680	as they come out, essentially.
+648680	652000	Actually, more than once on one of our existing ARM systems,
+652000	654180	I've just booted up a new version of Trusted Firmware,
+654180	656340	and then it told me in some log message,
+656340	657860	hey, there's this new Iwata I found
+657860	659640	that your CPU is susceptible to.
+659640	662740	So it's kind of nice to get this thing from the CPU vendors
+662740	667500	who know what they're doing and don't have to do it yourself.
+667500	669980	If we compare this Trusted Firmware architecture
+669980	672540	with Core Boot more closely, we can
+672540	678460	that it's matching up pretty well so the bl1 and bl2 part are the pure boot firmware part of
+678460	682700	trusted firmware which is essentially equivalent to the three stages of core boot that we know
+683260	689500	and then the bl32 and bl33 are actually not part of trusted firmware it's just names trusted
+689500	693740	firmware gives to the other stuff that it loads and it's therefore equivalent to the core boot
+693740	698540	payload which is also not part of core boot but it's a boot loader that is run after core boot
+698540	703660	is finished essentially so if we want a secure monitor and core boot we really don't need to
+703660	707980	care about all this other stuff we can throw all that away all we want is the secure monitor part
+707980	712700	it would be really nice if we could just yank it out of there and smash it in over here which is
+712700	720460	essentially exactly what we did so um we integrate trusted firmware as a git sub module into core
+720460	724220	boot so when you check out this core boot source we automatically have the trusted firmware source
+724220	730140	three there as well and can develop in it and when you build core boot it also builds trusted
+730140	734540	firmware and then picks the right part that b3 run out of it and integrates it into core wood at the
+734540	740700	right place so it all works out pretty nicely and if you're curious about the details of how this is
+740700	746140	implemented in core boot um the nice part of what core wood is that most of it is architecture
+746140	751020	independent right so all this logic about figuring out for example where this payload is and how to
+751020	756220	load it and put it in place that's all independent of the architecture and we don't need to touch
+756220	760540	that the only thing we are touching is really the very last part of the ram stage where it jumps to
+760540	764780	the payload that's an architecture specific callback and all we do for trusted firmware
+764780	769580	there is essentially we're saying if we're running trusted firmware then instead of jumping to the
+769580	775180	payload wait a second let's load this other thing over here first and run it and then we pass trusted
+775180	779420	firmware the information of how to jump to the payload and the payload is already noted so the
+779420	781760	The nice thing is, Trusted Firmware doesn't really
+781760	783760	need to know anything about how to access the flash
+783760	786820	or something like that in these architectures.
+786820	788200	The next stage is already loaded,
+788200	790240	and we just tell it how to move on after it's
+790240	793880	done its thing, essentially.
+793880	796380	This is a quick overview about how
+796380	798940	the Trusted Firmware repository is laid out.
+798940	801280	So my goal here is essentially to give you a rough idea of where
+801280	805480	to look if you have to implement your own SOC for,
+805480	807220	like if you're implementing an SOC in core boot
+807220	814180	want the trusted firmware support to get it working on ARM64. This is just a small excerpt
+814180	818100	of the directories. There are a lot of these. I left the ones out that you don't need to
+818100	822100	care about, essentially, if you only care about core boot. Next to the BL3.1 directory,
+822100	826180	there's also a BL2 and a BL1. You can just ignore those because we are not using those.
+826740	830980	There's a lot of really good documentation. If you're trying to work on trusted firmware,
+830980	835220	my recommendation is really to look at those because they are great, especially this
+835220	842940	This porting guide is essentially your one-stop stop for implementing a new platform.
+842940	847280	It tells you all the macros you need to define, all the functions you need to implement, and
+847280	848280	so on.
+848280	852700	If you're looking for drivers, they're all sorted by vendor.
+852700	855880	If you're looking for the generic interrupt controller, for example, that most SOCs use,
+855880	857380	that is under ARM.
+857380	862260	If you're looking for a standard 16550 UART, which most SOCs use, that is under TI in this
+862260	863960	case.
+863960	867360	And most of the drivers that cannot be reused between SOCs
+867360	868860	are just in the platform part over here.
+868860	872940	So actually, a lot of the framework is pretty lean,
+872940	875200	and a lot of the stuff is just implemented in the platform.
+875200	878360	And every platform does it however it thinks it wants to.
+878360	879920	One of the few things that you still
+879920	884120	have generic for all platforms to use, the CPU stuff
+884120	884900	is pretty great.
+884900	887760	So as I said, they have all the CPUs already implemented.
+887760	890340	And you essentially just need to add the right CPUs
+890340	892540	that your SOC has in the make file.
+892540	893420	And then it builds them.
+893420	895980	And then it can automatically detect which CPU is which.
+895980	898720	So when it brings up a CPU, it reads the identification
+898720	901460	register and searches for all the CPUs you compiled
+901460	905200	and which one this is and which code to use for that.
+905200	908320	And as I said, in the platform, first of all,
+908320	909840	there's a common platform directory.
+909840	912420	So there's a lot of callbacks for things
+912420	914880	which the platform can change if it wants to.
+914880	916540	But usually, most platforms just want
+916540	919060	to do the one thing that makes sense to most of them.
+919060	920820	So there's a bunch of stuff implemented in common
+920820	922640	that you can just link in because it will probably
+922640	924820	work for you.
+924820	926580	Then every platform does its own thing.
+926580	929300	There's usually a plat setup thing that
+929300	930980	is the first thing that runs during boot
+930980	932840	and does all the boot initialization.
+932840	936020	There's a PM thing usually that implements those pesky
+936020	936680	callbacks.
+936680	940660	And a lot of vendors sort of factor out
+940660	943220	some of the common stuff and then the per-SAC stuff.
+943220	945720	And in the end, each platform has a make
+945720	947360	file that defines all it does, essentially.
+947360	952380	So there's no complicated configuration framework here.
+952380	953960	It's not using kconfig or anything.
+953960	956700	All the compile time configuration options you have
+956700	958280	are just options in the make file,
+958280	959860	and then, essentially, which drivers
+959860	962640	you link in the make file.
+962640	965280	So if you want to support a new platform for Corvoo,
+965280	968200	the one thing you really need to implement is this pesky stuff.
+968200	971140	So let's look into that for a bit.
+971140	974820	And the main message here is, essentially, it's very flexible.
+974820	978700	You can do whatever you want, whatever is best for your SOC.
+978700	982600	So each of the things that you can turn on and off,
+982600	986040	essentially, for runtime power management,
+986040	990340	you have these nodes which are in a hierarchy of power levels.
+990340	992840	And then the bottom level, you always have the CPU.
+992840	994780	Or in case of multi-threading, that would be the threads,
+994780	995620	actually.
+995620	997880	And then you can have as many layers above that as you want.
+997880	999160	You don't need to have any layers.
+999160	1003720	But most SOCs have their CPUs in some sort of cluster.
+1003720	1005820	And when you turn off all the CPU in a cluster,
+1005820	1007860	then you can turn off some extra stuff for the cluster.
+1007860	1010280	So this power level stuff allows you
+1010280	1014020	to build the topology of your SOC in the framework,
+1014020	1014520	essentially.
+1014520	1017340	And you just tell it which maximum power level you want
+1017340	1019660	to have, and then it handles all the stuff
+1019660	1021860	of calling the right functions for each power level
+1021860	1023760	to turn them on and off, for example.
+1023760	1026940	And orthogonal to that, you also have power states.
+1026940	1028720	So there's not just on and off.
+1028720	1030820	There can be as many as you want in between
+1030820	1035360	to have a trade-off between exit latency, usually,
+1035360	1036100	and power draw.
+1036100	1038560	So rather than just turning it off,
+1038560	1040860	you can maybe put it into a retention state
+1040860	1042340	that you can wake up from quickly.
+1042340	1044460	And there again, you can have as many states as you want.
+1044460	1047420	You can define all of that inside your platform.
+1047420	1049100	The only thing you tell the outside framework
+1049100	1052160	is whether this is an off state or a retention state.
+1052160	1054600	The difference there is that in the off state,
+1054600	1056980	it loses all its state.
+1056980	1058300	And you have to, like the framework
+1058300	1059940	will reinitialize all of the state for you
+1059940	1060720	when it comes back up.
+1060720	1063820	And the retention state, it's expected to keep that.
+1063820	1066500	And then the only thing you really need to implement
+1066500	1068500	once you've decided how this hierarchy looks
+1068500	1072060	is a structure full of function pointers, essentially,
+1072060	1075400	with all the callbacks for how do I turn off the CPU,
+1075400	1077620	any of these nodes, actually not just CPUs,
+1077620	1079280	how do I turn it back on?
+1079280	1081440	What do I do with it after it's turned back on?
+1081440	1083700	So that is this finished callback down here.
+1083700	1084880	And there's a bunch more.
+1084880	1087360	But the general gist of it is that you just
+1087360	1089600	have this bunch of functions you need to implement,
+1089600	1093800	and then the framework knows how to call you correctly.
+1093800	1099640	That's really all you need for the pesky stuff. Once again, the documents are really great to
+1099640	1104520	look into how this works in specifics. Also, of course, just look at existing platforms.
+1104520	1108440	My favorite is always the Rockchip one because the SSCs tend to be really simple. They don't have
+1108440	1114280	any of the weird hooks and crannies that some of the other more complicated SSCs have, so they
+1114280	1119880	usually make a good example. Once you have that, you're essentially done supporting Corewood,
+1119880	1123560	but you can do some more stuff if you want to. One of the common things you might want to do
+1123560	1129320	is custom smcs of course this pesky also uses smcs and all of those are already implemented
+1129320	1132600	in the framework so you don't need to worry about those but you can add your own if you want to
+1133880	1139640	common thing that we need find that we need is one time ddr frequency scaling for example because
+1139640	1144360	if you do anything that involves memory since memory is used by the whole platform usually
+1144360	1149080	it needs to go through the highest privilege level to allow that and it's also pretty simple
+1149640	1153960	they essentially have a macro that you can use to define a handler for a given range of smc
+1153960	1159400	function ids there's actually this whole big specification from arm that tells you which
+1159400	1165080	smc function id ranges are allowed to be used by whom usually the one you want to use is called
+1165080	1169960	the sip range i always forget what it stands for but it's essentially the soc vendor range so if
+1169960	1176360	you're implementing an soc port that's usually the one you want to use and last but not least
+1176360	1183240	we have some fun core boot support in there now um one of the problems if with integrating
+1183240	1188840	core wood is that there's not yet a great way to pass parameters in a generic way from core boot
+1188840	1193160	into trusted firmware this is something that i think the trusted firmware team is interested in
+1193160	1200280	making better in the future but right now all that they have is uh essentially you can have one
+1200280	1205080	pointer of platform specific information and then the platform has to figure out how to deal with
+1205080	1211640	that so when you the first piece of platform code that's called when you are in trusted firmware is
+1211640	1216600	usually the function over there which gets that one pointer and then you have to figure out what
+1216600	1221560	to do with that usually we find that we have to pass a bunch of things from core boot into trusted
+1221560	1226040	firmware so what we do is we build a sort of primitive linked list with that and then parse it
+1227160	1233080	when like at the very first thing in trusted firmware um and one of the things you should
+1233080	1237720	passes the core boot table base address because then you can use this core boot table setup
+1237720	1242600	function which we have in trusted firmware which gives you all the core boot the generic core boot
+1242600	1247880	support that we implemented which is right now mostly console support so for example after that
+1247880	1254600	you have access to the console the uart information over there so you don't have to hard code the uart
+1254600	1259720	base address anymore you can use the one from core boot and more importantly you essentially
+1259720	1263720	take over coreboots configuration with that so if you disable the uart and coreboot kconfig then
+1263720	1267640	it would just not pass that and then trusted firmware will also not use it which is nicer than
+1267640	1272920	having to disable stuff in every uh every different repository your firmware is made of
+1273560	1277720	um the other nice thing you get with this automatically is cbmem console support so as
+1277720	1282600	soon as you like if you have a cbmem console in coreboot then information about that is passed
+1282600	1287160	in the coreboot table and then trusted firmware automatically register console driver for that
+1287160	1292120	and then once you boot into user land, you can dump the CBMIM console and see all the
+1292120	1298840	trusted firmware logs right after the core boot logs. I think this is pretty much all
+1298840	1304360	I want to talk about about the basic trusted firmware architecture. The one thing I want
+1304360	1311320	to leave you with is a little anecdote about some of the practical problems we had when implementing
+1311320	1317960	one of these socs and trusted firmware this is about the rock chip 3399 and um well we essentially
+1317960	1323800	had some trouble fitting everything there um this story starts very simple with bringing up the chip
+1323800	1329400	and trying to get suspend resume support working so of course the whole system suspend resume also
+1329400	1333400	needs to go through the secure monitor because it turns off the whole system so the highest
+1333400	1339400	privileged never needs to know about it and um you usually turn out like the ddr controller usually
+1339400	1342840	uses a state during that, so you have to reinitialize it somehow when you come back up.
+1342840	1347880	And, of course, the code for that can't be in DRAM. So thankfully, we are an ARM SOC. We
+1347880	1355080	usually have a bunch of SRAMs, so we can put it in there. And we have quite a lot of SRAM
+1355080	1360360	on this platform, so that's pretty easy to fit. Then we had some other issues about
+1361960	1367240	we want to do some DDR frequency scaling at runtime. Depending on the SOC, this is sometimes
+1367240	1371720	pretty easy and sometimes a real chore on this one it was thankfully not that hard because we
+1371720	1377640	have this little separate microcontroller in the soc like a cortex m0 essentially on the side of
+1377640	1383960	the normal cpus which had the ability to just stop the cpus in place retrain ddr to a different
+1383960	1388760	frequency and then kick them off again the main cpus never really knew what did them so this was
+1388760	1394200	pretty easy to implement but we still needed uh to put some code in like we needed to host that
+1394200	1398920	code for this M0 in SRAM, of course, because DDR is inaccessible while we're changing frequencies.
+1400680	1405240	And we had some more fun with trying to work around hardware bugs. So this is a particular
+1405240	1410840	thing where when it goes into system suspend and it gets a wake interrupt at just the right time,
+1410840	1415640	like just after you turned off the main CPU, then sometimes it wouldn't wake up again.
+1415640	1420040	So to work around that, you essentially needed something to sit around and wait until after all
+1420040	1422940	All the CPUs have been turned off and checked
+1422940	1424700	for this condition and then cleared.
+1424700	1426740	So here comes our M0 to the rescue again,
+1426740	1428860	and we had to implement some code for that.
+1428860	1431440	All of this still fit pretty nicely into SRAM.
+1431440	1436260	But then we had a great idea on how to save some more power.
+1436260	1439340	This is where I wanted to be, which is essentially
+1439340	1441700	there was one more power rail we could turn off,
+1441700	1443920	which powered most of the chip.
+1443920	1447140	And turning it off would have saved us really a bunch of power.
+1447140	1449400	Unfortunately, it also powered the SRAM.
+1449400	1452360	So, at that point, we sort of have a problem,
+1452360	1453500	because we can turn the system off,
+1453500	1454580	but when we turn it back on,
+1454580	1457260	we don't have anything to resume from.
+1457260	1459220	So, the one good thing we had was
+1459220	1461980	we have this little amount of PMU SRAM,
+1461980	1465100	which is sort of a separate amount of SRAM
+1465100	1468020	that's implemented, that's powered by a different power rail,
+1468020	1470460	and would stay alive even if we turn this off.
+1470460	1472640	But now we have to start fitting all of this stuff in there,
+1472640	1474360	which is kind of awful.
+1475360	1477480	The DDR in it stuff, so it kind of fits.
+1478360	1482680	one of the problems that we also have here is that the entry point of the cpu when it comes
+1482680	1488120	back from resume you can essentially only give the soc the top 60 bits so it has to be 64k aligned
+1488120	1491880	thankfully the pm usrm is 64k aligned but it needs to sit at the very top for that
+1492600	1497000	and the m0 code also needs to be 4k aligned because that's how the m0 works so
+1497720	1501560	first of all putting the whole m0 code that we have right now in there doesn't fit at all there's
+1501560	1508120	no way. Our idea was rather than having one M0 image and giving it an argument of which
+1508120	1512440	of the two functions it's supposed to do, we could split it up and have two M0 images
+1512440	1517320	and then just always give the M0 base address for the one we want to use when we kick it
+1517320	1521320	off. This sort of works, but if you can see between
+1521320	1526080	these two, it overlaps part of the DDR and its stuff, so it doesn't quite fit, and it
+1526080	1529240	needs to be in the middle there because it needs to be 4K aligned, so this also didn't
+1529240	1536500	quite work. But then we realized the DDR on it has to start at 64k. But after that, it's
+1536500	1541260	really just normal code. So we can really sort of rip it apart and sandwich it carefully
+1541260	1551760	around the M0 code. And come on. With a lot of, you know, juggling bits and counting instructions,
+1551760	1557800	we managed to get this all in 8k. You have one problem left if you do all this, which
+1557800	1561320	which is that since you lose SRAM in S3,
+1561320	1563760	of course, you lose that DDR frequency scanning stuff,
+1563760	1566400	so it would be not that great
+1566400	1569240	if DDR frequency scanning worked after you boot it,
+1569240	1571000	but then once you suspend resume once,
+1571000	1572360	it doesn't work anymore.
+1572360	1576120	So the ugly but obvious solution is to cache it in DRAM.
+1578240	1580520	I think this thing is dying there.
+1582040	1586360	And then just copy it back every time we resume, essentially.
+1586360	1588100	So if you want to look how this madness
+1588100	1592980	looks in the link to script, I've got it over here.
+1592980	1595100	Can we switch the slides manually?
+1595100	1597520	Thanks.
+1597520	1600600	So the ink bin stuff is essentially the M0 code.
+1600600	1603060	So you see it needs to be 64K aligned.
+1603060	1606920	And then even though the other stuff is the same program,
+1606920	1608680	if we put the data section beyond that,
+1608680	1610580	it just happens to magically work out.
+1610580	1612700	And we're just hoping that we never
+1612700	1614100	have a compiler change or anything
+1614100	1615280	that messes all of this up again,
+1615280	1617040	because it's going to be the most awful thing.
+1619820	1623680	If you want to see some details about how
+1623680	1625180	you do this sort of thing where you
+1625180	1627640	build the binary for a completely different chip
+1627640	1630220	inside the same software as the main,
+1630220	1632060	inside your main software package,
+1632060	1634760	and link it all together, it's somehow done like this.
+1634760	1636360	First of all, you essentially first
+1636360	1640300	build that M0 code completely separate into a strip binary.
+1640300	1642200	And then you would define a makefile rule
+1642200	1644520	for the main software, where that binary
+1644520	1648600	is another dependency for one of the C files.
+1648600	1650340	And you also pass the name of that binary
+1650340	1654140	in as a preprocessor macro.
+1654140	1656780	And then you can use this weird assembly instruction
+1656780	1659120	called inkbin, which essentially just tells the assembler
+1659120	1662280	to, at this point, include a whole other file completely
+1662280	1664140	and then continue assembling.
+1664140	1665640	And then you put a label around of it,
+1665640	1667800	and then you can access it from C code
+1667800	1672600	and tell the M0-based address, which is to put the address
+1672600	1674440	in there and then sort of work out.
+1674440	1678160	And this is the M0 code we run on suspend in the end.
+1678160	1680500	As you can see, it's really simple and really stupid.
+1680500	1683780	There's essentially this suspend state,
+1683780	1687340	which keeps counting upwards as you go through the suspend
+1687340	1689480	and then again as you go through the resume later.
+1689480	1691180	As you can see, we had some other issues we also
+1691180	1692740	had to work around in the end.
+1692740	1694840	Like as you keep testing more and more on the platform,
+1694840	1696700	you keep finding more things.
+1696700	1699360	This is actually where the system is suspended in here.
+1699360	1702160	So if you take one of these Chromebooks today
+1702160	1705540	and you close the lid, then even though it's supposed
+1705540	1707880	to save power, the whole time where the lid is closed,
+1707880	1711060	you have this little codex M0 saying in a tight loop,
+1711060	1712160	am I already resumed?
+1712160	1713160	Am I already resumed?
+1713160	1714700	Am I already resumed?
+1714700	1716840	But it turns out that M0s don't eat a lot of power.
+1716840	1718980	And if you do that on a 32 kilohertz clock,
+1718980	1721080	it's actually not as crazy as it sounds.
+1721080	1725940	You just shouldn't know how the sausage is made in that case.
+1725940	1726900	Yeah, that's all I have.
+1726900	1728540	So thanks for listening.
+1728540	1730640	Anyone have any questions?
+1732160	1740560	All right, thanks so far.
+1740560	1747560	Questions?
+1747560	1754560	Why does the DDR3 controller need to be re-initialized after S3 resume?
+1754560	1762560	Why, for instance, can the hardware put that in self-refresh and that boot, it works basically?
+1762560	1768960	Right, so this is not the DDR itself, right, so the DDR chip on the board is put into self-refresh,
+1768960	1775520	but the DDR controller on the SOC needs to know how to talk to the DDR, and that part isn't
+1775520	1780640	maintained mostly to save power, so we shut off most parts of the SOC when we go into S3 and that's
+1780640	1782020	That's one of the parts we shut off.
+1782020	1784720	So after the boot, you need something
+1784720	1787700	to tell the DDR controller how the DDR chip,
+1787700	1790960	like how many rows, banks, and columns, and so on,
+1790960	1793360	you have, and to tell it to take the DDR out
+1793360	1795080	of self-refresh, and all that kind of code
+1795080	1796820	needs to live somewhere.
+1796820	1800040	And second question.
+1800040	1805000	Why don't you do the initialization part
+1805000	1810100	like a normal boot, like in core boots on x86?
+1810100	1812980	Are you asking why we're not reading it from Flash?
+1812980	1816940	Yes, why aren't you doing it dynamically
+1816940	1818920	from code that is in Flash?
+1818920	1822460	Not necessarily saving that on Flash, but.
+1822460	1823800	You can do that.
+1823800	1825460	It sort of depends on the SoC.
+1825460	1827860	So this SoC in particular, I think,
+1827860	1830000	was designed to resume from SRAM.
+1830000	1832600	So I'm not sure if starting the boot
+1832600	1834940	ROM again from Flash would even be possible.
+1834940	1836720	The other reason you might not want that
+1836720	1840000	is it sort of depends on how your system is designed.
+1840000	1842340	In our case, this is a Chromebook.
+1842340	1844080	So Chromebooks are always designed in a way
+1844080	1846020	to boot from a read-only partition
+1846020	1849380	and then do some crypto magic before we jump into the partition
+1849380	1851760	we can actually update on the flash.
+1851760	1856440	And we found out in the past that tying the resume path
+1856440	1859000	to this read-only flash is a very bad idea,
+1859000	1862760	because that means that if you ever have a problem in your resume
+1862760	1865320	path, in your early resume path, you can't really fix it.
+1865320	1867480	So resuming from SOM is very nice,
+1867480	1869020	because then you can always update it.
+1869020	1873240	And you're not bound to the stuff you have put on Flash, essentially.
+1877980	1878960	More questions?
+1882900	1883460	Sorry.
+1883860	1890240	Going back to one of your earlier slides,
+1890960	1896160	you've replaced the early stages of trusted firmware with co-boot code.
+1896160	1904080	i'm not a trusted firmware architect or expert but i'm sure it would alarm those who are
+1904080	1910960	because the the whole route of trust derives from the early stages of the trusted firmware
+1910960	1916140	right i mean so it always depends on what you want to do with the system right so
+1916140	1923600	trusted firmware has many uh many things it does and many use cases um they do have a system of
+1923600	1927600	trusted boot where every stage verifies the next but of course you don't have to use that
+1927600	1933360	um in this case the goal was essentially to get core boot working on arm64 and what we needed was
+1933360	1937440	a secure monitor so we just took the secure monitor that existed and didn't really care
+1937440	1943520	about the other things um if you want trusted boot core boot has its own way of trusted boot
+1943520	1948800	which is derived from the way that chrome os initially did it which is called verified boot
+1948800	1955840	reboot and um the trusted the b3 one in this case is part of that so the way the core would work uh
+1955840	1959600	way works is you you boot from a read-only partition of the flash you verify the read-write
+1959600	1963920	partition of the flash and then you boot from there and trusted firmware is just one of the
+1963920	1968400	different components that are stored in this read-write partition so we have our own trusted
+1968400	1973120	boot mechanism essentially and we're just using a component of trusted firmware in there thank you
+1978800	1992840	So, if you had, like, the ability to tell the SOC guys here how to redesign their SRAM,
+1992840	1997280	would you just say, don't turn off the SRAM, or did you like having the two partitions
+1997280	2000420	for power reasons, or what's your feeling on that?
+2000420	2004540	I'm not a power guy, so I don't know how much SRAM itself actually takes.
+2004540	2006840	I think in this case, there was sort of a design problem
+2006840	2010960	of just tying everything to this one big power rail.
+2011040	2011900	So if you turn that off,
+2012300	2014480	it was really other components that we wanted to turn off,
+2014540	2016500	but the SRAM just happened to also hang on there.
+2016940	2019040	So it would probably be better to put SRAM
+2019040	2023880	on a separate rail or put it on an always-on rail,
+2023980	2025460	essentially, that's supposed to stay alive.
+2025660	2028200	But the problem is what we did on this chip
+2028200	2029440	is essentially something that the chip
+2029440	2030520	wasn't really designed for.
+2030600	2031720	We just figured out afterwards,
+2031860	2033800	hey, this is something we could, in theory, turn off.
+2033800	2039880	maybe if we just do it right um i also think the idea of having split sram is not that bad so
+2039880	2045320	8k is unfortunately not that much so having something like 16k 32k would be much easier
+2045320	2049480	to work with and then then maybe that's good enough and you can turn off the main sram
+2053400	2059320	what kind of information are you passing from corvo to the firmware um so the car
+2059320	2064280	core root table base address for one the other things that we usually pass is
+2065320	2070920	some information specific to the board so we had this design philosophy when doing this to try to
+2070920	2076360	not pull board specific information into trusted firmware because most of the stuff trusted firmware
+2076360	2081640	deals with is only specific to the soc so how to turn off cpus on and off it doesn't really care
+2081640	2086760	about the rest of the components on the board and if we had a notion of the board in trusted
+2086760	2090600	firmware essentially would make the whole thing way more complicated because every board that we
+2090600	2095640	implement with that soc would have its own code in there and it would just become more complicated
+2095640	2100760	so what we decided to do is in those few cases where trusted firmware needs to know something
+2100760	2106040	about the board this is for example when it wants to reboot it like it needs a way to reboot and
+2106040	2111720	on some systems we reboot to through an external gpio on others we use some soc internal mechanism
+2111720	2115720	so in that case we would have a parameter that tells trusted firmware which
+2115720	2120680	reboot mechanism to use and that way we can tell it bought specific information and don't need to
+2120680	2125800	hard code bought specific code in there okay i'm just telling you because uh now in the firmware
+2125800	2132840	we support uh dynamic configuration which basically consists on passing a device tree between images
+2132840	2138200	so maybe this is something that you could use in the future right um yeah i've heard about that i
+2138200	2142440	wasn't sure that if it's finished yet or not but it's definitely something we look into i'm not
+2142440	2148280	sure how it would work in your case with skipping the first stages of the firmware but yeah i'm
+2148280	2153240	sure it it could work and we are already using it in some reference code for passing arguments
+2153240	2159000	between images to for example share memory between different images so yeah i'm pretty
+2159000	2164440	sure it could work as to pass addresses for a peripheral or something so is it an interface
+2164440	2171960	between b02 and b031 or right now as far as i know we are using it between bl1 and bl2 but
+2171960	2176120	there's no reason why we couldn't use it in bl3 one right so i think that is the extension
+2176120	2179800	essentially that we are still waiting on before we can skip to a better mechanism
+2188680	2194600	hi what's the boot time penalty now that you have to use um on trusted firmware um it's usually not
+2194600	2200680	that bad because uh it doesn't do a lot during boot it just sets up so um trusted firmware is
+2200680	2203380	It's not supposed to do any SOC initialization.
+2203380	2204480	We have all of that in core boot.
+2204480	2207580	So really all it does on boot is setting up its own stuff
+2207580	2209260	and then passing on to the next part.
+2209260	2212200	And it's really only meant to do these runtime services.
+2212200	2215620	So it's usually below 15 milliseconds
+2215620	2219800	to go through the processor for my part.
+2219800	2221800	Yep, just out of curiosity, I think
+2221800	2223300	on that Rackchip platform, there was
+2223300	2227860	a dedicated microcontroller for the DRAM suspend stuff.
+2227860	2229880	The DCF, can you tell us the story about that
+2229880	2232440	and why it was replaced by the M0?
+2232440	2236900	Yeah, I don't think I can remember all the details.
+2236900	2240360	The DCF was this thing that they implemented specifically
+2240360	2242480	to do the frequency switching.
+2242480	2245000	And it was like their own little microcontroller
+2245000	2246380	with only a couple of instructions
+2246380	2248900	and really crazy thing, essentially.
+2248900	2250520	We didn't have an assembler for that.
+2250520	2252120	We had to ask them for code for it.
+2252120	2254640	And I don't really remember the details.
+2254640	2255980	But at some point, essentially, we
+2255980	2257640	found something that we needed to do
+2257640	2259400	during the frequency scaling that we couldn't
+2259400	2260520	with the DCF.
+2260520	2262160	And then we thought, why are we doing this
+2262160	2264300	if we just have a full ARM core there that
+2264300	2266840	can do everything, and it's fully general purpose.
+2266840	2268100	So we switched to using that.
+2275240	2278280	Oh, is there room for another two questions, maybe?
+2289400	2296440	In terms of whether to use the, like, you know, you pulled the one part out, and then
+2296440	2298700	the question was, you know, what about those earlier parts?
+2298700	2303580	Do you know their policy on, you know, booting versus bricking?
+2303700	2306840	In other words, the core boot thing is it'll always come up, and it'll just tell you things
+2306840	2309240	didn't go well, but do you know what the ARM stuff does?
+2309380	2310460	In that case, I'm just curious.
+2312080	2314540	I'm not really familiar, honestly, with those other two parts.
+2314880	2315100	Okay.
+2315100	2319760	But the thing is that I think it's a very thin framework,
+2319960	2321780	so a lot of the stuff is left to the platform,
+2321900	2324560	and the platform is supposed to figure those kinds of things out,
+2324620	2326100	like what happens if it fails or something.
+2326500	2330280	I think the actual generic framework parts for BL1 and BL2
+2330280	2333360	are very lightweight and don't really do that much.
+2333360	2347240	All right, if there are no more questions,
+2347240	2349420	then thanks again very much, Julius.

@@ -1,0 +1,1832 @@
+1
+00:00:00,440 --> 00:00:27,220
+Okay, let's get started. Welcome to my talk, Practical Application of Verified Boot. My name is Ruben Selvinsky, and the first slide is also about me. This is mostly useful if you want to contact me later or look me up on GitHub. I work for Pangotronics. We do Embedded Linux Consulting. I started out doing testing for Embedded Linux Systems and then moved on to Opti and Security. So that was my area of expertise for some years, and I'm also doing a lot of stuff in this area still.
+
+2
+00:00:27,220 --> 00:00:31,640
+I do system integration. Everybody at Pangotronics pretty much does system integration.
+
+3
+00:00:31,860 --> 00:00:33,500
+And I'm also interested in Linux Media.
+
+4
+00:00:33,940 --> 00:00:36,160
+So I work with GStreamer pipelines.
+
+5
+00:00:36,620 --> 00:00:44,040
+The very first thing you have to remember about verify boot is Boromir says one does not simply implement verified boot.
+
+6
+00:00:44,460 --> 00:00:46,720
+Everybody thinks it's so easy.
+
+7
+00:00:47,280 --> 00:00:50,500
+You just go to a contractor and say, we want verified boot.
+
+8
+00:00:50,600 --> 00:00:53,780
+We require it for the Cyber Resilience Act, for example.
+
+9
+00:00:53,780 --> 00:00:56,180
+That's what's happening to us a lot at the moment.
+
+10
+00:00:56,180 --> 00:01:01,180
+But it's not that simple and I will explain why it isn't simple, unfortunately.
+
+11
+00:01:01,180 --> 00:01:03,180
+I would like it to be simple.
+
+12
+00:01:03,180 --> 00:01:06,180
+First off, why am I talking about verified boot?
+
+13
+00:01:06,180 --> 00:01:11,180
+It's because x86 already has a coin on the secure boot term.
+
+14
+00:01:11,180 --> 00:01:16,180
+So in x86 systems, so on your laptop or on most of the laptops,
+
+15
+00:01:16,180 --> 00:01:21,180
+excepting the Mac systems, of course, or the modern ARM systems,
+
+16
+00:01:21,180 --> 00:01:26,460
+secure boot is the implementation which is used to verify that you are only
+
+17
+00:01:26,460 --> 00:01:30,760
+booting the kernel you have signed beforehand and for arm systems which we
+
+18
+00:01:30,760 --> 00:01:34,580
+have a lot in the embedded space there's always another vendor implementation so
+
+19
+00:01:34,580 --> 00:01:39,300
+everybody does their own implementation as an example from NXP it's called high
+
+20
+00:01:39,300 --> 00:01:44,640
+assurance boot for the older SOCs the newer IMX 9x systems use advanced high
+
+21
+00:01:44,640 --> 00:01:48,040
+assurance boot which is just a further development of the system they had
+
+22
+00:01:48,040 --> 00:01:53,120
+before. Rockchip has an NDA requirement. There is not even a name, or at least I couldn't find it.
+
+23
+00:01:53,200 --> 00:01:58,260
+If you know the name, please tell me later. I'm interested. And TI also calls it Secure Boot,
+
+24
+00:01:58,380 --> 00:02:04,240
+but it has completely nothing to do with the x86 implementation. And that's why I'm saying
+
+25
+00:02:04,240 --> 00:02:09,340
+verify boot when I include all the different vendor implementations and the things you have
+
+26
+00:02:09,340 --> 00:02:17,880
+to look out for. How does x86 Secure Boot work? So you have some kind of ROM implementation for
+
+27
+00:02:17,880 --> 00:02:23,640
+intel it's contained in the boot guard description which verifies the components which are booted so
+
+28
+00:02:23,640 --> 00:02:31,560
+in this case your uefi is verified and then is then able to in turn in turn verify the kernel
+
+29
+00:02:31,560 --> 00:02:37,160
+and the file system or your kernel will verify the file system and for amd it's the guard me
+
+30
+00:02:37,160 --> 00:02:42,920
+extensions so the rom code verifies the uefi and then the uefi verifies the further components and
+
+31
+00:02:42,920 --> 00:02:44,380
+and we get a secure boot chain.
+
+32
+00:02:47,240 --> 00:02:51,100
+It works with its own certificate authority.
+
+33
+00:02:51,640 --> 00:02:57,760
+So, the tool for Linux systems to implement this is SPCTL,
+
+34
+00:02:57,860 --> 00:03:01,200
+and then you can deploy your own certificates into your UEFI.
+
+35
+00:03:01,700 --> 00:03:04,820
+So, they are saved within the EEPROM, I guess.
+
+36
+00:03:05,620 --> 00:03:11,760
+The license problems and the complexity of implementing the secure boot solutions stay the same,
+
+37
+00:03:11,760 --> 00:03:18,860
+but at least it's unified across both x86 or across all x86 platforms so it has that going
+
+38
+00:03:18,860 --> 00:03:25,500
+for it and that is quite nice and you will also have to set up some kind of uefi password because
+
+39
+00:03:25,500 --> 00:03:30,900
+if there is no password for the uefi somebody can just remove the installed certificate and
+
+40
+00:03:30,900 --> 00:03:38,400
+then the bios will boot whatever you want this has to be taken into account for this implementation
+
+41
+00:03:38,960 --> 00:03:42,240
+For ARM, it's pretty much the same.
+
+42
+00:03:42,800 --> 00:03:44,040
+You also have a ROM code.
+
+43
+00:03:44,140 --> 00:03:46,420
+You have some kind of vendor ROM implementation.
+
+44
+00:03:46,740 --> 00:03:47,620
+Depends on your vendor.
+
+45
+00:03:47,760 --> 00:03:49,860
+Maybe you have to sign an NDA, and then you can look at it.
+
+46
+00:03:50,160 --> 00:03:51,600
+You have some bootloader.
+
+47
+00:03:51,940 --> 00:03:53,860
+It doesn't have to be only U-Boot.
+
+48
+00:03:53,980 --> 00:03:56,420
+It can also include an ARM-trusted firmware.
+
+49
+00:03:56,600 --> 00:03:57,300
+It can be barebox.
+
+50
+00:03:57,400 --> 00:03:59,600
+It can be some kind of Linux boot system.
+
+51
+00:03:59,600 --> 00:04:02,240
+But the ROM code will need to verify the bootloader.
+
+52
+00:04:02,760 --> 00:04:06,960
+And then pretty much the standard nowadays, at least for U-Boot and barebox,
+
+53
+00:04:06,960 --> 00:04:13,520
+is to use so-called fit images to verify a kernel and the device tree, for example,
+
+54
+00:04:13,520 --> 00:04:20,000
+or another initramfs. Fit stands for flattened image tree, which is a deviation of the
+
+55
+00:04:20,000 --> 00:04:31,440
+flattened device tree naming. Almost all of the vendor implementation will require you to burn
+
+56
+00:04:31,440 --> 00:04:36,480
+some fuses inside the processor which is a process that can only be done once so
+
+57
+00:04:36,480 --> 00:04:43,080
+a fuse is a little one-time programmable or one-time burnable thing where you can
+
+58
+00:04:43,080 --> 00:04:47,280
+burn the fuse and then it turns to a one but you can never turn that fuse back
+
+59
+00:04:47,280 --> 00:04:53,820
+into a zero and for NXP they use that to burn a hash over your certificate
+
+60
+00:04:53,820 --> 00:04:58,540
+authority certificates so at the very beginning you create a certificate
+
+61
+00:04:58,540 --> 00:05:02,860
+authority with your root certificate at the top then you create a hash over the
+
+62
+00:05:02,860 --> 00:05:08,980
+certificates and you burn it into the SOC and then your processor will be able
+
+63
+00:05:08,980 --> 00:05:13,540
+to verify your secure boot flow this is a one-time operation it's very important
+
+64
+00:05:13,540 --> 00:05:17,320
+you will totally brick a board if you burn the wrong fuse and you won't be
+
+65
+00:05:17,320 --> 00:05:23,380
+able to burn or to use other software to recover the board if you also burn the
+
+66
+00:05:23,380 --> 00:05:29,080
+additional lock fuse that is required on nxp socks it also means there's no new
+
+67
+00:05:29,080 --> 00:05:34,360
+deployment of certificate possible as is with x86 as long as you have the UEFI
+
+68
+00:05:34,360 --> 00:05:39,440
+BIOS password you could in theory go out into the field and then replace the
+
+69
+00:05:39,440 --> 00:05:43,620
+certificates on the devices in the field it's going to be very expensive but it's
+
+70
+00:05:43,620 --> 00:05:49,540
+possible at least I'm going to share a bit of an anecdote with you once upon a
+
+71
+00:05:49,540 --> 00:05:58,580
+time i had a project from 2019 to 2021 we had an arm embedded imx6 ul nxp platform it used high
+
+72
+00:05:58,580 --> 00:06:03,940
+assurance boot we also implemented the usage of opti to save authentication information for the
+
+73
+00:06:03,940 --> 00:06:08,340
+cloud so there was going to be a cloud backend which required authenticated information from the
+
+74
+00:06:08,340 --> 00:06:14,020
+device we also employed up armor to have another layer of security where we could control what the
+
+75
+00:06:14,020 --> 00:06:20,100
+user space application can access in the end we used rock for updates the whole system the
+
+76
+00:06:20,100 --> 00:06:26,180
+complete system was always built inside of your toe which ensured that you always got images that
+
+77
+00:06:26,180 --> 00:06:32,660
+were bootable on a device and for storage of the backend keys so for storage of the keys that were
+
+78
+00:06:32,660 --> 00:06:38,820
+used to sign the secure or sign the artifacts so where the secure boot keys are stored we use the
+
+79
+00:06:38,820 --> 00:06:45,620
+to NitroKey HSM. How does the complete chain look like, you might ask? It looks like this.
+
+80
+00:06:45,960 --> 00:06:51,520
+So at the very beginning, we have a ROM code that verifies the bootloader, which in turn already
+
+81
+00:06:51,520 --> 00:06:57,500
+contains the Opti. So the verified bootloader then loads Opti, and Opti will then return back
+
+82
+00:06:57,500 --> 00:07:01,700
+into the bootloader. We have different colors here, since Opti will be running inside of the
+
+83
+00:07:01,700 --> 00:07:07,160
+trust zone, which is marked in the green color. The blue color signifies the so-called normal
+
+84
+00:07:07,160 --> 00:07:13,720
+world in trust zone lingua the bootloader then goes on to verify the fit image which contains
+
+85
+00:07:13,720 --> 00:07:20,120
+the device tree the init ramfs and the kernel and the kernel in turn internally uses the dm
+
+86
+00:07:20,120 --> 00:07:26,440
+verity file system to verify the file system where all our binary information is contained
+
+87
+00:07:28,840 --> 00:07:36,120
+and that's the chain we also implemented inside the project which worked well and then 2022 came
+
+88
+00:07:36,120 --> 00:07:41,800
+around and the customer team no longer existed the team members left the company over time due
+
+89
+00:07:41,800 --> 00:07:47,320
+to external pressure or project pressure and eventually the whole company side was sold off
+
+90
+00:07:47,320 --> 00:07:52,280
+to another company so they said we no longer leave this branch of the company we're just going to sell
+
+91
+00:07:52,280 --> 00:07:58,120
+it um the octo was pretty much left in the state when we last touched it in 2021 and questions to
+
+92
+00:07:58,120 --> 00:08:03,400
+the customer whether we want to do further development or still or do some yokto updates
+
+93
+00:08:03,400 --> 00:08:08,920
+or update the system in general or provide some documentation on how systems are booted and so on
+
+94
+00:08:08,920 --> 00:08:13,240
+and so on was unanswered nobody was taking our course because the project lead for the project
+
+95
+00:08:13,240 --> 00:08:20,200
+was missing he was sold off with the with the site so nobody answered there and then what happened
+
+96
+00:08:20,200 --> 00:08:30,200
+in end of 2023 is a totally new team appeared and they were like verified boot hsm pkcs11 what what
+
+97
+00:08:30,200 --> 00:08:38,040
+is this all about we don't understand can you explain i will start by explaining pkcs11 pkcs11
+
+98
+00:08:38,040 --> 00:08:42,840
+is a standard programming interface for hardware security modules those come in different form
+
+99
+00:08:42,840 --> 00:08:48,520
+factors i will show on the next slide and is usually used to generate a key on the device
+
+100
+00:08:48,520 --> 00:08:54,760
+so generate a private public asymmetric key pair where the private key is generated on the device
+
+101
+00:08:54,760 --> 00:09:00,280
+never exportable so it stays on this device and the idea behind is that
+
+102
+00:09:00,280 --> 00:09:04,720
+behind that is that the device with the very important keys which is able to
+
+103
+00:09:04,720 --> 00:09:09,280
+assign the software was taken out of the computer where it was used to sign the
+
+104
+00:09:09,280 --> 00:09:15,940
+software and then stored inside the safe and the nice thing about PKCS11 is
+
+105
+00:09:15,940 --> 00:09:20,200
+that we got a lot of support for different authentication methods it's
+
+106
+00:09:20,200 --> 00:09:26,780
+it's this slide. So for Chromium, NGINX, SSH, VPSupplicant, a lot of software that's already
+
+107
+00:09:26,780 --> 00:09:34,920
+out there already supports using PKCS11 as the authentication information or to access
+
+108
+00:09:34,920 --> 00:09:43,140
+the backend keys. And also there's the usage possible in conjunction with OpenSSL and GNU
+
+109
+00:09:43,140 --> 00:09:49,560
+TLS for the new open SSL 3 version there's the new open SSL provider
+
+110
+00:09:49,560 --> 00:09:54,420
+interface which is much nicer than the old and now deprecated engine interface
+
+111
+00:09:54,420 --> 00:09:59,400
+where instead of having the private key in a file you can specify a PKCS 11 URI
+
+112
+00:09:59,400 --> 00:10:04,380
+which points to the device and then to the specific key that should be used so
+
+113
+00:10:04,380 --> 00:10:10,740
+this makes it a lot easier for newer deployments which haven't gotten the
+
+114
+00:10:10,740 --> 00:10:15,300
+profit of using new interfaces yet. We back then still used the old engine
+
+115
+00:10:15,300 --> 00:10:22,320
+interface. Regarding PKCS11 HSM form factors, we have three examples here. So
+
+116
+00:10:22,320 --> 00:10:26,340
+we have a PTIE add-in card that's supposed to be used inside of a secure
+
+117
+00:10:26,340 --> 00:10:30,460
+server and then you can generate the key on the card and then there's some
+
+118
+00:10:30,460 --> 00:10:34,380
+management software where you can do smart card authentication from remote.
+
+119
+00:10:34,380 --> 00:10:39,420
+There's also the very easy USB option. Here we have a YubiKey, there's also a
+
+120
+00:10:39,420 --> 00:10:44,220
+nitro key hsm which you can then unplug and store in a safe and then you have to have some kind of
+
+121
+00:10:44,220 --> 00:10:49,420
+procedure where somebody knows how to access the safe and then get the device out of the safe build
+
+122
+00:10:49,420 --> 00:10:54,620
+the software and sign the software and then deliver it and there's also rack mounted hardware
+
+123
+00:10:54,620 --> 00:11:00,380
+so for bigger projects which contain millions of devices it might be more suitable to have
+
+124
+00:11:00,380 --> 00:11:05,420
+rack mounted hardware inside of a secure data center and then have the capability to send
+
+125
+00:11:05,420 --> 00:11:11,660
+artifacts over the network to the device which then signs it and sends it back to you and this
+
+126
+00:11:11,660 --> 00:11:22,540
+is all possible using the pkcs11 api and then we turned around and it was end of 2023 and everything
+
+127
+00:11:23,180 --> 00:11:27,900
+inside of the project totally changed so they set up a new team because they realized at some point
+
+128
+00:11:27,900 --> 00:11:33,420
+they have to do a software update of the software they released back in 2021 because vulnerabilities
+
+129
+00:11:33,420 --> 00:11:39,660
+are everywhere, as we all know. The USB HSM was to be replaced with the cloud
+
+130
+00:11:39,660 --> 00:11:44,400
+HSM, which is already tricky because you have devices out there which rely on the
+
+131
+00:11:44,400 --> 00:11:49,880
+keys that are on the hardware HSM, where they are not exportable. So how do you
+
+132
+00:11:49,880 --> 00:11:54,000
+export the keys? It's just not possible and we tried to tell them that, but it
+
+133
+00:11:54,000 --> 00:11:57,840
+was really really hard for them to understand why that was the case. They
+
+134
+00:11:57,840 --> 00:12:02,520
+also had the Software Bill of Material requirement, which necessitated a Yocto
+
+135
+00:12:02,520 --> 00:12:08,840
+update and by the way excuse me but do you know how all this works so how the individual parts
+
+136
+00:12:08,840 --> 00:12:15,640
+work together could you explain that again to us and so we did to a new team and the conclusion
+
+137
+00:12:15,640 --> 00:12:24,600
+of this whole odyssey with the vendor was project knowledge for verified boot projects is very very
+
+138
+00:12:24,600 --> 00:12:31,000
+essential so for if you give me a normal linux device which like an embedded linux device which
+
+139
+00:12:31,000 --> 00:12:35,480
+doesn't have a verified boot chain I can kind of figure out what's going on I can start the device
+
+140
+00:12:35,480 --> 00:12:40,520
+then I can access the bootloader maybe I can say init equals bin bash and then I will get a root
+
+141
+00:12:40,520 --> 00:12:45,720
+shell and everything is going to be fine I can get that system open but for systems that are
+
+142
+00:12:45,720 --> 00:12:52,200
+specifically built to be closed it's really really hard because sometimes not even bring up works
+
+143
+00:12:52,200 --> 00:12:58,520
+you don't know what kind of device do I have in my hands is it a production device signed with
+
+144
+00:12:58,520 --> 00:13:05,080
+the release keys is it a development device with development keys which keys do i have to use how
+
+145
+00:13:05,080 --> 00:13:09,400
+do i even update the system is there some kind of update demon surely there is maybe you find out
+
+146
+00:13:09,400 --> 00:13:13,880
+it's wrong maybe you have access to the system console which is already great but some of the
+
+147
+00:13:13,880 --> 00:13:20,280
+devices were so locked down even for development purposes to test the release configuration that
+
+148
+00:13:20,280 --> 00:13:26,280
+you couldn't access the device and nobody wrote down that this device is pretty much burned and
+
+149
+00:13:26,280 --> 00:13:28,040
+and can't be used any longer.
+
+150
+00:13:28,040 --> 00:13:30,460
+Your bootloader is locked, so no reconfiguration.
+
+151
+00:13:30,460 --> 00:13:32,500
+Innet equals bin bash isn't an option,
+
+152
+00:13:32,500 --> 00:13:34,160
+and you can't even change the kernel
+
+153
+00:13:34,160 --> 00:13:35,820
+that is going to be booted on the device.
+
+154
+00:13:35,820 --> 00:13:39,100
+You may get lock output, sure, for diagnostic information
+
+155
+00:13:39,100 --> 00:13:42,440
+so that somebody later can recover the device,
+
+156
+00:13:42,440 --> 00:13:46,200
+but you don't have any access to reconfigure anything.
+
+157
+00:13:46,200 --> 00:13:50,540
+So the absolute bare minimum you have to do
+
+158
+00:13:50,540 --> 00:13:54,380
+is you have to do some kind of handover workshop.
+
+159
+00:13:54,380 --> 00:13:57,400
+at least some kind of workshop where you write down
+
+160
+00:13:57,400 --> 00:14:00,240
+what can be done and which devices can be used.
+
+161
+00:14:00,240 --> 00:14:03,460
+If you don't do that, what are you going to do?
+
+162
+00:14:03,460 --> 00:14:05,160
+You can't access your devices any longer.
+
+163
+00:14:05,160 --> 00:14:08,140
+And that's a very, very bad situation to be in.
+
+164
+00:14:08,140 --> 00:14:11,420
+And even better is if you can somehow arrange
+
+165
+00:14:11,420 --> 00:14:14,240
+to have a handover period where questions can be answered
+
+166
+00:14:14,240 --> 00:14:15,440
+by the old team.
+
+167
+00:14:15,440 --> 00:14:18,660
+So before people are leaving with the project knowledge
+
+168
+00:14:18,660 --> 00:14:21,440
+of your verified boot systems, you have to ensure
+
+169
+00:14:21,440 --> 00:14:23,860
+that there's some kind of handover period
+
+170
+00:14:23,860 --> 00:14:25,300
+where people can be taught
+
+171
+00:14:25,300 --> 00:14:27,800
+how to access these devices.
+
+172
+00:14:29,400 --> 00:14:33,600
+And oftentimes, our customers think it's easy.
+
+173
+00:14:33,600 --> 00:14:36,100
+The contractor does it, right?
+
+174
+00:14:36,100 --> 00:14:38,140
+We just say we want secure boot,
+
+175
+00:14:38,140 --> 00:14:41,540
+and then we say, okay, we can implement that,
+
+176
+00:14:41,540 --> 00:14:44,840
+but it's not how it's going to work out in the end,
+
+177
+00:14:44,840 --> 00:14:46,440
+because we can't do it alone.
+
+178
+00:14:46,440 --> 00:14:49,560
+We can implement the procedures to sign the bootloader,
+
+179
+00:14:49,560 --> 00:14:53,180
+to verify the fit image, to create the signed images,
+
+180
+00:14:53,180 --> 00:14:59,580
+to verify the file system but your technical decisions concerning the project have to be done
+
+181
+00:14:59,580 --> 00:15:06,620
+by you as the device vendor and we can't make these decisions because oftentimes we don't even
+
+182
+00:15:06,620 --> 00:15:13,180
+have the broad overview of how the product is going to be used oftentimes people have platform
+
+183
+00:15:13,180 --> 00:15:18,540
+ideas instead of building a specific device for a specific purpose so in the end inside of the
+
+184
+00:15:18,540 --> 00:15:22,980
+company there are four five six ten stakeholders who want to use the device
+
+185
+00:15:22,980 --> 00:15:27,480
+for different purposes and then we don't have any idea how the device is going to
+
+186
+00:15:27,480 --> 00:15:34,560
+be used and if we are we as a contractor are no longer involved every every
+
+187
+00:15:34,560 --> 00:15:39,240
+project at some point down the line switches to some kind of support stage
+
+188
+00:15:39,240 --> 00:15:44,280
+where we are no longer deeply involved sometimes decisions have to be made by
+
+189
+00:15:44,280 --> 00:15:49,800
+the vendor or somebody building the device and you have also have to be to
+
+190
+00:15:49,800 --> 00:15:54,660
+remember that the key management for the secure boot keys can't be done by us
+
+191
+00:15:54,660 --> 00:16:00,720
+the devices or the software is going to be signed in your infrastructure the
+
+192
+00:16:00,720 --> 00:16:05,640
+devices will need to be fused inside of your infrastructure and we can't arrange
+
+193
+00:16:05,640 --> 00:16:12,360
+that we oftentimes don't even have an overview of how these devices are
+
+194
+00:16:12,360 --> 00:16:21,980
+provisioned for deployment on the devices there are often two choices so we do one
+
+195
+00:16:21,980 --> 00:16:26,400
+for development publish purposes and open reconfigurable bootloader which can
+
+196
+00:16:26,400 --> 00:16:31,500
+boot anything because for development we sometimes want to change parameters we
+
+197
+00:16:31,500 --> 00:16:35,700
+want to test something then it's required so either you create a
+
+198
+00:16:35,700 --> 00:16:39,860
+development bootloader that is going to be signed with release keys which has
+
+199
+00:16:39,860 --> 00:16:45,300
+the advantage that every time you get a device from the field back which is somehow broken you
+
+200
+00:16:45,300 --> 00:16:50,340
+can just use your development bootloader and boot it up on the device it's really easy for support
+
+201
+00:16:50,340 --> 00:16:56,420
+cases but the disadvantage is if anybody gains access to this bootloader all your devices out
+
+202
+00:16:56,420 --> 00:17:02,980
+there are potentially vulnerable because now everybody can access or release devices and the
+
+203
+00:17:02,980 --> 00:17:07,780
+other choice you can you have is you can use the development bootloader with special development
+
+204
+00:17:07,780 --> 00:17:12,680
+keys it has a great advantage that your bootloader will be billable in CI if you
+
+205
+00:17:12,680 --> 00:17:17,540
+have development keys which can be leaked because there are only like 10 20
+
+206
+00:17:17,540 --> 00:17:20,860
+development devices out there and they are never going to reach the field and
+
+207
+00:17:20,860 --> 00:17:24,940
+nobody is going to use them out there it doesn't matter right and the
+
+208
+00:17:24,940 --> 00:17:29,840
+disadvantage is that you now have special development devices as I said
+
+209
+00:17:29,840 --> 00:17:35,740
+before you have to mark these devices as being used with development keys so
+
+210
+00:17:35,740 --> 00:17:40,820
+So every developer in the later development cycle, if he wants to use new software, he
+
+211
+00:17:40,820 --> 00:17:42,180
+has to use the development keys.
+
+212
+00:17:42,180 --> 00:17:43,580
+This is not a release device.
+
+213
+00:17:43,580 --> 00:17:45,320
+It doesn't use the release keys.
+
+214
+00:17:45,320 --> 00:17:47,980
+And you have to take care that this is done.
+
+215
+00:17:47,980 --> 00:17:55,860
+And what also can happen if you put too much stuff into the CI is this sign all the things.
+
+216
+00:17:55,860 --> 00:18:02,700
+In one of our projects, they set up the CI pipeline for their release devices as well.
+
+217
+00:18:02,700 --> 00:18:09,100
+And then somebody checked in development bootloader with development options, which was totally
+
+218
+00:18:09,100 --> 00:18:10,100
+open.
+
+219
+00:18:10,100 --> 00:18:12,400
+And the CI just went, okay, that's a valid configuration.
+
+220
+00:18:12,400 --> 00:18:13,400
+I can build that.
+
+221
+00:18:13,400 --> 00:18:15,060
+And then they had an artifact.
+
+222
+00:18:15,060 --> 00:18:21,500
+So a bootloader signed with release keys, which was open and which was now out on the
+
+223
+00:18:21,500 --> 00:18:25,040
+internet because it was cloud infrastructure that built this.
+
+224
+00:18:25,040 --> 00:18:29,940
+And they had to go to greater length to delete the artifacts back again.
+
+225
+00:18:29,940 --> 00:18:32,200
+So you have to take this into account as well.
+
+226
+00:18:32,200 --> 00:18:36,680
+CI is involved you have to be really really careful when you are using the release keys
+
+227
+00:18:38,200 --> 00:18:45,720
+and then there's the additional question of device provisioning so we have Anakin here which says
+
+228
+00:18:45,720 --> 00:18:53,400
+we use verified boot now but we do have a trustworthy manufacturer do we do yeah yeah
+
+229
+00:18:53,400 --> 00:18:59,560
+please so for another project they decided to outsource their production facilities to another
+
+230
+00:18:59,560 --> 00:19:04,360
+country and then decided oh we don't necessarily trust that factory even
+
+231
+00:19:04,360 --> 00:19:08,380
+though it's our own but then you have to set up some kind of procedure so you
+
+232
+00:19:08,380 --> 00:19:13,720
+can still manufacture your product board but you won't be able to provision your
+
+233
+00:19:13,720 --> 00:19:17,980
+device there right because somebody could replace the keys which are used
+
+234
+00:19:17,980 --> 00:19:23,740
+there and emulate your software so you're constantly or the potential for
+
+235
+00:19:23,740 --> 00:19:28,000
+harmful deployment on your devices there if you don't have a trustworthy
+
+236
+00:19:28,000 --> 00:19:34,720
+manufacturing facility and you have to take this into account so now you are
+
+237
+00:19:34,720 --> 00:19:39,220
+done with development verify boot is done everything works you have tested
+
+238
+00:19:39,220 --> 00:19:43,880
+that it works it's ready for release so now you have to think about the
+
+239
+00:19:43,880 --> 00:19:47,820
+provisioning of the device as in the previous example so steps before
+
+240
+00:19:47,820 --> 00:19:51,880
+deploying the software and the device you have to somehow set up the
+
+241
+00:19:51,880 --> 00:19:56,940
+enablement of verified boot so inside of your production or inside of the
+
+242
+00:19:56,940 --> 00:20:02,960
+production environment, yes, you have to fuse your release keys into the device. You may want to test
+
+243
+00:20:02,960 --> 00:20:08,940
+that the release keys work correctly. You may want to do additional initialization as well in this
+
+244
+00:20:08,940 --> 00:20:15,440
+key, if you are already there. So, for Opti, you often want to exchange a key with the RPMB partition
+
+245
+00:20:15,440 --> 00:20:23,200
+of the EMMC. Or maybe you also want to set up the pseudo-SLC mode for your EMMC so it lives a bit
+
+246
+00:20:23,200 --> 00:20:28,180
+longer then you have to provision a device private key so if you want to
+
+247
+00:20:28,180 --> 00:20:32,260
+use your device for cloud authentication you either have to load the private key
+
+248
+00:20:32,260 --> 00:20:37,300
+onto the device or better you have to generate the key on the device so the
+
+249
+00:20:37,300 --> 00:20:42,220
+key can never leave the device again and all that has to be done in a trusted
+
+250
+00:20:42,220 --> 00:20:49,200
+environment otherwise you're up to your luck pretty much another question which
+
+251
+00:20:49,200 --> 00:20:54,420
+also comes up all the time is how many keys do we generate do we generate one
+
+252
+00:20:54,420 --> 00:21:00,700
+key for all devices this pertains to how you authenticate to your cloud API as
+
+253
+00:21:00,700 --> 00:21:05,700
+well as how you install updates on the device so is there a global update key
+
+254
+00:21:05,700 --> 00:21:10,620
+maybe there's an update key for each revision of the device or maybe even for
+
+255
+00:21:10,620 --> 00:21:14,760
+each production run or for each individual device these are choices
+
+256
+00:21:14,760 --> 00:21:20,940
+which make it harder to deploy on a device or easier and make it more secure
+
+257
+00:21:20,940 --> 00:21:26,040
+or less secure in case of compromise of private key material and you also have
+
+258
+00:21:26,040 --> 00:21:30,240
+to ensure that you document your decision in this case so you have to
+
+259
+00:21:30,240 --> 00:21:34,620
+document it for anybody else who may have to touch the device in the future
+
+260
+00:21:34,620 --> 00:21:38,640
+for software updates as an example because oftentimes regarding
+
+261
+00:21:38,640 --> 00:21:44,320
+documentation what happens is something akin to this so we get a this is pretty
+
+262
+00:21:44,320 --> 00:21:49,040
+much what happens all the time we say we need to we need some time to write documentation the
+
+263
+00:21:49,040 --> 00:21:54,080
+customer says oh it's going to be fine we'll have documentation time later and then this is the
+
+264
+00:21:54,560 --> 00:22:02,560
+situation we end up in things you need to document as a starting point how are your release keys
+
+265
+00:22:02,560 --> 00:22:08,160
+created and provisioned on the device how was that done maybe if somebody else wants to create
+
+266
+00:22:08,160 --> 00:22:13,360
+another device which also uses verified boot if you have instructions for your
+
+267
+00:22:13,360 --> 00:22:18,900
+HSM how to create the how to create these keys it's already easier much
+
+268
+00:22:18,900 --> 00:22:24,180
+easier how do you distinguish development devices from release devices
+
+269
+00:22:24,180 --> 00:22:29,040
+do you have big red stickers or do you have a system online do you have QR
+
+270
+00:22:29,040 --> 00:22:32,940
+codes on the device I have there there are many many possible choices but you
+
+271
+00:22:32,940 --> 00:22:37,160
+should have thought about that and documented how it works how do I handle
+
+272
+00:22:37,160 --> 00:22:41,780
+devices that are returned from the field depending on which choice you made in
+
+273
+00:22:41,780 --> 00:22:46,400
+the initial bootloader signing you may be able to just run a development boot
+
+274
+00:22:46,400 --> 00:22:51,480
+order on the device then it's easy or you may have to do the field return
+
+275
+00:22:51,480 --> 00:22:56,160
+procedure for this specific implementation of secure boot and also
+
+276
+00:22:56,160 --> 00:23:01,100
+test and verify these instructions periodically they may be out of date
+
+277
+00:23:01,100 --> 00:23:05,500
+because they were created in a workshop two years ago and are no longer very
+
+278
+00:23:05,500 --> 00:23:10,540
+it valid for current software. You have to ensure that they are still working if everybody or anybody
+
+279
+00:23:10,540 --> 00:23:18,560
+wants to change the device later on. There's also some licensing problems. So GPLv3 contains the
+
+280
+00:23:18,560 --> 00:23:27,200
+TiVo clause and the idea behind that is that when you deploy GPLv3 software on the device,
+
+281
+00:23:27,200 --> 00:23:34,260
+you also have to ship out information to run modified versions of this GPLv3 software on the
+
+282
+00:23:34,260 --> 00:23:39,900
+device, which in the worst case means that you have to ship out your private key material for
+
+283
+00:23:39,900 --> 00:23:45,140
+secure boot, because otherwise nobody can change the software on the device. And that's not something
+
+284
+00:23:45,140 --> 00:23:53,840
+you want. The solution for this is either you use no GBL v3 software, which is from my point of view
+
+285
+00:23:53,840 --> 00:23:59,520
+still bad, because it becomes, it's harder and harder to avoid GBL v3 software. We are trying
+
+286
+00:23:59,520 --> 00:24:04,980
+very hard and for the project in 2019 it was still possible but nowadays I'm not
+
+287
+00:24:04,980 --> 00:24:10,500
+entirely sure and the other option you do have is you implement an unlock mode
+
+288
+00:24:10,500 --> 00:24:15,580
+inside of your bootloader so some kind of mechanism where the customer can
+
+289
+00:24:15,580 --> 00:24:19,080
+decide okay I don't want to use this device with your infrastructure any
+
+290
+00:24:19,080 --> 00:24:24,120
+longer and then the device just deletes all key material or makes it inaccessible
+
+291
+00:24:24,120 --> 00:24:29,120
+which comes out to the same point and then unlocks the device and they can run
+
+292
+00:24:29,120 --> 00:24:36,460
+their own GPLv3 software. That's totally valid. I think in one of the examples in an automotive
+
+293
+00:24:36,460 --> 00:24:41,940
+presentation, they said you can totally break your core and not use it any longer, but at least you
+
+294
+00:24:41,940 --> 00:24:49,520
+can run your own software on it. And this is valid. There's also the question of how to handle
+
+295
+00:24:49,520 --> 00:24:55,700
+devices returned from the field. This is unique per verified boot implementation. If you have
+
+296
+00:24:55,700 --> 00:25:00,820
+information on this pertaining to other socks than nxp let me know i'm very interested on how that
+
+297
+00:25:00,820 --> 00:25:08,260
+works for nxp devices you have to sign the bootloader and it has to include the unique id of
+
+298
+00:25:08,260 --> 00:25:14,180
+the soc so if you have a device returned from the field you definitely want to know the unique id of
+
+299
+00:25:14,180 --> 00:25:24,420
+the processor that was soldered onto the device and then the device can burn another fuse which
+
+300
+00:25:24,420 --> 00:25:30,580
+totally disables the secure boot process and then you can again boot any boot loader out there so
+
+301
+00:25:30,580 --> 00:25:36,420
+you can create another boot loader and then boot that this is a complex process and may need some
+
+302
+00:25:36,420 --> 00:25:43,780
+automation for support cases right because device support way may not necessarily be able to run
+
+303
+00:25:43,780 --> 00:25:50,020
+the whole yokto system to sign the boot loader so you may have may want to have a simple portal for
+
+304
+00:25:50,020 --> 00:25:55,940
+that where they can type in the soc and then your internal inventory already marks as no longer
+
+305
+00:25:55,940 --> 00:26:05,380
+usable there's also yokto integration we upstream in the last few years so for example there's this
+
+306
+00:26:05,380 --> 00:26:12,980
+signing bb class which is made which was made by my colleague jan lube which implements the usage
+
+307
+00:26:12,980 --> 00:26:21,620
+of PKCS11 inside of Yocto recipes. So inside of the recipes you just say which PKCS11 URIs to use,
+
+308
+00:26:21,620 --> 00:26:27,060
+and then the HSM axis happens in the background during the build of the recipe, which makes it
+
+309
+00:26:27,060 --> 00:26:33,220
+really easy to integrate even complex HSMs into a Yocto build. It's really nice. This is upstream
+
+310
+00:26:33,220 --> 00:26:37,940
+in MetaOE since Mickeldor, which means it's also contained in the latest LTS release, ScarfGap.
+
+311
+00:26:37,940 --> 00:26:44,820
+it's a good reason to update to the latest lts and usage examples are like the whole chain up to
+
+312
+00:26:44,820 --> 00:26:50,340
+the kernel where the kernel then verifies the file system so bootloader signing can be done
+
+313
+00:26:50,340 --> 00:26:55,940
+update signing can be automated to action access and hsm and fit image signing as well there's
+
+314
+00:26:55,940 --> 00:26:59,780
+also an integration example on github it's linked in the slides you can download
+
+315
+00:26:59,780 --> 00:27:11,020
+How this works is that you pretty much say I would like to use the following HSM here
+
+316
+00:27:11,020 --> 00:27:17,060
+it's identified by the serial number and then you have an additional argument you have to
+
+317
+00:27:17,060 --> 00:27:27,660
+construct in this escaped manner and you can also provide a pin and you can point to the
+
+318
+00:27:27,660 --> 00:27:37,180
+respective implementation of the PKCS11C API and then inside of your configuration you can set up
+
+319
+00:27:37,180 --> 00:27:43,340
+which objects are going to be used so in this case we have four SRK keys which are the super
+
+320
+00:27:43,340 --> 00:27:51,260
+root keys used for nxp verified boot we then additionally have the command sequence file
+
+321
+00:27:51,260 --> 00:27:57,260
+and image keys and then we have a key for fit image signing and for update signing down here
+
+322
+00:27:57,260 --> 00:28:03,020
+so this is all that's that's needed to be done to switch the keys from development keys which
+
+323
+00:28:03,020 --> 00:28:08,460
+may be contained inside your bsp so you don't have to access an external hsm to switch over
+
+324
+00:28:08,460 --> 00:28:14,220
+to a real hsm implementation which is maybe connected via usb to your device
+
+325
+00:28:16,460 --> 00:28:23,340
+so in conclusion what we want for a variable boot process is documentation documentation and more
+
+326
+00:28:23,340 --> 00:28:28,200
+documentation we want to know which decisions were made during the initial
+
+327
+00:28:28,200 --> 00:28:33,460
+project creation we want to know which devices are still usable and how they
+
+328
+00:28:33,460 --> 00:28:38,040
+are going to be used how a device can be flashed how the build system can be
+
+329
+00:28:38,040 --> 00:28:43,300
+instructed to build a complete image for the device everything that's documented
+
+330
+00:28:43,300 --> 00:28:48,060
+makes it easier for anybody else who has no information on the project to get out
+
+331
+00:28:48,060 --> 00:28:52,800
+how to build devices how to build software for the device you want to have
+
+332
+00:28:52,800 --> 00:28:57,440
+hand over process express especially when the contractor leaves or a new team member needs
+
+333
+00:28:57,440 --> 00:29:04,160
+onboarding which is essential in our fast living software world at least that's what i've seen from
+
+334
+00:29:04,160 --> 00:29:10,160
+customers oftentimes people are only there for two to three years so a handover process for verified
+
+335
+00:29:10,160 --> 00:29:15,760
+boot projects is pretty much pretty much essential and be also very really really careful about
+
+336
+00:29:15,760 --> 00:29:23,360
+provisioning and remember or document how to manage field return devices. And with that,
+
+337
+00:29:24,000 --> 00:29:26,400
+I'm pretty much done and I would like to hear your questions.
+
+338
+00:29:45,760 --> 00:29:54,980
+So the question was whether the NXP signing or HSM access pertains to signing data for the device,
+
+339
+00:29:55,080 --> 00:30:00,120
+so signing bootloaders, if I got that correctly, or using PKCS11 on the device.
+
+340
+00:30:00,480 --> 00:30:01,760
+Did I get that correctly?
+
+341
+00:30:02,360 --> 00:30:03,880
+So in the end, both.
+
+342
+00:30:05,020 --> 00:30:11,340
+The signing BB class for Yocto uses the external HSM connected to your developer machine
+
+343
+00:30:11,340 --> 00:30:14,080
+to sign artifacts for the device.
+
+344
+00:30:14,080 --> 00:30:19,900
+But then inside of the device, if you employ Opti, there's for Opti a PKCS-11TA.
+
+345
+00:30:20,320 --> 00:30:25,440
+So on the device itself, you can also use PKCS-11 to authenticate to a cloud interface.
+
+346
+00:30:26,060 --> 00:30:27,340
+So both.
+
+347
+00:30:27,820 --> 00:30:30,000
+So the Opti speaks with the internet and gets the system?
+
+348
+00:30:30,740 --> 00:30:36,080
+The Opti doesn't speak with the internet, but the Opti is able to generate key material
+
+349
+00:30:36,080 --> 00:30:40,280
+and then is able to sign requests from Linux user space.
+
+350
+00:30:40,280 --> 00:30:50,680
+So if you want to do, for example, client certificate authentication, there is the PKCS11 or OpenSSL PKCS11 provider interface.
+
+351
+00:30:51,100 --> 00:31:00,120
+And then your software can instruct OpenSSL not to use a private key which is stored in the Linux root file system, but to use a private key that is stored inside of Opti.
+
+352
+00:31:00,440 --> 00:31:05,380
+And then software or data that needs to be signed is handed over to Opti.
+
+353
+00:31:05,380 --> 00:31:09,720
+Opti does the signing without Linux being able to inspect what happens.
+
+354
+00:31:09,720 --> 00:31:11,880
+and then the signed data is handed back.
+
+355
+00:31:15,700 --> 00:31:16,220
+Yes.
+
+356
+00:31:16,220 --> 00:31:17,820
+Yeah, thanks for a great talk.
+
+357
+00:31:18,300 --> 00:31:23,300
+I would like to highlight one pitfall that I find often on variable boot setup
+
+358
+00:31:23,300 --> 00:31:26,200
+is that people forget about downgrade attacks.
+
+359
+00:31:26,720 --> 00:31:30,060
+For example, when your bootloader has a security vulnerability
+
+360
+00:31:30,060 --> 00:31:32,080
+and you have to rebate the bootloader,
+
+361
+00:31:32,180 --> 00:31:35,520
+but you have to make sure that nobody can reinstall the buggy bootloader.
+
+362
+00:31:35,900 --> 00:31:36,060
+Yes.
+
+363
+00:31:36,060 --> 00:31:44,300
+So, not really the question, but the notice from the audience was that downgraded techs in this case are still possible.
+
+364
+00:31:44,660 --> 00:31:46,980
+So, there's no downgrade protection for the bootloader.
+
+365
+00:31:47,040 --> 00:31:52,140
+Somebody could install an old vulnerable bootloader on the device, which is correct.
+
+366
+00:31:52,320 --> 00:31:54,760
+And in the current scheme, there's no mitigation for that.
+
+367
+00:31:54,980 --> 00:31:58,680
+I have ideas for mitigation, but they are not implemented at the moment.
+
+368
+00:31:59,620 --> 00:32:00,900
+Yes, that's correct.
+
+369
+00:32:01,620 --> 00:32:02,560
+There's a question up there.
+
+370
+00:32:02,560 --> 00:32:07,200
+I have a question regarding the GPL version 3 problem.
+
+371
+00:32:07,540 --> 00:32:07,760
+Yes.
+
+372
+00:32:09,080 --> 00:32:17,800
+I thought it would be necessary to offer a possibility to deploy the modified version 3 software on the device.
+
+373
+00:32:19,940 --> 00:32:25,140
+You do not need to guarantee a warranty for the device anymore.
+
+374
+00:32:25,240 --> 00:32:25,500
+Yes.
+
+375
+00:32:25,500 --> 00:32:28,900
+But it should keep its functionality.
+
+376
+00:32:28,900 --> 00:32:46,760
+So, the question is, for the GPLv3 problem, the deployment of modified software needs to be done, but that the device should keep its functionality. I am not a lawyer, and I'm afraid that I can't answer this question definitely.
+
+377
+00:32:46,760 --> 00:32:52,260
+So, from my understanding, that's not what's required by the GPL.
+
+378
+00:32:52,660 --> 00:32:55,000
+So, functionality doesn't need to be retained.
+
+379
+00:32:55,380 --> 00:32:58,120
+Your software just has to be able to run on the device.
+
+380
+00:32:58,520 --> 00:33:01,340
+But still, this is no legal advice.
+
+381
+00:33:03,680 --> 00:33:10,280
+You said that for NXP, you can disable the HAD again for few different devices.
+
+382
+00:33:10,820 --> 00:33:12,740
+Why is this not a security issue?
+
+383
+00:33:12,740 --> 00:33:22,620
+So, the question was, why is the disablement of HAB for field return devices not a security vulnerability?
+
+384
+00:33:23,180 --> 00:33:27,920
+Because you need to have the private key material.
+
+385
+00:33:28,360 --> 00:33:31,920
+So, you need to be the one that initially deployed software on the device.
+
+386
+00:33:32,200 --> 00:33:34,680
+And you also need the SoC Unic ID.
+
+387
+00:33:34,960 --> 00:33:38,880
+So, there's no global unlock bootloader for every device out there.
+
+388
+00:33:38,880 --> 00:33:49,200
+The bootloader, which is able to return your device from the deployed state into the return state where HAB is disabled, needs to be specifically created for the device.
+
+389
+00:33:50,160 --> 00:33:53,500
+So that's pretty much how this works for NXP.
+
+390
+00:33:54,840 --> 00:33:58,880
+If you do like that and disable the bootloader, can you come back to an enable it again?
+
+391
+00:33:59,140 --> 00:34:02,340
+No. At least for the NXP HAB.
+
+392
+00:34:02,480 --> 00:34:05,780
+So the question was, can you return back to the production state?
+
+393
+00:34:05,840 --> 00:34:06,600
+And the answer is no.
+
+394
+00:34:06,600 --> 00:34:16,200
+So, during the disablement of HAB, you have to burn a fuse, which says this is now a field return device, and burning the fuse means you can never go back.
+
+395
+00:34:17,400 --> 00:34:22,540
+Does PKCS11 have anything to support revocation?
+
+396
+00:34:23,380 --> 00:34:31,640
+The question was whether PKCS11 has anything that supports revocation, and as far as I know, no, it doesn't.
+
+397
+00:34:31,640 --> 00:34:49,180
+This is due to PKCS11 being often used with client certificate authentication, and then you have a CA setup where you can have certificate revocation lists, of course, and then the revocation can be done that way, but PKCS11 doesn't implement revocation.
+
+398
+00:34:51,320 --> 00:34:56,760
+How do you protect the integration of PKI for all RCA?
+
+399
+00:34:56,760 --> 00:35:24,240
+So the question was how the key material to assign the devices
+
+400
+00:35:26,760 --> 00:35:32,760
+I mean, the configuration of your PKCS subsystem.
+
+401
+00:35:32,760 --> 00:35:38,760
+So, the question is how the PKCS11 subsystem is protected.
+
+402
+00:35:38,760 --> 00:35:43,760
+Is the question pertaining to using PKCS11 on the device or during the build process?
+
+403
+00:35:43,760 --> 00:35:45,760
+During the build of the system.
+
+404
+00:35:45,760 --> 00:35:50,760
+During the build of the release.
+
+405
+00:35:50,760 --> 00:35:52,760
+During the build of the release.
+
+406
+00:35:52,760 --> 00:35:57,580
+During the build of the release, it depends on which kind of HSM you choose.
+
+407
+00:35:57,580 --> 00:36:04,840
+If you use a USB HSM and it needs to be connected, then you can use a developer or you can use
+
+408
+00:36:04,840 --> 00:36:09,100
+a laptop or a computer which doesn't have any internet connection, for example, if you
+
+409
+00:36:09,100 --> 00:36:13,360
+want to be really safe, and then only copy over the source artifacts required to build
+
+410
+00:36:13,360 --> 00:36:14,860
+your complete software.
+
+411
+00:36:14,860 --> 00:36:16,360
+That's one of the possibilities.
+
+412
+00:36:16,360 --> 00:36:32,680
+The question pertains to how do you verify that the configuration in the release device
+
+413
+00:36:32,680 --> 00:36:34,680
+isn't different from the development device.
+
+414
+00:36:34,680 --> 00:36:42,520
+it's it's most of the customer is main demand uh but if you configuration is public for all
+
+415
+00:36:42,520 --> 00:36:53,000
+developers i mean the team and pass today you move some to some e so how do you provide how
+
+416
+00:36:53,000 --> 00:37:02,680
+do you hide this integration from uh well not so how do you separate the security in this case
+
+417
+00:37:02,680 --> 00:37:08,860
+Because CI is going to be accessed by everyone in the development team.
+
+418
+00:37:09,640 --> 00:37:20,620
+I guess the question was, how do I protect my keys from a certain, or from some people in the development team,
+
+419
+00:37:20,620 --> 00:37:23,940
+which may not be allowed if the signing is done by a CI?
+
+420
+00:37:24,300 --> 00:37:26,960
+I would say don't do the signing by the CI.
+
+421
+00:37:27,320 --> 00:37:31,720
+I would totally recommend against that, which is a pretty good mitigation.
+
+422
+00:37:31,720 --> 00:37:48,060
+So, that's one of the possibilities, which may not always be possible, of course, because some people insist on having the CI having access to the release keys, but what can you do, right?
+
+423
+00:37:48,620 --> 00:37:54,600
+If that's the decision somebody took during the development, we don't have any sway over that.
+
+424
+00:37:54,600 --> 00:38:09,500
+I just wanted to mention that Fit is a standard outside of UBoot now, and there is a Linux target for building Fit now.
+
+425
+00:38:10,720 --> 00:38:13,340
+I don't got the notice.
+
+426
+00:38:14,920 --> 00:38:18,920
+So Fit is now a standard outside of UBoot.
+
+427
+00:38:18,920 --> 00:38:22,820
+Ah, so Fit images are now maintained outside of UBoot.
+
+428
+00:38:22,820 --> 00:38:40,840
+The specification. Ah, the specification. Ah, yeah, nice. That's useful. So, the notice was that the specification for flattened image trees, fit images, is now maintained outside of U-Boot. Yeah, thanks.
+
+429
+00:38:40,840 --> 00:38:57,200
+no unfortunately i don't do you so the question was or the notice was that everything i was
+
+430
+00:38:57,200 --> 00:39:04,740
+talking about was about nxp processors and my answer is i mostly worked with nxp processors
+
+431
+00:39:04,740 --> 00:39:10,200
+a lot of projects we at panglotronics have are done with nxp processors but i would be very very
+
+432
+00:39:10,200 --> 00:39:15,060
+interested in how it works on TI SOCs, especially on the new AM6-2 series.
+
+433
+00:39:15,060 --> 00:39:25,440
+One thing I can mention is that my question is that TI doesn't have this secure boot off-the-game mode.
+
+434
+00:39:25,440 --> 00:39:32,520
+What I have seen is that they have a processor where you can use secure boot, but only that.
+
+435
+00:39:32,520 --> 00:39:33,520
+Okay.
+
+436
+00:39:33,520 --> 00:39:38,520
+So the notice is that somebody in the audience looked at the TI specification for secure
+
+437
+00:39:38,520 --> 00:39:43,000
+boot and the impression is that there is no provisioning for some kind of field return
+
+438
+00:39:44,200 --> 00:39:51,160
+possibilities so where you can disable secure boot again but maybe somebody from ti has deeper
+
+439
+00:39:51,160 --> 00:39:58,600
+information on that if you have contact me i'm very interested yes of course that's not it's very
+
+440
+00:39:59,320 --> 00:40:05,000
+the audience mentions that it's very nda which is unfortunate because i do open source software
+
+441
+00:40:05,000 --> 00:40:07,300
+and it kind of clashes with NDAs, so, yeah.
+
+442
+00:40:11,200 --> 00:40:15,200
+So, that may be one of the reasons why I'm able to talk about the NXP process,
+
+443
+00:40:15,200 --> 00:40:19,500
+because most of it, we are actually able to talk about it
+
+444
+00:40:19,500 --> 00:40:22,400
+if it's contained in open source software, which is nice.
+
+445
+00:40:22,900 --> 00:40:27,860
+But for other vendors, you can't even tell me if you have signed the NDA, right?
+
+446
+00:40:27,860 --> 00:40:31,900
+So, it's a pretty bad situation,
+
+447
+00:40:31,900 --> 00:40:37,900
+because at least for we we have some deeper insights on how the NXP process
+
+448
+00:40:37,900 --> 00:40:40,960
+works and we understand how it works but for other implementations if you have
+
+449
+00:40:40,960 --> 00:40:45,100
+to sign the NDA you don't know whom you can talk to except your colleagues who
+
+450
+00:40:45,100 --> 00:40:48,900
+have also signed the NDAs, right?
+
+451
+00:40:48,900 --> 00:41:00,900
+So, I have a TI EVK and I don't think I signed an NDA yet for some, but I didn't get deep enough to know how it actually works.
+
+452
+00:41:00,900 --> 00:41:08,900
+Somebody mentions that they do have an EVK from TI, but they don't have access to the secure boot documentation.
+
+453
+00:41:08,900 --> 00:41:33,560
+yeah okay so somebody in the audience mentions that there's the new IP 2350
+
+454
+00:41:33,560 --> 00:41:40,740
+that's it which is a Cortex-M CPU so not really suitable for Linux targets
+
+455
+00:41:40,740 --> 00:41:43,880
+unfortunately but they want to open source all the documentation required
+
+456
+00:41:43,880 --> 00:41:49,960
+for secure boot which is great if you ask me now if we could get that for the
+
+457
+00:41:49,960 --> 00:41:56,880
+bigger Raspberry Pi Cortex-A course right would be nice no more questions
+
+458
+00:41:56,880 --> 00:41:58,260
+Thank you very much.
+

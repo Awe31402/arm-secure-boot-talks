@@ -1,0 +1,1045 @@
+Attacking Samsung Galaxy A*
+Boot Chain, and Beyond
+
+
+Maxime Rossi Bellom
+Damiano Melotti
+Raphaël Neveu
+Gabrielle Viala
+Who we are
+
+■   Maxime Rossi Bellom @max_r_b         ■   Gabrielle Viala @pwissenlit
+■   Security researcher                  ■   Security researcher
+    and R&D leader @ Quarkslab               and R&D leader @ Quarkslab
+■   Working on mobile and embedded       ■   Playing with low-level stuﬀ
+    software security
+
+
+
+
+■   Damiano Melotti @DamianoMelotti      ■   Raphaël Neveu
+■   Ex security researcher @ Quarkslab   ■   Security researcher @ Quarkslab
+■   Interested in low-level mobile       ■   Working on low-level mobile
+    security and fuzzing                     security
+                                                                               2
+Our Device
+
+
+  ■ Samsung Galaxy A225F
+             ●        Cheap (~300€)
+             ●        Mediatek SoC MT6769V
+             ●        Main OS: Android
+             ●        Mix of Mediatek and Samsung code
+             ●        Trustzone OS: TEEGRIS
+             ●        Secure Boot Bypass using MTKClient1
+                       → making debugging easier
+
+
+
+
+[1]: https://github.com/bkerler/mtkclient
+                                                            4
+Mediatek Secure Boot Process
+
+
+
+
+                               5
+Mediatek Secure Boot Process
+
+
+
+
+                               6
+Little Kernel (LK)
+
+
+  ■ Open-source OS2
+  ■ Common as bootloader in the Android world
+  ■ Allows to boot Android or other modes
+    (Recovery)
+  ■ Implements Android Veriﬁed Boot v2
+              ●        Veriﬁcation of Android images
+              ●        Involving boot and vbmeta partitions
+              ●        Anti-rollback
+
+
+
+[2]: https://github.com/littlekernel/lk
+                                                              7
+Little Kernel by Samsung
+
+
+
+■ Samsung modiﬁed LK to include:
+    ●   The Odin recovery protocol
+    ●   Knox Security Bit
+    ●   Etc…
+    ●   And a JPEG parser/renderer
+■ This version is closed source
+
+
+
+
+                                     8
+Why Targeting the JPEG Loader/Parser
+
+
+  ■ JPEGs are placed in a TAR archive in the up_param partition
+  ■ The archive is signed… but the signature is not checked at boot
+    ❗ Anyone able to write the ﬂash can modify these JPEGs
+  ■ Parsing JPEG is known to be hard (cf. LogoFail3)
+
+
+
+
+[3]: https://www.binarly.io/blog/inside-the-logofail-poc-from-integer-overﬂow-to-arbitrary-code-execution
+                                                                                                            9
+Why Targeting the JPEG Loader/Parser
+
+
+  ■ JPEGs are placed in a TAR archive in the up_param partition
+  ■ The archive is signed… but the signature is not checked at boot
+    ❗ Anyone able to write the ﬂash can modify these JPEGs
+  ■ Parsing JPEG is known to be hard (cf. LogoFail3)
+
+
+
+                                                  How are these JPEGs loaded by LK?
+
+
+
+[3]: https://www.binarly.io/blog/inside-the-logofail-poc-from-integer-overﬂow-to-arbitrary-code-execution
+                                                                                                            10
+Heap Overﬂow in JPEG Loading
+
+
+               _JPEG_BUF = alloc(0x100000);
+               if (_JPEG_BUF == 0) {
+                 log("%s: img buf alloc fail\n","drawimg");
+                 uVar2 = 0xffffffff;
+               }
+               else {
+                 memset(_JPEG_BUF,0,0x100000);
+                 iVar1 = read_jpeg_file(file_name,_JPEG_BUF,0);
+                 if (iVar1 == 0) {
+                   log("%s: read %s from up_param as 0, size\n","drawimg",file_name);
+                   uVar2 = 0xffffffff;
+                 }
+               // ...
+
+               pimage(*(undefined4 *)(&DAT_4c5107fc + param_1 * 0x3c),
+                  *(undefined4 *)(&DAT_4c510800 + param_1 * 0x3c),
+                  0x2d0,0x640,1,_JPEG_BUF,iVar1);
+
+
+                                                                                    11
+  Heap Overﬂow in JPEG Loading
+
+
+                        _JPEG_BUF = alloc(0x100000);
+                        if (_JPEG_BUF == 0) {
+Heap allocation of        log("%s: img buf alloc fail\n","drawimg");
+constant size for the     uVar2 = 0xffffffff;
+                        }
+buﬀer                   else {
+                          memset(_JPEG_BUF,0,0x100000);
+                          iVar1 = read_jpeg_file(file_name,_JPEG_BUF,0);
+                          if (iVar1 == 0) {
+                            log("%s: read %s from up_param as 0, size\n","drawimg",file_name);
+                            uVar2 = 0xffffffff;
+                          }
+                        // ...
+
+                        pimage(*(undefined4 *)(&DAT_4c5107fc + param_1 * 0x3c),
+                           *(undefined4 *)(&DAT_4c510800 + param_1 * 0x3c),
+                           0x2d0,0x640,1,_JPEG_BUF,iVar1);
+
+
+                                                                                             12
+Heap Overﬂow in JPEG Loading
+
+
+                   _JPEG_BUF = alloc(0x100000);
+                   if (_JPEG_BUF == 0) {
+                     log("%s: img buf alloc fail\n","drawimg");
+                     uVar2 = 0xffffffff;
+                   }
+                   else {
+                     memset(_JPEG_BUF,0,0x100000);
+                     iVar1 = read_jpeg_file(file_name,_JPEG_BUF,0);
+Read the JPEG in     if (iVar1 == 0) {
+                       log("%s: read %s from up_param as 0, size\n","drawimg",file_name);
+the buﬀer              uVar2 = 0xffffffff;
+                     }
+                   // ...
+
+                   pimage(*(undefined4 *)(&DAT_4c5107fc + param_1 * 0x3c),
+                      *(undefined4 *)(&DAT_4c510800 + param_1 * 0x3c),
+                      0x2d0,0x640,1,_JPEG_BUF,iVar1);
+
+
+                                                                                        13
+Heap Overﬂow in JPEG Loading
+
+
+                   _JPEG_BUF = alloc(0x100000);
+                   if (_JPEG_BUF == 0) {
+                     log("%s: img buf alloc fail\n","drawimg");
+                     uVar2 = 0xffffffff;
+                   }
+                   else {
+                     memset(_JPEG_BUF,0,0x100000);
+                     iVar1 = read_jpeg_file(file_name,_JPEG_BUF,0);
+                     if (iVar1 == 0) {
+                       log("%s: read %s from up_param as 0, size\n","drawimg",file_name);
+                       uVar2 = 0xffffffff;
+                     }
+                   // ...
+
+
+Parse and render   pimage(*(undefined4 *)(&DAT_4c5107fc + param_1 * 0x3c),
+                      *(undefined4 *)(&DAT_4c510800 + param_1 * 0x3c),
+the JPEG              0x2d0,0x640,1,_JPEG_BUF,iVar1);
+
+
+                                                                                        14
+Heap Overﬂow in JPEG Loading
+
+
+               _JPEG_BUF = alloc(0x100000);
+               if (_JPEG_BUF == 0) {
+                 log("%s: img buf alloc fail\n","drawimg");
+                 uVar2 = 0xffffffff;
+               }
+               else {
+                 memset(_JPEG_BUF,0,0x100000);
+                 iVar1 = read_jpeg_file(file_name,_JPEG_BUF,0);
+                 if (iVar1 == 0) {
+                   log("%s: read %s from up_param as 0, size\n","drawimg",file_name);
+                   uVar2 = 0xffffffff;
+                 }
+               // ...
+
+               pimage(*(undefined4 *)(&DAT_4c5107fc + param_1 * 0x3c),
+                  *(undefined4 *)(&DAT_4c510800 + param_1 * 0x3c),
+                  0x2d0,0x640,1,_JPEG_BUF,iVar1);
+
+
+                                                                                    15
+Heap Overﬂow in JPEG Loading
+
+
+■ read_jpeg_file takes a size as 3rd argument
+■ It triggers an error if the ﬁle does not ﬁt the size provided
+
+
+
+ file_size = string_to_int(tar_header_file.size,0,8);
+ if (size != 0 && size < file_size) {
+     file_size = print("read fail! (%d < %d)\n",size,file_size,size);
+     return file_size;
+ }
+ iVar1 = read(data_addr,index + 1,file_size,outbuf);
+
+                                                                        16
+Heap Overﬂow in JPEG Loading
+
+
+■ read_jpeg_file takes a size as 3rd argument
+■ It triggers an error if the ﬁle does not ﬁt the size provided
+  👉 Unless the size provided is 0…
+
+
+ file_size = string_to_int(tar_header_file.size,0,8);
+ if (size != 0 && size < file_size) {
+     file_size = print("read fail! (%d < %d)\n",size,file_size,size);
+     return file_size;
+ }
+ iVar1 = read(data_addr,index + 1,file_size,outbuf);
+
+                                                                        17
+Is it exploitable?
+
+
+
+
+                     18
+Exploiting a Heap Overﬂow in Little Kernel
+
+                                                struct free_chunk_head {
+■ The heap algorithm is miniheap
+    ●   It relies on a doubly linked list           struct free_chunk_head *prev;
+
+■ Chunks are in a unique memory pool                struct free_chunk_head *next;
+    ●   An overﬂow may overwrite the metadata       size_t len;
+        of next chunk                           }
+
+
+
+
+                                                                               19
+From Heap Overﬂow to Arbitrary Write
+
+
+■ After allocation, a chunk is removed from the free list
+■ next and prev are dereferenced to change the corresponding nodes
+  ⇒ Controlling a free chunk leads to a write-what-where
+
+
+
+
+                node->next->prev = node->prev;
+                node->prev->next = node->next;
+                node->prev = node->next = 0;
+
+
+                                                                     20
+From Heap Overﬂow to Arbitrary Write
+
+
+■ After allocation, a chunk is removed from the free list
+■ next and prev are dereferenced to change the corresponding nodes
+  ⇒ Controlling a free chunk leads to a write-what-where
+     ❗ Both values must writable addresses
+
+
+                node->next->prev = node->prev;
+                node->prev->next = node->next;
+                node->prev = node->next = 0;
+
+
+                                                                     21
+From Arbitrary Write to Code Execution
+
+
+      Important details about LK
+         ❌    No ASLR
+         ❌    No canaries
+         ❌    No bounds checks in the heap algorithm
+         ❌    Heap is executable!
+
+
+
+
+                                                       22
+From Arbitrary Write to Code Execution
+
+
+      Important details about LK
+         ❌    No ASLR
+         ❌    No canaries
+         ❌    No bounds checks in the heap algorithm
+         ❌    Heap is executable!
+
+      Exploit strategy becomes simple:
+          1. Overwrite a pointer that the code will jump to
+              👉 the return address in the stack
+          2. Make it point to a shellcode in our JPEG buﬀer   23
+Exploiting a Heap Overﬂow in Little Kernel
+
+
+
+
+                                             24
+Exploiting a Heap Overﬂow in Little Kernel
+
+
+
+
+                                             25
+Exploiting a Heap Overﬂow in Little Kernel
+
+
+
+
+                                             26
+Exploiting a Heap Overﬂow in Little Kernel
+
+
+
+
+                                             27
+Exploiting a Heap Overﬂow in Little Kernel
+
+
+
+
+                                             28
+Exploiting a Heap Overﬂow in Little Kernel
+
+
+
+
+                                             29
+Exploiting a Heap Overﬂow in Little Kernel
+
+
+
+
+                                             30
+To sum-up
+
+
+● SVE-2023-2079/CVE-2024-20832
+  ✅ Leads to code execution
+  ✅ Persistent (it survives reboots and factory reset)
+  ✅ Gives full control over Normal World EL1/0
+  ✅ Impacts Samsung devices based on Mediatek SoCs
+       ■   Including those for which MTKClient does not work
+  ❌ Requires to ﬂash the up_param partition
+
+
+
+
+                                                               31
+How to write our JPEGs in the
+   up_param partition?
+
+
+
+
+                                32
+Odin: Samsung's recovery protocol
+
+
+
+  ■ Odin is implemented in LK
+  ■ It is available through the Download Mode
+             ●       It allows to ﬂash partitions over USB
+  ■ The Odin oﬃcial client is closed source
+  ■ There is an open-source client: Heimdall4
+
+
+
+
+[4]: https://github.com/Benjamin-Dobell/Heimdall
+                                                             33
+Odin: Samsung's recovery protocol
+
+   ■ Images are authenticated and contain a footer signature
+   ■ Two internal structures indicate which partitions to ﬂash
+       ●   The Partition Information Table (PIT)
+       ●   A global structure indicating which partitions to authenticate
+
+
+
+
+                                                                            34
+Odin: Partition Information Table
+
+                                                   --- Entry #1 ---
+                                                   Binary Type: 0 (AP)
+■ PIT is retrieved statically from the eMMC        Device Type: 2 (MMC)
+■ It indicates where partitions are stored         Identifier: 70
+    ●   Memory type, block count, etc              Attributes: Read/Write
+■ A partition not present in PIT can't be ﬂashed   Update Attributes: 1
+■ PIT can be updated, but requires a signed        Block Size/Offset: 0
+  image                                            Block Count: 34
+                                                   Partition Name: pgpt
+                                                   …
+
+                                                                            35
+Odin: Image Authentication
+
+
+■ A global array indicates how an image should be authenticated
+■ An image not present in this array will not be authenticated
+    ●   (Except for some speciﬁc images)
+■ Comparing this array with PIT gives a set of images ﬂashable without
+  authentication
+
+           md5hdr, md_udc, pgpt, sgpt, and vbmeta_vendor
+
+
+
+
+                                                                         36
+GPT: GUID Partition Table
+
+
+
+  ■ pgpt points to the Primary GPT Header
+  ■ sgpt points to the Secondary GPT Header
+  ■ Similarly to the PIT, it describes the partitions
+            ○       (Names, sizes, addresses, etc)
+  ■ Any GPT can be ﬂashed through Odin
+    ❗ No authentication required
+
+
+
+
+Source: https://en.wikipedia.org/wiki/GUID_Partition_Table
+                                                             37
+GPT vs PIT
+
+
+
+■ PIT and GPT are used for the same thing: to describe partitions
+■ PIT is mainly used for Samsung features in LK
+    ●   Odin, JPEGs loading, etc
+■ And GPT is used the rest of the time
+
+  ❗ We can't just rename a partition to up_param to ﬂash our JPEGs
+
+
+
+
+                                                                     38
+PIT Loading
+
+
+
+  pit_address = 0x4400;
+  exist = get_part_table("pit");
+  if (exist == 0) {
+    pit_address = get_partition_offset("pit");
+  }
+  type = storage(3);
+  iVar1 = storage_read(type,0x4000,(int)pit_address,
+                        (int)((ulonglong)pit_address >> 0x20),
+                        &ODIN_TEMP_BUF_PIT,0x4000);
+
+
+
+
+                                                                 39
+PIT Loading
+
+                                         PIT default address
+
+  pit_address = 0x4400;
+  exist = get_part_table("pit");
+  if (exist == 0) {
+    pit_address = get_partition_offset("pit");
+  }
+  type = storage(3);
+  iVar1 = storage_read(type,0x4000,(int)pit_address,
+                        (int)((ulonglong)pit_address >> 0x20),
+                        &ODIN_TEMP_BUF_PIT,0x4000);
+
+
+
+
+                                                                 40
+PIT Loading
+
+                                          PIT default address
+
+  pit_address = 0x4400;
+  exist = get_part_table("pit");                     Check for pit partition
+  if (exist == 0) {                                  And use it if it exists
+    pit_address = get_partition_offset("pit");
+  }
+  type = storage(3);
+  iVar1 = storage_read(type,0x4000,(int)pit_address,
+                        (int)((ulonglong)pit_address >> 0x20),
+                        &ODIN_TEMP_BUF_PIT,0x4000);
+
+
+
+
+                                                                        41
+PIT Loading
+
+                                        PIT default address
+
+  pit_address = 0x4400;
+  exist = get_part_table("pit");
+                                                  Uses GPT table 😈
+  if (exist == 0) {
+    pit_address = get_partition_offset("pit");
+  }
+  type = storage(3);
+  iVar1 = storage_read(type,0x4000,(int)pit_address,
+                        (int)((ulonglong)pit_address >> 0x20),
+                        &ODIN_TEMP_BUF_PIT,0x4000);
+
+
+
+
+                                                                     42
+Strategy to Bypass Odin Authentication
+
+
+
+
+                                         43
+Strategy to Bypass Odin Authentication
+
+
+
+
+                                         44
+Strategy to Bypass Odin Authentication
+
+
+
+
+                                         45
+Strategy to Bypass Odin Authentication
+
+
+
+
+                                         46
+Strategy to Bypass Odin Authentication
+
+
+
+
+                                         47
+To sum up
+
+
+■ SVE-2024-0234/CVE-2024-20865
+  ✅ Can bypass authentication in Odin
+  ✅ We can ﬂash anything in the eMMC
+  ✅ Including our up_param partition
+  ✅ Seems to impact most Samsung using
+     Mediatek SoCs
+
+
+
+
+                                         48
+Chaining Everything Together
+
+
+
+
+                               49
+To Conclude
+
+
+■ Chain based on 2 vulnerabilities
+  ✅ Leads to code execution in LK
+  ✅ Persistent (it survives reboots and factory reset)
+  ✅ Impacts Samsung devices based on Mediatek SoCs
+       ●   Including those for which MTKClient does not work
+  ✅ Can be triggered over USB thanks to Odin authentication bypass
+  ✅ Gives full control over Normal World EL1/0
+  ❌ Still no access to secrets stored in Secure World
+
+
+                                                                     50
+Targeting ARM Trusted Firmware
+
+
+
+
+                                 51
+Targeting ARM Trusted Firmware
+
+
+
+
+                                 52
+Communication between NSW and SW
+
+
+
+
+                                   53
+Vulnerability Research on ATF
+
+
+■ Motivation:
+   ● Highest privilege level → A bug here can be devastating
+   ● Reachable from Normal World through SMCs
+■ Code is simple
+■ Interacts a lot with HW through unknown registers
+   ● Fuzzing not particularly interesting in this case
+■ Our approach: focus on static analysis
+
+
+
+                                                               54
+Extracting ATF
+
+
+■ Inside an Android ROM Image:
+   ●   tee-verified.img: ATF, TEEGRIS kernel, userboot.so…
+
+
+
+
+                                                             55
+SMC Handlers
+
+ if ((is_secure & 1) == 0) {
+     puVar1 = mediatek_plat_sip_handler_secure(smc_id,arg1,arg2,arg3
+                   ,arg4,arg5,output);
+     return puVar1;
+ }
+ [...]
+ if ((origin < 2) && (IN_BOOTLOADER == 0)) {
+     puVar1 = mediatek_plat_sip_handler_kernel(smc_id,arg1,arg2,arg3
+                   ,arg4,arg5,output);
+     return puVar1;
+ }
+                                                                       56
+SMC Handlers
+
+ if ((is_secure & 1) == 0) {
+     puVar1 = mediatek_plat_sip_handler_secure(smc_id,arg1,arg2,arg3
+                   ,arg4,arg5,output);
+     return puVar1;
+ }
+                                                 Arguments of SMC
+ [...]
+ if ((origin < 2) && (IN_BOOTLOADER == 0)) {
+     puVar1 = mediatek_plat_sip_handler_kernel(smc_id,arg1,arg2,arg3
+                   ,arg4,arg5,output);
+     return puVar1;
+ }
+                                                                       57
+Leaking from Virtual Address Space
+
+          uint* global_array = (uint *)0x4ce2f578;
+          [...]
+          if (smcid == 0x82000526) {
+              out_value = global_array[arg1 * 4];
+              goto exit;
+          }
+          [...]
+              output[2] = out_value;
+              output[1] = arg1;
+              *output = 0;
+              return output;
+                                                     58
+Leaking from Virtual Address Space
+
+          uint* global_array = (uint *)0x4ce2f578;
+          [...]
+          if (smcid == 0x82000526) {
+              out_value = global_array[arg1 * 4];
+              goto exit;
+                                                Fully controlled by
+          }
+                                                      attacker
+          [...]
+              output[2] = out_value;
+              output[1] = arg1;
+              *output = 0;
+              return output;
+                                                                      59
+Leaking from Virtual Address Space
+
+          uint* global_array = (uint *)0x4ce2f578;
+          [...]
+          if (smcid == 0x82000526) {
+              out_value = global_array[arg1 * 4];
+              goto exit;
+                                                Fully controlled by
+          }
+                                               attacker… And never
+          [...]                                      checked
+              output[2] = out_value;
+              output[1] = arg1;
+              *output = 0;
+              return output;
+                                                                      60
+SVE-2023-2215 (CVE-2024-20820)
+
+
+■ In mediatek_plat_sip_handler_kernel, reachable from Linux Kernel
+■ To exploit it, send the SMC 0x82000526 with
+   ● (arbitrary_address - 0x4ce2f578) / 4
+■ Bug introduced by Samsung only in some devices (including A225F)
+■ It leaks 4 bytes from ATF virtual address space
+   ● We can read all the internal data of ATF
+   ● But we can't leak anything from other SW components
+
+
+
+                                                                     61
+SVE-2023-2215 (CVE-2024-20820)
+
+
+
+
+                                 62
+Mapping Any Physical Address in ATF
+
+
+    SMC 0x8200022A calls function spm_actions
+
+
+             if (smc_id == 0x8200022a) {
+                spm_actions(arg1,arg2,arg3);
+
+
+
+
+                                                63
+Mapping Any Physical Address in ATF
+
+
+        SMC 0x8200022A calls function spm_actions
+
+undefined * spm_actions(ulong cmdid,undefined *addr,ulong size) {
+    switch(cmdid & 0xffffffff) {
+[...]
+        case 1:
+          if (size < 0x100001) {
+              mmap_wrap(addr,size);
+[...]
+}
+
+                                                                    64
+Mapping Any Physical Address in ATF
+
+
+        SMC 0x8200022A calls function spm_actions
+
+undefined * spm_actions(ulong cmdid,undefined *addr,ulong size) {
+    switch(cmdid & 0xffffffff) {
+[...]                                               Arguments fully
+        case 1:                                       controlled
+          if (size < 0x100001) {
+              mmap_wrap(addr,size);
+[...]
+}
+
+                                                                      65
+Mapping Any Physical Address in ATF
+
+
+        SMC 0x8200022A calls function spm_actions
+
+undefined * spm_actions(ulong cmdid,undefined *addr,ulong size) {
+    switch(cmdid & 0xffffffff) {
+[...]                                                          Arguments fully
+        case 1:                                                  controlled
+          if (size < 0x100001) {
+              mmap_wrap(addr,size);
+[...]
+                                      And still no checks on
+}                                         the address
+
+                                                                                 66
+Mapping Any Physical Address in ATF
+
+
+        SMC 0x8200022A calls function spm_actions
+
+undefined * spm_actions(ulong cmdid,undefined *addr,ulong size) {
+    switch(cmdid & 0xffffffff) {
+[...]
+                                                        Physical Address
+        case 1:
+          if (size < 0x100001) {
+              mmap_wrap(addr,size);
+[...]
+                                      And still no checks on
+}                                         the address
+
+                                                                           67
+CVE-2024-20021
+
+
+■ Also in mediatek_plat_sip_handler_kernel
+■ Will mmap with physical base address to the same virtual address
+   ● … however we can't munmap
+        ○ So we are limited to 8 consecutive mmaps
+        ○ Meaning we can leak up to 8MB of data
+■ Introduced by Mediatek (impacts plenty of Mediatek SoCs)
+■ Chained to our leak, we can read everything in Secure World
+   ● Including TEEGRIS
+
+
+                                                                     68
+Can we use this vulnerability to leak
+         Keystore keys?
+
+
+
+
+                                        69
+Android Keystore system
+
+
+■ Key storage and crypto services
+■ Keys are stored as encrypted key blobs
+■ Three protection levels:
+   ● Software only
+   ● TEE (default)
+   ● Hardware-backed (StrongBox)
+■ Raw key should never leave protected environment
+
+
+
+                                                     70
+Android Keystore system
+
+
+
+
+                          71
+Our PoC
+
+
+1. Import a key into the Android Keystore
+2. Encrypt using that key
+3. Stop the execution after BeginOperation is called
+    ○   To makes sure the key stays in memory
+4. Leak the identiﬁed region of memory
+5. Try all possible keys from leak to decrypt ciphertext
+
+
+
+
+                                                           72
+Demo
+
+
+
+
+       73
+What’s next?
+
+
+
+
+               74
+Key Attestation
+
+
+  ■ Proves that a key pair is stored in the secure hardware
+            ●      Trustzone or Security Chip
+  ■ Contains information about the device state
+            ●      Such as bootloader locked status and veriﬁed boot state
+  ■ Used by SafetyNet5 to tell if a device has been compromised
+
+
+
+
+[5]: https://www.sstic.org/media/SSTIC2022/SSTIC-actes/droidguard_a_deep_dive_into_safetynet/SSTIC2022-Article-droidguard_a_deep_dive_into_safetynet-thomas.pdf
+                                                                                                                                                                  75
+First Key Attestation test
+
+
+
+
+                                                 ✅ Attestation generated with a demo
+                                                   app6
+                                                 👉 Our exploit seems not detected!
+
+
+
+
+[6]: https://github.com/vvb2060/KeyAttestation
+                                                                                       76
+What about SafetyNet?
+
+
+
+
+                                        ✅ SafetyNet detects the exploit
+                                           ■ Possibly through heuristics to
+                                              detect Magisk
+
+
+
+
+[6]: https://github.com/RikkaW/YASNAC
+                                                                              77
+Certiﬁcate Chain
+
+
+
+
+                   78
+Certiﬁcate Chain
+
+
+
+
+                   79
+Certiﬁcate Chain
+
+
+
+
+                   80
+Certiﬁcate Chain
+
+
+
+
+                   81
+Strategy to leak GAK
+
+
+■ Stored as EKEY in Android Filesystem
+   ● /mnt/vendor/efs/DAK/GAK_EC.private
+
+
+
+
+                                          82
+Strategy to leak GAK
+
+
+■ Stored as EKEY in Android Filesystem
+   ● /mnt/vendor/efs/DAK/GAK_EC.private
+
+1.   Forge a valid Begin request with GAK keyblob
+2.   Stop the execution after BeginOperation is called
+3.   Leak memory (as in previous PoC)
+4.   Try to every possible private keys in the dump
+      ○ By generating the public key out of it
+
+
+                                                         83
+Strategy to leak GAK
+
+
+■ Stored as EKEY in Android Filesystem
+   ● /mnt/vendor/efs/DAK/GAK_EC.private
+
+1.   Forge a valid Begin request with GAK keyblob
+2.   Stop the execution after BeginOperation is called
+3.   Leak memory (as in previous PoC)
+4.   Try to every possible private keys in the dump
+      ○ By generating the public key out of it
+
+         → Still WIP
+                                                         84
+Strategy to leak GAK
+
+
+■ Stored as EKEY in Android Filesystem
+   ● /mnt/vendor/efs/DAK/GAK_EC.private
+
+1.   Forge a valid Begin request with GAK keyblob
+2.   Stop the execution after BeginOperation is called
+3.   Leak memory (as in previous PoC)
+4.   Try to every possible private keys in the dump
+      ○ By generating the public key out of it
+
+         → Still WIP
+                                                         85
+Conclusion
+
+
+
+ ■ We presented 4 vulnerabilities leading to
+     ●   Authentication bypass in Odin
+     ●   Code execution with persistence in LK
+     ●   Leak of SW memory, including Keystore keys
+          ■ Still unclear if we can leak Attestation Keys
+ ■ Impact low/middle end Samsung devices
+     ●   Vulnerabilities are simple, and yet super impactful
+     ●   No mitigations in LK nor ATF
+ ■ All the vulnerabilities are now ﬁxed
+
+                                                               86
+                        Thank you!
+
+
+                          @max_r_b
+contact@quarkslab.com     @DamianoMelotti
+                          @pwissenlit
+

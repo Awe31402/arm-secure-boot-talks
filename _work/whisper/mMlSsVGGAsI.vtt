@@ -1,0 +1,2243 @@
+WEBVTT
+
+00:00.000 --> 00:05.760
+Hello everyone and welcome to my talk on fit happens how secure boot wasn't.
+
+00:06.320 --> 00:11.120
+My name is Ahmad Fatoum. I am an embedded Linux developer with Pingotronics. We are a German
+
+00:11.120 --> 00:16.880
+Linux consulting company and especially in the last few years most of our customer projects
+
+00:16.880 --> 00:25.200
+are employing some verified boot scheme and on the x86 systems this is most often UKIs for us
+
+00:25.200 --> 00:31.920
+and on the arm systems we are heavy users of fit and fit is what i'm going to talk about today
+
+00:33.040 --> 00:39.760
+so i will start with some history about fit how fit came to increase in scope how signing was
+
+00:39.760 --> 00:46.480
+bolted onto the format how it was exploited over the years and then talking about my proposal for
+
+00:46.480 --> 00:53.440
+avoiding some of these issues and how we can survive using fit going forward so how did we
+
+00:53.440 --> 00:58.400
+get fit so it takes us with a grain of salt i was not there for it i was like in middle school i was
+
+00:58.400 --> 01:05.920
+like 13 years old but basically you had uimages and uimage is a very simple format you have a 64
+
+01:05.920 --> 01:12.560
+byte headers in front of your image in its last iteration you had these multi-file images where
+
+01:12.560 --> 01:17.600
+you had at the start of the image a number of sizes and then you had multiple images in the
+
+01:17.600 --> 01:25.200
+same binary and it's not difficult to see where this falls short so you have only a crc32 not
+
+01:25.200 --> 01:32.480
+enough space for like a longer cryptographic hash you have only a single load address and
+
+01:32.480 --> 01:38.000
+you can't have something like a kernel and the device tree but no ram disk because if you have
+
+01:38.000 --> 01:44.160
+a ram disk of zero that terminates this list at the right side at the top so you can't have that
+
+01:44.880 --> 01:50.800
+and looking at these limitations there was a need for proper multi-file images that means this
+
+01:50.800 --> 01:57.040
+metadata that we had for all these images should really be per image so each image whether it's a
+
+01:57.040 --> 02:02.800
+kernel a device tree or a ram disk should have its own load address should have its own hash or crc
+
+02:02.800 --> 02:08.800
+or whatever and to actually boot this you want to have bootable configurations so this is a
+
+02:08.800 --> 02:11.860
+a combination of images, a subset of them,
+
+02:11.860 --> 02:13.220
+or maybe all of them.
+
+02:13.220 --> 02:16.360
+And these are what you would boot on an actual board.
+
+02:16.360 --> 02:18.180
+So board one needs these three images
+
+02:18.180 --> 02:20.440
+and board two needs these two images.
+
+02:20.440 --> 02:23.220
+And all of that should exist in the same file.
+
+02:23.220 --> 02:26.040
+So you can deploy one file that you target
+
+02:26.040 --> 02:27.660
+a lot of different hardware with.
+
+02:28.600 --> 02:31.840
+And yeah, that's basically how FIT came to be.
+
+02:31.840 --> 02:34.400
+Of course, for it all to be in the same file,
+
+02:34.400 --> 02:35.920
+you need a file format.
+
+02:35.920 --> 02:39.660
+and device tree was what was chosen for this file format.
+
+02:39.660 --> 02:42.940
+And it makes sense because, well,
+
+02:42.940 --> 02:46.100
+you had this problem of you image being not flexible,
+
+02:46.100 --> 02:48.160
+device tree is infinitely flexible.
+
+02:48.160 --> 02:50.620
+You can have arbitrary nesting in your nodes.
+
+02:50.620 --> 02:53.520
+I think nowadays it's limited to 64 for fit parsing,
+
+02:53.520 --> 02:56.140
+but yeah, you can go down as you like,
+
+02:56.140 --> 02:58.860
+and you can have any number of key value pairs
+
+02:58.860 --> 03:01.240
+with string property names.
+
+03:01.240 --> 03:03.700
+So you can add anything at all.
+
+03:03.700 --> 03:05.160
+And it had available tooling,
+
+03:05.160 --> 03:07.280
+So there is a device tree compiler even back then.
+
+03:07.280 --> 03:09.540
+There is libfttt, nowadays you have a lot
+
+03:09.540 --> 03:11.380
+of more tooling for it.
+
+03:11.380 --> 03:14.160
+And a very strong argument, especially back then,
+
+03:14.160 --> 03:16.300
+was that code size, especially in the bootloader,
+
+03:16.300 --> 03:17.640
+comes at a premium.
+
+03:17.640 --> 03:20.900
+And if the bootloader already has libfttt
+
+03:20.900 --> 03:23.940
+for parsing the device tree that it manipulates
+
+03:23.940 --> 03:26.580
+before passing to the kernel, so for example,
+
+03:26.580 --> 03:28.440
+the boot arguments on an ARM system
+
+03:28.440 --> 03:29.720
+are written into the device tree.
+
+03:29.720 --> 03:32.780
+So the bootloader has some device tree support.
+
+03:32.780 --> 03:35.100
+So why not use the same device tree support
+
+03:35.100 --> 03:37.800
+for the image where the kernel itself is located in.
+
+03:37.800 --> 03:41.460
+And yeah, so a lot of birds want stone.
+
+03:41.460 --> 03:43.920
+So I think that was the thinking.
+
+03:44.760 --> 03:48.520
+And yeah, so that's how it looks like.
+
+03:48.520 --> 03:50.700
+You have these images on the right.
+
+03:50.700 --> 03:53.800
+You have a kernel, a RAM disk, any number of device trees.
+
+03:53.800 --> 03:56.320
+And then on the left side, you have these configurations.
+
+03:56.320 --> 03:57.760
+You can have any number of images,
+
+03:57.760 --> 03:59.500
+any number of configurations.
+
+04:00.500 --> 04:01.860
+I'm not sure if you can have one
+
+04:01.860 --> 04:04.000
+without any configurations, but yeah.
+
+04:04.000 --> 04:08.460
+you can surely have more than one in any of them.
+
+04:08.460 --> 04:12.120
+And yeah, what the bootloader is going to do
+
+04:12.120 --> 04:14.360
+is it's going to read this device tree
+
+04:14.360 --> 04:17.740
+and determine which configuration it should boot.
+
+04:17.740 --> 04:19.540
+So there are multiple ways to do that.
+
+04:19.540 --> 04:20.420
+What I like to do
+
+04:20.420 --> 04:23.320
+is to use the compatible property of configurations.
+
+04:23.320 --> 04:24.820
+So each configuration can say,
+
+04:24.820 --> 04:28.860
+I am compatible with Aracha Rock 3A for example.
+
+04:28.860 --> 04:31.080
+And the bootloader device tree itself
+
+04:31.080 --> 04:32.760
+has a compatible for the board.
+
+04:32.760 --> 04:35.160
+So the bootloader can match its own compatible
+
+04:35.160 --> 04:36.980
+against the compatible of the fit,
+
+04:36.980 --> 04:38.360
+and once it has a match, okay,
+
+04:38.360 --> 04:39.920
+this is a configuration I want to boot,
+
+04:39.920 --> 04:41.640
+and it's going to boot it.
+
+04:41.640 --> 04:44.640
+Now, as you can see in this fit here,
+
+04:44.640 --> 04:46.660
+there are a lot of configurations.
+
+04:46.660 --> 04:50.960
+419, for example, was the index of the ROC3A.
+
+04:50.960 --> 04:53.080
+This is generated by the kernel build.
+
+04:53.080 --> 04:56.080
+So since Linux 6.10, I think,
+
+04:56.080 --> 04:59.300
+the kernel, the cable supports a make image fit target
+
+04:59.300 --> 05:02.380
+on ARM64, and that generates you a fit
+
+05:02.380 --> 05:03.980
+with all device trees and the kernel
+
+05:03.980 --> 05:05.960
+and optionally a RAM disk.
+
+05:05.960 --> 05:08.720
+But you can also write this ITS
+
+05:08.720 --> 05:11.300
+for image tree source file by hand.
+
+05:11.300 --> 05:13.540
+And there is this ink bin directive.
+
+05:13.540 --> 05:15.760
+I think it might have been added, especially for FIT,
+
+05:15.760 --> 05:17.800
+where you can include arbitrary binaries
+
+05:17.800 --> 05:19.720
+directly into the FIT.
+
+05:19.720 --> 05:22.720
+And yeah, but there are also various build system wrappers
+
+05:22.720 --> 05:24.880
+in tools like PDXtest or Yocto.
+
+05:24.880 --> 05:26.680
+So in Yocto there are two of them.
+
+05:26.680 --> 05:29.040
+One in OE core, kernel fit image pb class.
+
+05:29.040 --> 05:30.860
+One in meta OE fit image pb class.
+
+05:30.860 --> 05:34.480
+These generate for user ITS and then make image
+
+05:34.480 --> 05:36.780
+takes this and compiles a fit out of it.
+
+05:36.780 --> 05:40.800
+Make image can also on its own generate fit
+
+05:40.800 --> 05:43.160
+in that it takes some command line arguments
+
+05:43.160 --> 05:45.580
+and then it produces the binary.
+
+05:45.580 --> 05:47.160
+This is how the binary looks like.
+
+05:47.160 --> 05:49.360
+If you have seen some diagrams of device tree,
+
+05:49.360 --> 05:51.340
+it's exactly a device tree.
+
+05:51.340 --> 05:53.060
+So there is this memory reservation block
+
+05:53.060 --> 05:55.300
+but it doesn't make sense for fit so it's empty.
+
+05:55.300 --> 05:57.720
+There is a structure block which contains all nodes
+
+05:57.720 --> 06:00.780
+and properties including the values of all your kernels,
+
+06:00.780 --> 06:01.980
+device trees and ram disks,
+
+06:01.980 --> 06:03.800
+this is all inline as a properties.
+
+06:03.800 --> 06:07.320
+This is what I have marked here in green.
+
+06:07.320 --> 06:10.340
+And because a number of strings in the properties
+
+06:10.340 --> 06:12.220
+appear a lot of times, so for example,
+
+06:12.220 --> 06:14.600
+this compatible string in a normal device tree,
+
+06:14.600 --> 06:17.280
+it can occur a hundred times or so.
+
+06:17.280 --> 06:18.820
+So these strings are in turns,
+
+06:18.820 --> 06:21.220
+they are in a separate strings block.
+
+06:21.220 --> 06:22.200
+But that's basically it.
+
+06:22.200 --> 06:24.580
+You have a header, it has a number of offsets,
+
+06:24.580 --> 06:27.280
+and yeah, that's how fit looks like.
+
+06:27.280 --> 06:29.680
+And you can use the exact same toolings
+
+06:29.680 --> 06:32.120
+that you use for FTT, for flattened device tree,
+
+06:32.120 --> 06:33.360
+also for fit.
+
+06:33.360 --> 06:36.380
+But the downside here is that you can't detect
+
+06:36.380 --> 06:38.220
+if you have an FTT or a fit.
+
+06:38.220 --> 06:39.620
+They look exactly the same.
+
+06:39.620 --> 06:40.760
+You actually have to pause it
+
+06:40.760 --> 06:42.520
+and implement some heuristic,
+
+06:42.520 --> 06:44.300
+like checking if,
+
+06:44.300 --> 06:47.060
+is there a slash configurations node, for example.
+
+06:47.060 --> 06:48.360
+And yeah, you wouldn't see that
+
+06:48.360 --> 06:50.400
+in actual hardware device tree,
+
+06:50.400 --> 06:51.760
+so that's probably a fit.
+
+06:53.180 --> 06:55.500
+Now, fit didn't stop there.
+
+06:55.500 --> 06:59.480
+Fit has evolved and increased in scope.
+
+06:59.480 --> 07:01.980
+So you can use fit as a partition table.
+
+07:01.980 --> 07:05.720
+So why should you put your kernel inside
+
+07:05.720 --> 07:06.700
+a device tree property?
+
+07:06.700 --> 07:08.500
+Why can't we put it outside
+
+07:08.500 --> 07:11.660
+and just have a data offset and a data size?
+
+07:11.660 --> 07:13.540
+And yeah, basically a partition table
+
+07:13.540 --> 07:15.240
+that you put on the start of your partition
+
+07:15.240 --> 07:18.620
+and then you can have the actual image data outside.
+
+07:19.860 --> 07:22.080
+It's a bit funny kind of partition table
+
+07:22.080 --> 07:23.980
+because you can have interned partitions,
+
+07:23.980 --> 07:26.440
+which are just images are inline in the fit
+
+07:26.440 --> 07:29.300
+and some external partitions.
+
+07:29.300 --> 07:33.080
+But yeah, that is what fit can provide you.
+
+07:33.080 --> 07:36.680
+And this also breaks the total FDT size member.
+
+07:36.680 --> 07:39.140
+So previously you could read that
+
+07:39.140 --> 07:40.520
+and know how big a fit is.
+
+07:40.520 --> 07:41.420
+Now you can't anymore.
+
+07:41.420 --> 07:43.840
+Now you only know how big the device tree portion
+
+07:43.840 --> 07:44.780
+of the fit is,
+
+07:44.780 --> 07:46.360
+but you don't know how big the images is.
+
+07:46.360 --> 07:48.960
+You actually need to walk through the fit
+
+07:48.960 --> 07:52.160
+and pass every image and look at each data offset
+
+07:52.160 --> 07:54.500
+and at each data size, add them up
+
+07:54.500 --> 07:57.800
+and determine which is the largest extent.
+
+07:57.800 --> 07:59.860
+and then you know how big your fit is.
+
+07:59.860 --> 08:01.860
+So you can't say if you have a fit,
+
+08:01.860 --> 08:05.360
+you can't say how big your fit is
+
+08:05.360 --> 08:08.400
+without actually parsing the device tree.
+
+08:08.400 --> 08:13.340
+Now, fit didn't stop at being something booted by U-boot
+
+08:13.340 --> 08:15.680
+or Bearbox or various other bootloaders.
+
+08:15.680 --> 08:18.880
+U-boot itself is nowadays often in a fit.
+
+08:18.880 --> 08:21.260
+So you have U-boot SPL,
+
+08:21.260 --> 08:23.320
+which needs to load not only U-boot proper
+
+08:23.320 --> 08:24.460
+and provided a device tree,
+
+08:24.460 --> 08:27.300
+but also maybe trusted firmware A, Opti and so on.
+
+08:27.300 --> 08:29.760
+and you need some container format for all of these.
+
+08:29.760 --> 08:33.020
+So well, why not use fit, you know, birds and stones.
+
+08:33.020 --> 08:35.400
+So there is a small problem here
+
+08:35.400 --> 08:38.800
+that SPL is running at the highest privilege level.
+
+08:38.800 --> 08:42.380
+So you could maybe mount an attack against you with proper
+
+08:42.380 --> 08:45.980
+and it would not be so bad if Opti has already been loaded
+
+08:45.980 --> 08:48.420
+so you can't access stuff in your trust zone.
+
+08:48.420 --> 08:50.320
+But the SPL is usually running
+
+08:50.320 --> 08:52.740
+at the highest available privilege level.
+
+08:52.740 --> 08:57.020
+And an unfun fact about this is SPL is very size constrained.
+
+08:57.020 --> 09:00.700
+So some checks in libfdt that check
+
+09:00.700 --> 09:04.820
+if a device tree is malformed are skipped in the SPL
+
+09:04.820 --> 09:08.940
+for size reasons, although it is the more critical part.
+
+09:08.940 --> 09:10.520
+But they are there in uBoot proper,
+
+09:10.520 --> 09:13.700
+so you are safe there if this is some issue
+
+09:13.700 --> 09:15.100
+that you could exploit.
+
+09:17.200 --> 09:20.780
+Yeah, so how did fit gain signatures?
+
+09:20.780 --> 09:25.400
+So at the very first, fit only had like hashes and CRCs
+
+09:25.400 --> 09:27.160
+you could just write into the device tree,
+
+09:27.160 --> 09:29.840
+my algorithm is CRC32, this is the value.
+
+09:29.840 --> 09:31.160
+You had no kind of signatures,
+
+09:31.160 --> 09:34.220
+this came after maybe five years after it.
+
+09:34.220 --> 09:38.740
+And at first, it was signing for images.
+
+09:38.740 --> 09:40.360
+That means you have this image node,
+
+09:40.360 --> 09:41.840
+it has this data property,
+
+09:41.840 --> 09:43.580
+and this data property contains for your kernel,
+
+09:43.580 --> 09:46.760
+for example, and what's being signed is exactly that.
+
+09:46.760 --> 09:49.400
+This data property, the content of this data property,
+
+09:49.400 --> 09:51.500
+nothing else in the node is being signed,
+
+09:51.500 --> 09:53.580
+including the load and entry address.
+
+09:53.580 --> 09:55.640
+And this is very critical
+
+09:55.640 --> 09:59.340
+because you can just put your unsigned payload anywhere,
+
+09:59.340 --> 10:01.280
+for example, in a new property,
+
+10:01.280 --> 10:03.340
+just after the data property,
+
+10:03.340 --> 10:05.460
+increment your entry to jump to it
+
+10:05.460 --> 10:06.840
+and nothing will stop you.
+
+10:06.840 --> 10:08.680
+U-Boot has no bounce checking on entry.
+
+10:08.680 --> 10:11.840
+So you can jump anywhere, basically not, yeah.
+
+10:11.840 --> 10:14.420
+So anywhere within the fit that's loaded, you can jump.
+
+10:14.420 --> 10:16.920
+Probably you can also jump outside the fit.
+
+10:16.920 --> 10:19.700
+And you could add bounce checking on entry,
+
+10:19.700 --> 10:22.420
+but this wouldn't help because this is a kernel image.
+
+10:22.420 --> 10:26.380
+it's like 10 megabytes of executable code or 20 megabytes,
+
+10:26.380 --> 10:28.440
+you will have so many jump instructions there
+
+10:28.440 --> 10:30.480
+that you could jump to and then continue
+
+10:30.480 --> 10:32.060
+to jump to your payload.
+
+10:32.060 --> 10:35.580
+So this is fundamentally insecure and you would never,
+
+10:35.580 --> 10:38.360
+I don't think you can salvage it.
+
+10:38.360 --> 10:40.900
+I wasn't aware of this at first until I read about it
+
+10:40.900 --> 10:41.880
+on the uBoot mailing list.
+
+10:41.880 --> 10:44.920
+So Barebox never implemented it because as I understand,
+
+10:44.920 --> 10:47.020
+there were fears of mix and match attacks
+
+10:47.020 --> 10:48.840
+that you take a device tree and the kernel
+
+10:48.840 --> 10:50.260
+and mix and match them.
+
+10:50.260 --> 10:53.420
+But this is really a very minor issue
+
+10:54.900 --> 10:58.480
+next to what you can do with the entry here.
+
+10:58.480 --> 11:01.240
+And yeah, so who does it?
+
+11:01.240 --> 11:03.620
+UiCoreUbootSignBB class does it if you ask it
+
+11:03.620 --> 11:05.520
+with SPL sign enable.
+
+11:05.520 --> 11:07.820
+That means TFR, OPT, FDT, and Uboot,
+
+11:07.820 --> 11:09.640
+if you are using that, yeah,
+
+11:09.640 --> 11:12.480
+they can be trivially exchanged
+
+11:12.480 --> 11:15.300
+and you should probably implement
+
+11:15.300 --> 11:20.220
+some downgrade protection, fixes, revoke your signing keys.
+
+11:20.220 --> 11:22.660
+So yeah, that's bad.
+
+11:22.660 --> 11:25.180
+I reported it and Marta is currently fixing it.
+
+11:25.180 --> 11:27.800
+I think the series is now at version three or version four.
+
+11:27.800 --> 11:29.300
+Here is a link to that.
+
+11:29.300 --> 11:31.680
+Make image itself happily generates it for you
+
+11:31.680 --> 11:33.360
+when you use minus F auto.
+
+11:33.360 --> 11:36.480
+So people use minus F auto because a side effect
+
+11:36.480 --> 11:39.580
+of using it is that it can patch the UBoot device tree.
+
+11:39.580 --> 11:42.220
+Okay, you can do that, but do not use the fit
+
+11:42.220 --> 11:45.360
+that it generates because it's not secure.
+
+11:45.360 --> 11:48.460
+And there are a number of upstream UBoot SPLs
+
+11:48.460 --> 11:51.140
+that do board fit image post process,
+
+11:51.140 --> 11:54.760
+which allow, and SOC code,
+
+11:54.760 --> 11:57.380
+this is a weak function, so SOC code can implement it.
+
+11:57.380 --> 12:01.240
+This allows SOC code to implement some custom way
+
+12:01.240 --> 12:03.220
+to verify the fit.
+
+12:03.220 --> 12:04.980
+I believe that's wrong.
+
+12:04.980 --> 12:08.060
+I didn't look into it, but probably someone should.
+
+12:08.060 --> 12:11.400
+So on ARM64, actually, the entry is ignored,
+
+12:11.400 --> 12:14.020
+but you can change OS to phawxworks,
+
+12:14.020 --> 12:15.380
+which is enabled by default,
+
+12:15.380 --> 12:18.400
+and then you can use entry again.
+
+12:18.400 --> 12:21.640
+So yeah, it's not good.
+
+12:21.640 --> 12:23.520
+What you all are hopefully using,
+
+12:23.520 --> 12:26.640
+or maybe something better, is sign-in configurations.
+
+12:26.640 --> 12:30.040
+And in this case, the hash also only covers the data,
+
+12:30.040 --> 12:33.380
+but critically, the configuration has the signature
+
+12:33.380 --> 12:37.020
+and it covers not only, yeah, it covers a number of nodes.
+
+12:37.020 --> 12:40.000
+So it covers the root node, you see this in this hash node,
+
+12:40.000 --> 12:43.000
+it covers slash, it covers slash configurations on fun,
+
+12:43.000 --> 12:45.880
+it covers your images, all images you have,
+
+12:45.880 --> 12:49.580
+and that hash image, and you should be protected this way.
+
+12:49.580 --> 12:51.740
+I talked about this string interning
+
+12:51.740 --> 12:53.620
+that happens for property names.
+
+12:53.620 --> 12:56.460
+So yeah, you need to hash the strings also,
+
+12:56.460 --> 12:59.280
+but only a prefix of strings is hashed
+
+12:59.280 --> 13:01.620
+because you can add configurations of that effect.
+
+13:01.620 --> 13:02.740
+They can have property names
+
+13:02.740 --> 13:04.120
+that are not in the string table.
+
+13:04.120 --> 13:06.340
+So you hash from the start of the string table
+
+13:06.340 --> 13:09.400
+until some point and don't hash the rest.
+
+13:10.840 --> 13:12.980
+But that's how the format is.
+
+13:12.980 --> 13:14.940
+And yeah, you can't change entry anymore
+
+13:14.940 --> 13:16.940
+with configuration signing,
+
+13:16.940 --> 13:18.340
+but you can add extra images,
+
+13:18.340 --> 13:19.880
+you can add extra configurations,
+
+13:19.880 --> 13:22.000
+you can add a property to slash images,
+
+13:22.000 --> 13:23.740
+but not to the image node itself.
+
+13:23.740 --> 13:25.740
+So there are still some degrees of freedom
+
+13:25.740 --> 13:26.920
+that you can use.
+
+13:26.920 --> 13:28.140
+This is how it looks like.
+
+13:28.140 --> 13:30.500
+So the FTT headers that we passed at start
+
+13:30.500 --> 13:32.820
+is completely unchecked.
+
+13:32.820 --> 13:34.380
+The stuff that's dashed,
+
+13:34.380 --> 13:37.460
+there is only enforced that this node exists,
+
+13:37.460 --> 13:39.840
+but not what it has as contents.
+
+13:39.840 --> 13:43.280
+And the red stuff, yeah, the red stuff is verified,
+
+13:43.280 --> 13:45.900
+that the gray stuff is completely unverified.
+
+13:45.900 --> 13:47.500
+So normally, if everything is correct,
+
+13:47.500 --> 13:52.180
+it shouldn't matter, but things rarely are.
+
+13:52.180 --> 13:56.540
+So both barebox and uboot are written in C,
+
+13:56.540 --> 14:00.260
+and they have the same issues many C code bases have.
+
+14:00.260 --> 14:02.360
+Yeah, a lot of undefined behavior.
+
+14:02.360 --> 14:03.760
+These are only the fixes.
+
+14:04.680 --> 14:06.580
+I will leave it as an exercise to find out
+
+14:06.580 --> 14:08.920
+how much more of these might be there.
+
+14:10.220 --> 14:11.260
+Yeah, fit happens.
+
+14:11.260 --> 14:13.700
+So let's talk about some fit exploits.
+
+14:13.700 --> 14:15.300
+So fit is tricky to pass.
+
+14:15.300 --> 14:18.760
+And this can be a bit unexpected
+
+14:18.760 --> 14:21.300
+because hey, it's just a device tree.
+
+14:21.300 --> 14:23.320
+But you do pass this device tree
+
+14:23.320 --> 14:24.860
+and you pass a lot of it
+
+14:24.860 --> 14:27.220
+before you actually verify the signatures.
+
+14:27.220 --> 14:29.280
+And an attacker has just one goal,
+
+14:29.280 --> 14:31.460
+get fit consumers to confuse nodes.
+
+14:31.460 --> 14:34.000
+So you can add your own nodes, we have seen that.
+
+14:34.000 --> 14:38.060
+You just need to have one place just confuse these nodes.
+
+14:38.060 --> 14:41.420
+So for example, if you have kernel1 in lowercase
+
+14:41.420 --> 14:45.100
+and kernel1 in uppercase that you insert after the fact
+
+14:45.100 --> 14:47.320
+and you have a signed configuration,
+
+14:47.320 --> 14:50.560
+you will have these two parts of the code.
+
+14:50.560 --> 14:54.040
+What was signed, so I can verify it,
+
+14:54.040 --> 14:55.780
+and what should I boot?
+
+14:55.780 --> 15:00.240
+So if you can abuse difference in APIs used for one thing
+
+15:00.240 --> 15:02.240
+and for the other thing,
+
+15:02.240 --> 15:05.720
+then maybe you got yourself a boot bypass.
+
+15:06.560 --> 15:09.820
+And yeah, there are numerous ways you could do that.
+
+15:09.820 --> 15:12.280
+We have seen memory safety issues.
+
+15:12.280 --> 15:15.900
+Perhaps you can get some buffer overflow or something.
+
+15:15.900 --> 15:18.920
+Fuzziness in the API themselves.
+
+15:18.920 --> 15:22.020
+So Uboot is using libftt,
+
+15:22.020 --> 15:24.800
+barebox is using these of underscore functions
+
+15:24.800 --> 15:26.980
+that originally were ported from the kernel,
+
+15:26.980 --> 15:29.180
+but both of them were not originally written
+
+15:29.180 --> 15:31.080
+to handle untrusted input.
+
+15:31.080 --> 15:35.800
+I believe fit might be the only untrusted device tree
+
+15:35.800 --> 15:37.740
+that's actually being used.
+
+15:37.740 --> 15:40.820
+So TFA, if it takes a device tree, it trusts it
+
+15:40.820 --> 15:44.420
+because the first stage bootloader running, the BL2,
+
+15:44.420 --> 15:46.260
+it's already running at the highest privilege level.
+
+15:46.260 --> 15:48.540
+It doesn't need to protect itself against it.
+
+15:48.540 --> 15:50.180
+It's the same thing as a kernel is running
+
+15:50.180 --> 15:52.500
+at the same privilege level as a bootloader booting it.
+
+15:52.500 --> 15:54.160
+It doesn't make sense to assume
+
+15:54.160 --> 15:56.720
+that the bootloader is malicious, you know?
+
+15:56.720 --> 15:59.080
+And yeah, it's the job of the bootloader
+
+15:59.080 --> 16:05.720
+pass something correct here and so you have apis in libftt for example where you say give me a
+
+16:05.720 --> 16:11.240
+memory node and it gives you a memory node or a memory at zero node to make it easier for you and
+
+16:11.880 --> 16:17.160
+there are in the of family of functions from the kernel functions where you tell it give me this
+
+16:17.160 --> 16:23.560
+node with name kernel and it gives you one an uppercase if it doesn't found the lowercase one
+
+16:23.560 --> 16:29.480
+and this sounds like trivial stuff but both of these were full fit signature bypass exploits
+
+16:29.480 --> 16:37.320
+so unit addresses broke uboot fit verification completely but not barebox case sensitivity
+
+16:37.320 --> 16:43.560
+broke barebox but not uboot so there is something here for everyone and yeah you could try to trick
+
+16:43.560 --> 16:49.400
+walkers for example you could add slash in node names this shouldn't happen there but are all
+
+16:49.400 --> 16:53.560
+all your APIs expecting that they can handle a slash.
+
+16:54.480 --> 16:57.260
+You could have non-null terminated strings
+
+16:57.260 --> 16:59.600
+and maybe one API doesn't like this at all
+
+16:59.600 --> 17:02.420
+and the other API, okay, yeah, no problem.
+
+17:02.420 --> 17:05.980
+I will just copy the bytes because there is a size field.
+
+17:05.980 --> 17:09.340
+And there is this, let's call it necessary untrusted data
+
+17:09.340 --> 17:11.800
+which you are just accessing and assuming, yeah,
+
+17:11.800 --> 17:13.480
+an attacker can't do anything with it.
+
+17:13.480 --> 17:16.100
+So the default configuration booted by a fit,
+
+17:16.100 --> 17:17.240
+the attacker can choose that.
+
+17:17.240 --> 17:19.220
+Of course, it must be a verified configuration
+
+17:19.220 --> 17:20.940
+but the attacker can choose that.
+
+17:20.940 --> 17:25.220
+And hashed nodes, which we have seen, is also untrusted.
+
+17:25.220 --> 17:26.780
+Which brings us to this issue,
+
+17:26.780 --> 17:30.740
+which is probably the biggest fit security vulnerability
+
+17:30.740 --> 17:35.500
+for the last few years, CVE 2026 and so on.
+
+17:35.500 --> 17:38.720
+And it's deceptively simple.
+
+17:38.720 --> 17:41.540
+So you had this verified kernel image.
+
+17:41.540 --> 17:44.080
+It's completely okay, it's good.
+
+17:44.080 --> 17:46.020
+And you rename it, you move it
+
+17:46.020 --> 17:49.080
+to slash images slash images kernel one.
+
+17:49.080 --> 17:51.580
+And then you add a new slash images kernel one
+
+17:51.580 --> 17:54.020
+which is your evil payload and then hash node
+
+17:54.020 --> 17:55.460
+because it's not being hashed.
+
+17:55.460 --> 17:57.380
+It's just tells you what to hash
+
+17:57.380 --> 18:00.840
+but itself is not hashed or covered by any signature.
+
+18:00.840 --> 18:03.680
+You change slash images kernel one which is,
+
+18:05.720 --> 18:06.760
+yeah, this one.
+
+18:06.760 --> 18:09.540
+This one used to say slash images kernel one
+
+18:09.540 --> 18:13.360
+but now you have changed it and so you hash the old one
+
+18:13.360 --> 18:14.860
+but actually boots a new one.
+
+18:14.860 --> 18:19.220
+And this way you got yourself full FITS signature bypass
+
+18:19.220 --> 18:22.080
+without abusing any memory safety issues.
+
+18:22.080 --> 18:26.500
+So this is something that's very general in applicability.
+
+18:26.500 --> 18:28.700
+This has fixed now, so the problem here was
+
+18:28.700 --> 18:30.320
+that there were two different ways,
+
+18:30.320 --> 18:32.680
+one to how to determine what to hash
+
+18:32.680 --> 18:34.840
+and how to determine what to boot.
+
+18:34.840 --> 18:38.620
+And actually there were the redundancy here in the node
+
+18:38.620 --> 18:42.100
+because the configuration node already has a kernel,
+
+18:42.100 --> 18:46.300
+FDT and so on properties that point at the images.
+
+18:46.300 --> 18:48.760
+And yeah, you should actually check these
+
+18:48.760 --> 18:50.920
+because these are used for booting.
+
+18:50.920 --> 18:53.340
+Hash nodes is not something you should check
+
+18:53.340 --> 18:54.420
+in the bootloader.
+
+18:54.420 --> 18:56.560
+This was fixed in uboot, in barebox,
+
+18:56.560 --> 18:58.220
+in the fit specification.
+
+18:58.220 --> 19:01.500
+And yeah, I think that's everyone who is affected
+
+19:01.500 --> 19:03.900
+because I think no one implements configuration signing
+
+19:03.900 --> 19:06.860
+outside of uboot and barebox, I'm not sure.
+
+19:06.860 --> 19:08.860
+Yeah, so there is an advisory that I have written
+
+19:08.860 --> 19:12.120
+that goes a bit in depth what is affected.
+
+19:12.120 --> 19:15.460
+So if you're using configuration signing in the U-Boot SPL,
+
+19:15.460 --> 19:19.800
+your opt is also probably, how do you call it,
+
+19:19.800 --> 19:21.600
+attacked, attackable by this.
+
+19:23.620 --> 19:27.920
+Yeah, and I am interested how good publicity work
+
+19:27.920 --> 19:28.780
+was done for this.
+
+19:28.780 --> 19:31.040
+So please raise your hand if you have a verified boot
+
+19:31.040 --> 19:32.180
+project using fit.
+
+19:34.200 --> 19:36.840
+And keep your hand up if you have not heard
+
+19:36.840 --> 19:38.720
+of this particular issue.
+
+19:39.660 --> 19:41.820
+Okay, yeah.
+
+19:41.820 --> 19:45.540
+I wasn't able to see how many hands went down.
+
+19:45.540 --> 19:48.260
+But yes, a number of people haven't heard about this issue,
+
+19:48.260 --> 19:50.640
+so we should have done better work here,
+
+19:50.640 --> 19:52.340
+which I will get to.
+
+19:52.340 --> 19:55.540
+So, how do we trim the fit?
+
+19:55.540 --> 19:57.160
+Yeah, so fit keeps on growing.
+
+19:57.160 --> 19:59.920
+So I showed this partition table thing.
+
+19:59.920 --> 20:02.640
+You can have partitions that alias each other.
+
+20:02.640 --> 20:04.760
+You can have fit as a partition table with the mverity.
+
+20:04.760 --> 20:07.320
+So you actually have a kernel driver
+
+20:07.320 --> 20:10.760
+that mounts your fit as a partition table
+
+20:10.760 --> 20:12.320
+and has variety on it.
+
+20:12.320 --> 20:14.080
+So yeah, you can do that.
+
+20:14.080 --> 20:15.600
+This is in the spec.
+
+20:15.600 --> 20:17.180
+U-boot support is being added.
+
+20:18.480 --> 20:21.980
+So our open pull requests for all sorts of things.
+
+20:21.980 --> 20:26.460
+And yeah, we should try to keep fit secure,
+
+20:26.460 --> 20:29.220
+but not at the cost of new features, right?
+
+20:29.220 --> 20:31.460
+This is a slide that I had last year
+
+20:31.460 --> 20:33.840
+in my bootloaders under fire talk.
+
+20:33.840 --> 20:37.240
+And this was like a wishlist for barebox or in general.
+
+20:37.240 --> 20:39.480
+And I'm happy that a lot of this materialized.
+
+20:39.480 --> 20:41.640
+So security policies are upstream.
+
+20:41.640 --> 20:45.460
+OSS fast has barebox and uboot support now.
+
+20:45.460 --> 20:47.300
+This is nice.
+
+20:47.300 --> 20:49.620
+The fit code is also being fast.
+
+20:49.620 --> 20:52.720
+I think for uboot it fails whenever you need to hash.
+
+20:52.720 --> 20:55.360
+So an attacker can trivially compute a hash.
+
+20:55.360 --> 20:59.560
+So it's not cool if the father can't continue there.
+
+20:59.560 --> 21:02.980
+For barebox or for both of them, barebox and uboot,
+
+21:02.980 --> 21:05.440
+You can't actually find this issue that I have shown
+
+21:05.440 --> 21:07.040
+because it's not a memory safety issue.
+
+21:07.040 --> 21:08.620
+So there is still some work to do here.
+
+21:08.620 --> 21:10.380
+I have been trying to do it for barebox.
+
+21:10.380 --> 21:11.420
+Have something promising.
+
+21:11.420 --> 21:14.820
+I hope that I can upstream it in the future
+
+21:14.820 --> 21:18.900
+so we can actually catch these confusion attacks by fuzzing.
+
+21:19.840 --> 21:20.680
+There's a barebox thread model.
+
+21:20.680 --> 21:22.900
+And yeah, there was this one here.
+
+21:22.900 --> 21:25.440
+Fit images, verify full image before parsing.
+
+21:25.440 --> 21:27.620
+When I wrote this, I was thinking about memory safety issue.
+
+21:27.620 --> 21:31.060
+I was not thinking about like the barn door
+
+21:31.060 --> 21:32.360
+being so wide open.
+
+21:33.260 --> 21:35.080
+But yeah, so let's get to that.
+
+21:35.080 --> 21:37.860
+A lot of stuff has a check mark on it.
+
+21:37.860 --> 21:39.460
+What do we need for whole fit signing?
+
+21:39.460 --> 21:41.960
+So this is not a new radical new idea.
+
+21:41.960 --> 21:44.860
+You have this on uBoot already for the IMX8M.
+
+21:44.860 --> 21:47.560
+You sign the whole fit image as if it were firmware
+
+21:47.560 --> 21:49.080
+and then you give it the boot ROM.
+
+21:49.080 --> 21:52.100
+It's a bit special and it abuses the fact that you can,
+
+21:52.100 --> 21:54.060
+after the fit header, just move the nodes
+
+21:54.060 --> 21:56.580
+because there are pointers and then you put something there
+
+21:56.580 --> 21:57.680
+that lets the boot ROM sync.
+
+21:57.680 --> 22:00.040
+Oh, this is a bootloader, I can verify that.
+
+22:00.040 --> 22:02.100
+Yeah, but you can do it, people do it,
+
+22:02.100 --> 22:06.880
+and the people who did it were not affected by this issue.
+
+22:06.880 --> 22:08.860
+So, but they were probably affected
+
+22:08.860 --> 22:09.920
+when booting the kernel
+
+22:09.920 --> 22:12.380
+because this is often used only in UBoot SPL.
+
+22:12.380 --> 22:16.600
+So kernel is, EL2 is compromised, EL3 isn't.
+
+22:16.600 --> 22:18.640
+But well, let's get back.
+
+22:18.640 --> 22:19.940
+Android verified boot.
+
+22:19.940 --> 22:22.680
+You can have this trailer to verify the fit image
+
+22:22.680 --> 22:25.020
+as a whole, so it's not a new thing.
+
+22:25.020 --> 22:26.920
+The UBoot implementation, when I looked into it,
+
+22:26.920 --> 22:29.160
+is time of check, time of use vulnerable.
+
+22:29.160 --> 22:31.900
+So don't get running and say,
+
+22:31.900 --> 22:33.600
+yeah, I will use full fit signing
+
+22:33.600 --> 22:34.660
+and I will take the first thing
+
+22:34.660 --> 22:36.040
+that's implemented in uBoot.
+
+22:36.040 --> 22:38.140
+That's not a good idea yet.
+
+22:38.140 --> 22:39.500
+One thing that's implemented in uBoot
+
+22:39.500 --> 22:42.040
+that you could actually use is config image preloadsig.
+
+22:42.040 --> 22:43.980
+This has been there for four years now.
+
+22:43.980 --> 22:45.540
+It's unfortunately not in the spec.
+
+22:45.540 --> 22:47.140
+It's barely documented.
+
+22:47.140 --> 22:49.680
+And I think it's not backwards compatible.
+
+22:49.680 --> 22:51.640
+So that wouldn't help adoption.
+
+22:51.640 --> 22:53.020
+So what do I think is needed?
+
+22:53.020 --> 22:55.220
+We need something generic, must be documented,
+
+22:55.220 --> 22:56.320
+must be backwards compatible,
+
+22:56.320 --> 22:58.920
+so people can actually use it.
+
+22:58.920 --> 23:02.100
+And yeah, there's a lot of things you can do with fit,
+
+23:02.100 --> 23:04.260
+but we should really focus on the main use case
+
+23:04.260 --> 23:07.880
+for most of us, which is a secure kernel boot container.
+
+23:07.880 --> 23:09.980
+And I want this format to be attractive.
+
+23:09.980 --> 23:12.680
+So people use it even if they are not really sold
+
+23:12.680 --> 23:14.300
+on the whole fit signing idea.
+
+23:14.300 --> 23:16.960
+So the format should allow you to detect a fit.
+
+23:16.960 --> 23:18.820
+It should allow you to know the size of the fit.
+
+23:18.820 --> 23:20.460
+It should allow you to append metadata
+
+23:20.460 --> 23:22.740
+that's not being verified.
+
+23:22.740 --> 23:27.100
+And very critically, it should not do any device reparsing
+
+23:27.100 --> 23:29.220
+before verification, because then I think
+
+23:29.220 --> 23:30.580
+you can just throw it away.
+
+23:32.160 --> 23:33.880
+Yeah, so this is what I came up with.
+
+23:33.880 --> 23:35.720
+You have the struct FTT header.
+
+23:35.720 --> 23:38.780
+This has this boot CPU ID field,
+
+23:38.780 --> 23:40.480
+which is not used nowadays.
+
+23:40.480 --> 23:43.940
+And I propose that we add fit as a magic there.
+
+23:43.940 --> 23:47.280
+And when there is fit there, we would expect,
+
+23:47.280 --> 23:48.560
+or the bootloader would expect
+
+23:48.560 --> 23:50.860
+there is a struct fit header directly after it.
+
+23:50.860 --> 23:53.200
+It would have also a fit for cross-checking.
+
+23:53.200 --> 23:56.080
+And then it would have actually external data size.
+
+23:56.080 --> 23:57.480
+so we can actually size a fit
+
+23:57.480 --> 23:59.820
+and we need that to be able to hash the fit.
+
+23:59.820 --> 24:02.080
+So without knowing how big a fit is,
+
+24:02.080 --> 24:04.420
+how should a bootloader know what to hash?
+
+24:04.420 --> 24:05.820
+And then it can have some flags
+
+24:05.820 --> 24:08.060
+for backwards and forward compatibility.
+
+24:08.060 --> 24:10.180
+And if you have a fit header,
+
+24:10.180 --> 24:12.200
+you also have a metadata trailer,
+
+24:12.200 --> 24:16.440
+which is just a very simple TLV format at the end
+
+24:16.440 --> 24:18.600
+where you can add detached signatures
+
+24:18.600 --> 24:21.260
+or something else that shouldn't be covered by a hash,
+
+24:21.260 --> 24:23.240
+but it should be very simple.
+
+24:23.240 --> 24:27.220
+So in comparison, you just read, I think,
+
+24:27.220 --> 24:29.480
+like eight fixed offset integers.
+
+24:29.480 --> 24:32.160
+The 64-bit ones of them are kept at 48 bits.
+
+24:32.160 --> 24:34.740
+So even if you do not do overflow checking,
+
+24:34.740 --> 24:37.040
+just check the upper two bytes.
+
+24:37.040 --> 24:39.180
+And yeah, hash it, verify it,
+
+24:39.180 --> 24:41.140
+and only then do the parsing.
+
+24:41.140 --> 24:45.460
+And yeah, in the old style with configurations,
+
+24:45.460 --> 24:46.640
+what you see on the left,
+
+24:46.640 --> 24:51.020
+the verifying the signature is just step four
+
+24:51.020 --> 24:53.280
+instead of being like something you do
+
+24:53.280 --> 24:55.880
+before the device tree is being passed.
+
+24:55.880 --> 24:59.220
+And I think this has a pretty good compatibility story.
+
+24:59.220 --> 25:01.420
+So if you have a new bootloader and an old fit,
+
+25:01.420 --> 25:03.940
+no problem, pair configuration signatures
+
+25:03.940 --> 25:06.640
+can be supported for a transitory period.
+
+25:06.640 --> 25:08.700
+If you have an old bootloader and a new fit,
+
+25:08.700 --> 25:11.020
+no problem, because it looks exactly the same.
+
+25:11.020 --> 25:13.860
+The FTT header is something added after the,
+
+25:13.860 --> 25:16.320
+the fit header is something added after the FTT header,
+
+25:16.320 --> 25:17.560
+which you are allowed to do.
+
+25:17.560 --> 25:19.020
+If you have a new bootloader and a new fit,
+
+25:19.020 --> 25:20.920
+you can use whole fit signatures.
+
+25:20.920 --> 25:24.340
+And you would roll this out in the field,
+
+25:24.340 --> 25:27.460
+sign both configurations and the whole fit image.
+
+25:27.460 --> 25:28.840
+And after a transitory period,
+
+25:28.840 --> 25:31.900
+you would stop allowing configuration signing
+
+25:31.900 --> 25:33.940
+as a bootloader policy.
+
+25:33.940 --> 25:36.160
+And yeah, this is something I would like to see
+
+25:36.160 --> 25:37.560
+in my customer projects.
+
+25:38.400 --> 25:41.860
+So I wrote a spec draft for that.
+
+25:43.320 --> 25:45.560
+Yeah, so there was some discussions with Simon.
+
+25:45.560 --> 25:48.100
+I think we reached a consensus in this approach
+
+25:48.100 --> 25:50.400
+that we will add this TLV.
+
+25:50.400 --> 25:52.740
+This TLV overlaps a bit with device tree
+
+25:52.740 --> 25:54.300
+but I think this is unavoidable
+
+25:54.300 --> 25:56.880
+because if we do something device-tree compatible
+
+25:56.880 --> 25:58.820
+people will just use libfttt.
+
+25:58.820 --> 26:01.700
+And yeah, I don't want any intern strings
+
+26:01.700 --> 26:04.320
+and this whole complexity of device tree
+
+26:04.320 --> 26:06.220
+before we do a verification.
+
+26:07.080 --> 26:08.700
+Not that you can't get it secure
+
+26:08.700 --> 26:12.360
+but experience has shown that this is rather tricky
+
+26:12.360 --> 26:14.340
+and we should draw a line
+
+26:14.340 --> 26:16.660
+and try to do better in my opinion.
+
+26:17.720 --> 26:19.320
+Yeah, so ball is in my court.
+
+26:19.320 --> 26:21.040
+I have been busy this week,
+
+26:21.040 --> 26:26.040
+but I hope to soon update the PR for feedback.
+
+26:26.480 --> 26:28.840
+And after that, we will discuss signature entry
+
+26:28.840 --> 26:31.040
+and implementation on the GitHub pull request.
+
+26:31.040 --> 26:32.640
+You can click there.
+
+26:32.640 --> 26:34.340
+PR44 is its number.
+
+26:34.340 --> 26:37.420
+So if you are interested in collaboration or sponsoring,
+
+26:37.420 --> 26:39.100
+please let me know.
+
+26:39.100 --> 26:41.900
+So what should we do till then?
+
+26:41.900 --> 26:44.940
+And more importantly, what should we do when we have it?
+
+26:44.940 --> 26:46.900
+So vulnerabilities will happen.
+
+26:46.900 --> 26:54.260
+it's independent of which format we are using i think so bootloader updates need to be easier
+
+26:54.260 --> 27:01.140
+so most my most our projects are using rauc rauc has a wider repertoire of bootloader update methods
+
+27:01.140 --> 27:06.180
+so if you are using rauc or your bootloader is allowing you to update sorry your update
+
+27:06.180 --> 27:11.860
+system is allowing you to update the bootload and a boot power fail safe manner you should really do
+
+27:11.860 --> 27:17.860
+so but i think also on the bootloader development side there are some process changes that are
+
+27:17.860 --> 27:24.580
+desirable so these issues i spent a lot of time looking at them and i can't expect some user of
+
+27:24.580 --> 27:29.220
+the bootloader to get the same understanding what the implications are by reading a commit message
+
+27:29.220 --> 27:33.620
+so for these critical issues i wrote security advisories and they were published on the
+
+27:33.620 --> 27:39.220
+barebox github yeah one issue was specific to barebox the other also affected uboots so i wrote
+
+27:39.220 --> 27:44.180
+a security advisory so it's applicable to both and got a you would from the you would maintainers
+
+27:44.900 --> 27:51.220
+a sign off on it we started requesting cves so cve requesting and bootloader land is something that
+
+27:51.220 --> 27:57.140
+a security researcher does if they want to but no one does but yeah i think if you are writing
+
+27:57.140 --> 28:01.380
+such a nice severe nice advisory as people have told me you want people to read it so you should
+
+28:01.380 --> 28:07.380
+request a cve so people have a reason to go there and yeah we have been maintaining an lts release
+
+28:07.380 --> 28:14.020
+for barebox so yokto rhinos includes barebox in open embedded core and this release is lts and
+
+28:14.020 --> 28:18.100
+we are backporting patches to there whether there are critical security patches or just normal bug
+
+28:18.100 --> 28:23.780
+fixes and for the small versions between them we are having migration guides so we have been doing
+
+28:23.780 --> 28:29.060
+this for maybe under two years a year and a half so we have monthly barebox releases there is a
+
+28:29.060 --> 28:33.540
+migration guide telling you what you might need to look out for and i really would like to see
+
+28:33.540 --> 28:38.200
+like for Opti and other projects because, yeah.
+
+28:38.200 --> 28:39.660
+So it's just a small point,
+
+28:39.660 --> 28:41.800
+but I want to talk about this a bit
+
+28:41.800 --> 28:45.160
+because I think it's really good for security to have it
+
+28:45.160 --> 28:48.940
+because there are these defaults in various software
+
+28:48.940 --> 28:51.260
+which were chosen at one time
+
+28:51.260 --> 28:54.100
+and then it has shown that these are bad defaults.
+
+28:54.100 --> 28:55.260
+And now you can change them
+
+28:55.260 --> 28:57.600
+because you will break all these users
+
+28:57.600 --> 29:01.620
+and all these users wouldn't know why and so on.
+
+29:01.620 --> 29:06.260
+And this inconveniences possibly more future users
+
+29:06.260 --> 29:10.580
+than there are existing users, just to keep this default.
+
+29:10.580 --> 29:12.580
+And I think with migration guides,
+
+29:12.580 --> 29:16.380
+we got more bold in bare box to just say you,
+
+29:16.380 --> 29:20.180
+there was some, for example, there is boot or boot M
+
+29:20.180 --> 29:24.040
+allows you to temporarily raise the level
+
+29:24.040 --> 29:25.640
+of fit signature checking.
+
+29:25.640 --> 29:28.520
+So there is a global toggle, a build time toggle
+
+29:28.520 --> 29:29.900
+and a runtime global toggle.
+
+29:29.900 --> 29:32.740
+and then you could, at shell level, raise it.
+
+29:32.740 --> 29:35.520
+And this is a feature that might be nice for development,
+
+29:35.520 --> 29:38.820
+but it complicates so much thinking about
+
+29:38.820 --> 29:41.020
+what level am I at now?
+
+29:41.020 --> 29:42.940
+And how do these things interact?
+
+29:42.940 --> 29:44.380
+And we just ripped it out.
+
+29:44.380 --> 29:46.080
+We wrote in the migration notes,
+
+29:46.080 --> 29:48.040
+hey, if you are using this, use this.
+
+29:48.040 --> 29:50.140
+We found this is a bad idea, don't use it.
+
+29:50.140 --> 29:52.820
+And I would really like more projects to be bold.
+
+29:52.820 --> 29:53.880
+So we are not bold.
+
+29:53.880 --> 29:55.460
+We still have very old hardware
+
+29:55.460 --> 29:58.660
+that I am too emotionally invested to throw out.
+
+29:58.660 --> 30:01.160
+but at least a bit.
+
+30:01.160 --> 30:02.600
+So in the security relevant stuff,
+
+30:02.600 --> 30:06.460
+we should really get into the habit of changing defaults.
+
+30:06.460 --> 30:11.460
+And yeah, so I have two more slides and it's about testing.
+
+30:11.880 --> 30:16.220
+So I think testing for pitfalls with fit is too difficult.
+
+30:16.220 --> 30:19.520
+And who of us even tests that an unsigned fit
+
+30:19.520 --> 30:21.260
+is indeed refused?
+
+30:21.260 --> 30:23.920
+So this might, great.
+
+30:23.920 --> 30:27.700
+Okay, sorry, again, how many were that?
+
+30:27.700 --> 30:31.460
+Okay, so six people are doing it, this is good.
+
+30:32.340 --> 30:34.180
+Yeah, I wish more people would do it
+
+30:34.180 --> 30:35.800
+and that it would be easier to do it
+
+30:35.800 --> 30:38.140
+and that it would be also easier to check
+
+30:38.140 --> 30:41.100
+that you are indeed, when you are backporting a fix,
+
+30:41.100 --> 30:42.680
+for example, that you are not,
+
+30:43.700 --> 30:45.720
+that this issue does not affect you
+
+30:45.720 --> 30:47.940
+or that you have probably fixed it.
+
+30:47.940 --> 30:50.820
+And I think LLMs increase the urgency here
+
+30:50.820 --> 30:54.000
+because exploitation has become very easy.
+
+30:55.140 --> 30:56.880
+LLM, here is assigned fit.
+
+30:56.880 --> 30:58.760
+Here is this open source repository.
+
+30:58.760 --> 31:00.700
+Here is this patch that applies on top of it.
+
+31:00.700 --> 31:02.980
+Give me a reproducer that a vulnerable bootloader
+
+31:02.980 --> 31:05.180
+will accept, and it will happily do so.
+
+31:05.180 --> 31:07.700
+And it doesn't need some fancy cyber model.
+
+31:08.720 --> 31:10.720
+And to prove that point here is something
+
+31:10.720 --> 31:11.980
+I vibe-coded back in March.
+
+31:11.980 --> 31:13.040
+I never looked into the code.
+
+31:13.040 --> 31:17.040
+I am not much of a JavaScript guy anyway.
+
+31:17.040 --> 31:18.220
+And this is a website.
+
+31:18.220 --> 31:19.560
+It's a tribute to my cat.
+
+31:19.560 --> 31:23.180
+You can also do a tribute to her and upload a fit.
+
+31:23.180 --> 31:26.040
+And then from a dropdown, you can choose
+
+31:26.040 --> 31:27.640
+if you want to manipulate the device tree,
+
+31:27.640 --> 31:28.820
+if you want to replace the kernel,
+
+31:28.820 --> 31:31.060
+if you want to amend something after the initramfs
+
+31:31.060 --> 31:33.840
+to get a root shell, then you can, from the dropdown,
+
+31:33.840 --> 31:36.280
+choose some way to forge your fit.
+
+31:36.280 --> 31:39.680
+For example, you are using image signing
+
+31:39.680 --> 31:42.120
+and you want to use this entry method.
+
+31:42.120 --> 31:44.220
+Then you click root and then you can download it.
+
+31:44.220 --> 31:46.620
+It runs in your browser and, of course,
+
+31:46.620 --> 31:50.540
+you will only use this responsibly and on devices you own.
+
+31:50.540 --> 31:52.620
+But I think we should really use that
+
+31:52.620 --> 31:54.860
+and should verify that our systems are safe
+
+31:54.860 --> 31:57.720
+because security by obscurity doesn't help us
+
+31:57.720 --> 32:00.820
+as people who are trying to defend the software.
+
+32:00.820 --> 32:03.100
+So yes, that's it, thank you.
+
+32:14.580 --> 32:17.920
+I was a bit quick in talking, so we have like eight minutes,
+
+32:17.920 --> 32:20.760
+but I hope you still, I was not too quick.
+
+32:20.760 --> 32:22.860
+Yeah, any questions?
+
+32:24.860 --> 32:33.380
+I have a lot of backup slides like certain slides I had to cut down to try
+
+32:33.380 --> 32:36.820
+to get into yes please
+
+32:44.980 --> 32:50.620
+yes so this is one thing that I want in your whole fit signature to support so
+
+32:50.620 --> 32:54.020
+old format certainly can be made to support it because it can be made to
+
+32:54.020 --> 33:00.200
+support anything and there is actually on the uBoot mailing list a series to add some form of
+
+33:00.200 --> 33:09.620
+post-quantum cryptography. Ah you okay okay yeah so yeah I am of the same idea that what feedback
+
+33:09.620 --> 33:14.300
+you got in the mailing list we should really use embed TLS so I didn't I have it on a backslide
+
+33:14.300 --> 33:22.400
+backup slide that I don't think we should add post-quantum crypto that we support ourselves in
+
+33:22.400 --> 33:30.640
+would yeah so uh yeah we are in so whether you would or barebox we have been importing crypto
+
+33:30.640 --> 33:37.520
+code from the kernel but the fixes do not usually follow and they follow on a case-by-case basis
+
+33:37.520 --> 33:45.040
+and i would much rather have like embed tls which we can just update and has a stable api
+
+33:45.040 --> 33:46.880
+when it has support for post quantum
+
+33:46.880 --> 33:51.880
+Yeah, yeah, yeah, but maybe that's something
+
+33:54.660 --> 33:56.220
+that we should focus on first.
+
+33:56.220 --> 33:58.880
+So this week actually someone submitted Authenticode,
+
+33:58.880 --> 34:03.580
+which is UEFI PE signing for barebox.
+
+34:03.580 --> 34:06.440
+And yeah, my feedback was no, use MBT-LS
+
+34:06.440 --> 34:09.400
+because I don't see why we should import
+
+34:09.400 --> 34:12.420
+a PK-7 parser or implement one ourselves.
+
+34:12.420 --> 34:14.300
+Doesn't make sense to me.
+
+34:14.300 --> 34:15.660
+Thanks.
+
+34:16.880 --> 34:27.140
+okay I have a general comment which is I would say that in addition to the core work that you're
+
+34:27.140 --> 34:34.880
+doing which is super excellent and great one thing I've observed also is that sometimes vendors will
+
+34:34.880 --> 34:41.480
+add debug specific functionality that can also be used to do these sorts of bypasses and should
+
+34:41.480 --> 34:48.380
+definitely be part of an overall assessment yes yes absolutely so not to
+
+34:48.380 --> 34:51.740
+like yeah not to do too much self-marketing but last year I talked
+
+34:51.740 --> 34:58.980
+about the box security policies which is a structure yeah which is a general way
+
+34:58.980 --> 35:04.700
+to like gates of functionalities that's meant for debug so yeah I think we
+
+35:04.700 --> 35:11.320
+should have more structured ways to do this and I hope my laptop survives
+
+35:11.480 --> 35:20.360
+it's it's still working here so I hope I burned something in the HDMI just look at it it's very
+
+35:20.360 --> 35:28.040
+yeah it doesn't look like an HDMI cable so I hope that's an issue here any other questions
+
+35:33.560 --> 35:40.600
+yeah so I had the first slide I expected someone to say UKI so that was the very next slide yeah so
+
+35:41.480 --> 35:49.400
+yeah I would just say it so when you boot over UEFI you have a lot of hardening mechanisms and I
+
+35:49.400 --> 35:53.820
+really think that we should look into that so that's a boot loader it might be just a fit
+
+35:53.820 --> 35:59.220
+but you boot the kernel over UEFI and then you can leave the MMU enabled you can have write
+
+35:59.220 --> 36:05.300
+execute probably properly working the kernel can do a kernel address based layout randomization
+
+36:05.300 --> 36:11.460
+so I think this is an interesting prospect even for people who don't want to go like full UKI
+
+36:11.460 --> 36:16.020
+so it's a use EFI in fit so this is certainly something I want to look into
+
+36:16.020 --> 36:18.500
+in the future
+
+36:31.220 --> 36:39.940
+now what was the verb how did I what verify
+
+36:41.460 --> 36:49.640
+So I work for a consultancy, we have a lot of customers and I just booted, I used this
+
+36:49.640 --> 36:54.860
+website, I generated my, it's this website you don't need to upload in fit, you can also
+
+36:54.860 --> 36:59.860
+upload in uBoot and it will search for the fit and manipulate it and then I actually
+
+36:59.860 --> 37:05.880
+booted it on real hardware and yeah I read the code so I spent a few weeks looking at
+
+37:05.880 --> 37:13.560
+fit code and stuff this year yeah it's yeah I hope when you have tooling like this more
+
+37:13.560 --> 37:22.520
+easily available it becomes easier I have actually started building a virtual boot chain I'm calling
+
+37:22.520 --> 37:27.880
+it boot jig I hope to open source it at some point of time which mimics a secure boot chain
+
+37:27.880 --> 37:34.200
+from the boot loader to the kernel and the kernel yeah and so I can do fuzzing on the disk image
+
+37:35.000 --> 37:39.080
+uh from the outside so the problem is we are fuzzing only the parser
+
+37:39.080 --> 37:43.080
+but the parser is of course only one part of all of it and i want to fuzz all of it
+
+37:43.080 --> 37:49.560
+and yeah i hope this is something that we can use in future to find more issues and to verify fixes
+
+37:56.040 --> 37:57.480
+the laptop is still working so
+
+37:57.480 --> 38:07.320
+yeah so if there are no other questions I am here for the rest of the week just talk to me thank you
+

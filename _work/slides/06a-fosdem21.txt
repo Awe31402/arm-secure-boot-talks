@@ -1,0 +1,477 @@
+Overview of Secure Boot state in the
+         ARM-based SoCs
+    Hardware-Aided Trusted Computing devroom
+
+                  FOSDEM 2021
+
+                 Maciej Pijanowski
+
+
+
+
+                                               1 / 26
+                                                                  Agenda
+
+whoami
+Company proﬁle
+What do we mean by Secure Boot
+Typical implementation
+Typical workﬂow
+Hardware examples
+        availability overview
+Research results
+Summary
+Contact us
+Q&A
+
+
+
+
+          Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                CC BY | 3mdeb Embedded Systems Consulting            2 / 26
+                                                         /usr/bin/whoami
+
+
+
+
+                     Maciej Pijanowski
+               Embedded Firmware Team Leader
+
+
+ @macpijan                               5 years in 3mdeb
+ maciej.pijanowski@3mdeb.com             interested in:
+ linkedin.com/in/maciej-                         Embedded Linux
+pijanowski-9868ab120                             build systems (e.g. Yocto)
+                                                 system security
+
+
+
+
+         Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+               CC BY | 3mdeb Embedded Systems Consulting                      3 / 26
+                                                                     Company proﬁle
+
+
+
+
+3mdeb is a ﬁrmware and embedded systems development company founded by Piotr Król and
+ headquartered in Gdańsk, Poland. We combine the collaborative creativity of the open-source
+       community with the reliable strength of an enterprise-grade solutions provider.
+
+
+                   Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                         CC BY | 3mdeb Embedded Systems Consulting                             4 / 26
+                                                                      Company proﬁle
+
+
+
+
+Our team is made up of engineers with vast experience working with UEFI/BIOS, coreboot, Linux,
+    Yocto, and more. We create IoT and ﬁrmware solutions supporting security and integrity
+             standards; roots of trust, boot integrity, TPM, DRTM, and much more.
+
+
+                   Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                         CC BY | 3mdeb Embedded Systems Consulting                               5 / 26
+                               What do we mean by Secure Boot
+
+We focus on the ARM context in this presentation
+Boot ROM feature
+Veriﬁed Boot
+To verify the ﬁrmware before executing it
+        verify the signature
+        private key was used to sign the binary
+        public key must be known by the device
+Boot ROM is assumed to be trusted
+        closed source
+The meaning of Secure Boot for diﬀerent architecture can be diﬀerent
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting             6 / 26
+                                                       Typical implementation
+
+Public key written into the SoC
+        electrical Fuse (eFuse)
+        OTP (One-Time-Programmable) registers
+        Root of Trust
+Next components can use diﬀerent keys
+        must be locked down (e.g. disabled U-Boot shell)
+        to preserve the chain of trust
+We are focusing on the ﬁrst step
+        the veriﬁcation of the ﬁrst binary executed by the BootROM
+
+                       verify                             verify
+                     signature                          signature
+   Boot ROM                         bootloader                        kernel
+         pubkey 1                           pubkey 2
+
+
+
+
+              Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                    CC BY | 3mdeb Embedded Systems Consulting                  7 / 26
+                                                                        Typical workﬂow
+
+Generate keypair
+Sign the ﬁrmware binary
+Fuse the public key into the SoC
+Enable Secure Boot feature
+Conﬁrm whether the ﬁrmware veriﬁcation works correcly
+Close (lock) the platform
+        at this point only the signed ﬁrmware can be executed
+                Secure location                                   Target device
+
+                                           Sign                                               Verify
+
+
+  private key                                      public key
+
+
+
+                                  signed binary                                   verification result
+
+
+    binary                                        signed binary
+
+
+
+
+                Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                      CC BY | 3mdeb Embedded Systems Consulting                                         8 / 26
+                                                           Typical workﬂow
+
+Signed binary layout
+Typically original data extended with some header
+        speciﬁc to the given implementation
+        digital signature is here
+
+
+                   ...                   header
+
+
+
+            digital signature
+
+                                                          signed
+                                                          binary
+                   ...
+                                         binary
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting             9 / 26
+                                                                NXP - i.MX 6/7/8
+
+HABv4 (High Assurance Boot)
+       Boot ROM feature
+HABv4 features
+       store up to 5 public keys
+       RSA 1024-4096 keys
+       EC p256, p384, p521 keys
+HAB API can be used to verify more than one binary
+
+                       verify
+                     signature
+   Boot ROM                         bootloader                        kernel
+         pubkey 1
+
+
+
+                       verify
+                     signature
+
+
+
+
+              Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                    CC BY | 3mdeb Embedded Systems Consulting                  10 / 26
+                                                             NXP - i.MX 6/7/8
+
+Application notes freely available
+        AN4581 i.MX Secure Boot on HABv4 Supported Devices:
+        https://www.nxp.com/docs/en/application-note/AN4581.pdf
+        AN12263 HABv4 RVT Guidelines and Recommendations:
+        https://www.nxp.com/docs/en/application-note/AN12263.pdf
+Lot's of guides online
+SoC Reference Manual available after free registration
+Signing tool
+        Code Signing Tool can be downloaded after free registration
+        can be used with HSM
+        AN12812 Using Code-Signing Tool with Hardware Security Module:
+        https://www.nxp.com/docs/en/application-note/AN12812.pdf
+Vulnerabilities in Boot ROM may happen
+        https://blog.quarkslab.com/vulnerabilities-in-high-assurance-boot-
+        of-nxp-imx-microprocessors.html
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting                   11 / 26
+                                                            NXP - Layerscape
+
+QorIQ Trust Architecture
+        Secure Boot is one of the features
+        similar to HAB
+Application notes freely available
+        AN5227 Secure Boot and Secure Debug Conﬁguration for LS1:
+        https://bit.ly/39Ez3Mm
+Excellent documentation in the LSDK User Guide:
+https://www.nxp.com/docs/en/user-guide/LSDKUG_Rev20.04.pdf
+        chapter: 6.1 Secure boot
+SoC and Security Reference Manual available after free registration
+Signing tool
+        Code Signing Tool as part of the LSDK
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting              12 / 26
+                                                             Marvell Armada
+
+Details not available publicly
+Documentation under NDA
+        SoC Reference Manual under NDA
+        AN-383: ARMADA ® 38x/39x Families Secure Boot Mode Support
+Marvell github repositories provide useful information
+        https://github.com/MarvellEmbeddedProcessors/u-boot-marvell
+        https://github.com/MarvellEmbeddedProcessors/atf-marvell
+        https://github.com/MarvellEmbeddedProcessors/edk2
+Almost step-by-step guide in U-Boot repository
+        https://github.com/MarvellEmbeddedProcessors/u-boot-
+        marvell/blob/u-boot-2018.03-armada-
+        18.12/doc/mvebu/trusted_boot.txt
+The process is similar for 32-bit Armada 38x and 64-bit Armada 7k/8k
+Fuse command available in U-Boot and edk2
+Signing tool
+        tools/doimage in atf-marvell repository
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting             13 / 26
+                                                  STM32 - STM32MP1 SoC
+
+Only EC keys are supported
+Quality documentation and guides available on-line
+        https://wiki.st.com/stm32mpu/wiki/Security_overview#Secure_boot
+        https://wiki.st.com/stm32mpu/wiki/STM32MP15_secure_boot
+Key generation
+        https://wiki.st.com/stm32mpu/wiki/KeyGen_tool
+Signing tool
+        https://wiki.st.com/stm32mpu/wiki/Signing_tool
+        tools are part of the STM32CubeProgrammer toolkit
+        free registration required
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting            14 / 26
+                                                                  Xilinx - Zynq
+
+2048-bit RSA key
+Documentation freely available
+Application note - XAPP1175 Secure Boot of Zynq-7000 SoC
+       https://bit.ly/3stH1Ao
+       describes the Secure Boot process preparation in great details
+Zynq-7000 SoC Technical Reference Manual
+       https://www.xilinx.com/support/documentation/user_guides/ug585-
+       Zynq-7000-TRM.pdf
+       chapter 32: Device Secure Boot
+
+
+
+
+          Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                CC BY | 3mdeb Embedded Systems Consulting                  15 / 26
+                                                                   NVIDIA - Tegra
+
+2048-bit RSA key
+Documentation and guides available on-line
+        https://bit.ly/35JiSw6
+Nvidia Xavier SoC Technical Reference Manual
+        https://developer.nvidia.com/embedded/downloads#?
+        tx=%24product,jetson_agx_xavier
+        not much Secure Boot related topics
+        the information from on-line documentation os enough
+Fusing tool
+        part of the JetPack SDK
+        odmfuse.sh script
+Signing tool
+        the ﬂash.sh ﬂashing script has option for binary signing
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting                   16 / 26
+                                                       Microchip - SAMA5
+
+RSA keys
+Publicly available documentation
+        AN2748 SAMA5D2 Linux® Secure Boot:
+        http://ww1.microchip.com/downloads/en/AppNotes/DS00002748A.pdf
+        some details missing
+Documentation behind NDA
+        AN2435 SAMA5D2 Series Secure Boot Strategy application note
+Fusing tool
+        code signing tools (Secure SAM-BA tools) require NDA
+        usage described in the AN2748
+Signing tool
+        code signing tools (Secure SAM-BA tools) require NDA
+
+
+
+
+          Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                CC BY | 3mdeb Embedded Systems Consulting           17 / 26
+                                 Texas Instruments - Sitara SoCs
+
+Details not publicly available
+Publicly available AM335x Technical Reference Manual
+        https://www.ti.com/lit/ug/spruh73q/spruh73q.pdf
+        it only mentions that Secure Boot is available
+        no details
+High-level Secure Boot overview is available
+        https://www.ti.com/lit/wp/spry305a/spry305a.pdf?
+        ts=1610562359010
+        marketing material
+Contact with TI and/or signing NDA required to get more documentation
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting              18 / 26
+                                                                  Qualcomm
+
+Limited documentation publicly available
+        Secure Boot and Image Authentication Technical Overview:
+        https://www.qualcomm.com/media/documents/ﬁles/secure-boot-
+        and-image-authentication-technical-overview-v2-0.pdf
+        high-level overview
+        RSA keys
+Interesting 3rd party writeups
+        https://www.timesys.com/security/secure-boot-snapdragon-410/
+        https://lineageos.org/engineering/Qualcomm-Firmware/
+Signing tool
+        proprietary tool: sectool
+        requires NDA
+
+
+
+
+          Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                CC BY | 3mdeb Embedded Systems Consulting              19 / 26
+                                                                      Rockchip
+
+RK3399 TRM mentions the Secure Boot and eFuse features
+      two 1024bits(32x32) high-density electrical Fuse
+      the document can be found online
+      not clear which eFuse registers store public key
+      not clear how to burn the eFuse
+
+Some more documents can be found online
+      like the Rockchip Secure Boot Specification
+      some Windows tool SecureBootTool used to generate keys and sign
+      ﬁrmware images
+
+Most likely some kind of Secure Boot exists, but it is not clear how to use it
+        no success stories found on-line
+        communication with vendor would be necessary
+
+
+
+
+            Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                  CC BY | 3mdeb Embedded Systems Consulting                      20 / 26
+                                                                   Allwinner
+
+There are signs that some form of Secure Boot feature is there
+Possibly no one knows how to use that
+The most advanced used story got stucked
+       https://forum.armbian.com/topic/3033-h3-soc-boot-rom-security-
+       e-fuse/page/2/?tab=comments#comment-107012
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting              21 / 26
+                                                Overview results
+
+
+
+
+Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+      CC BY | 3mdeb Embedded Systems Consulting             22 / 26
+                                                           Overview results
+
+Comments to the graphic table from previous slide
+     (1) - free registration required
+     (2) - There is a documentation in the Marvell's U-Boot's repository,
+     which should be enough to get things working (but not to fully
+     understand it)
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting                  23 / 26
+                                                                   Summary
+
+The general implementation of Secure Boot is similar across vendors
+         image authentication before execution
+         public key in eFuse
+         burn speciﬁc eFuse to "lock" the device (switch to "secure" mode)
+Most commonly RSA-2048 is used as the signing key
+         some support only EC keys (ST)
+         some support both (NXP supports up to RSA-4096 and a few EC
+         keys)
+In all cases the SHA-256 is used as a hash function for digital signature
+Usually also ﬁrmware decryption feature is present
+         but it was not in scope of this presentation
+
+
+
+
+           Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                 CC BY | 3mdeb Embedded Systems Consulting                   24 / 26
+                                                                      Contact us
+
+We are open to cooperate and discuss
+
+ contact@3mdeb.com
+
+ facebook.com/3mdeb
+
+ @3mdeb_com
+
+ linkedin.com/company/3mdeb
+
+https://3mdeb.com
+
+Book a call
+
+Sign up to the newsletter
+
+
+
+
+              Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+                    CC BY | 3mdeb Embedded Systems Consulting               25 / 26
+                     Q&A
+
+
+
+
+Hardware-Aided Trusted Computing devroom, FOSDEM 2021
+      CC BY | 3mdeb Embedded Systems Consulting         26 / 26
+

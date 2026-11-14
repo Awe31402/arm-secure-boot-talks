@@ -1,0 +1,604 @@
+welcome back everyone I hope you had a great coffee break so we're going to
+hear more about arm so Julius that's your stage and let's hear about trusted
+firmware okay thanks is this thing on okay great so hi everyone I'm Julius
+and I work for Google on Chrome OS firmware I'm also the core boot
+maintainer for ARM architectures and I also wanted to talk about trusted
+firmware today so when I signed up for this talk I actually didn't know that
+arm would also be here and talk about trusted firm as one of this some of this
+may be a little duplicate but my main focus for this talk is a broad
+introduction to people who have no idea what trusted firmwares who maybe know
+core boot and don't really know why the two have been like why core boot is using trusted firmware
+these days on arm64 systems actually when i thought about this talk first my intention was to do
+just a general core boot on arm64 talk two years ago in san francisco i already gave a talk about
+core boot on arm32 and this was supposed to be kind of the next situation of that but when i
+looked into this more closely i realized that in on the core boot side there's really not a lot of
+difference between 32 and 64-bit arm there's of course the isa is a little different there are
+some differences in the details but for the general core boot framework at all pretty much works the
+same and the differences compared to x86 core boot are also pretty much all the same so if you
+look at that old talk most of these things are still true for 64-bit um platforms the one real
+difference in how core boot works to stay on these platforms is the trusted firmware part so that's
+why i chose to focus on that and to start the motivation of what we why we even need this
+trusted firmware it actually has to do with the expectations that linux has to the firmware
+environment so this is a little excerpt from the device tree documentation in linux the device tree
+is this thing which is essentially a big table of hardware description that the firmware passes
+to the kernel so that the kernel knows how that particular hardware is laid out.
+As you can see here, this part talks about CPU runtime power management, so turning CPUs
+off and on to save power.
+On ARM32, that part was still optional.
+On ARM64, it's now required that we have this weird PSCI thing.
+In order to figure out what that is and how we get there, how we can support that with
+our firmware. You have to follow me on a journey through the trust zone. I mostly put this
+up because I sometimes get the impression that people who don't know the ARM architecture
+that well just have heard this term trust zone somewhere but don't really know what
+it means and think it's this kind of scary thing that runs the evil code that spies on
+you or the DRM stuff or something. So trying to take some of that fear away, it's really
+not that complicated because if so if you're running open source firmware essentially you can
+also run an open source trust zone it's really just uh an architectural feature to run code
+outside of the context of the kernel so whoever seen the previous talk this is a very similar
+slide essentially uh just telling you what this trust zone stuff is it's essentially
+comparable to system management mode on x86 with the difference that system management mode is a
+really ugly legacy thing. This is a much nicer and cleaner extension of the existing architecture.
+So you essentially just take the existing concept of kernel and user land and expand it to another
+level. In the same way user land makes system calls, the kernel can make these secure monitor
+calls to the next exception level up there. The whole trust zone isn't just the part down there,
+but it's the whole part on the right side so it's like a whole separate operating system and user
+land that can run these trusted applications that are secured from the uh from the rest of
+the operating system and this is this barrier is sort of a one-way street so the secure stuff can
+still access the non-secure stuff but not the other way around and there's also no true uh
+no true memory virtualization on this right side over here.
+So the SecureOS can actually access the SecureMonitor
+memory and thus attack the SecureMonitor,
+essentially, unless, of course, you
+have those new architectural features,
+which we just heard about in the previous talk.
+And the reason of that SecureMonitor down there
+is essentially to arbitrate between these trusted
+applications that run your DRM stuff or whatever
+want them to run and the main operating system that's why it's at the highest it's called exception
+level in arm 64 but that essentially also means privilege level so user land is level zero kernels
+level one hypervisors level two and then the secure monitor is the most privileged thing at level three
+and this the definition of this memory barrier is actually very completely soc specific so there's
+There's no architectural way in the ARM architecture
+to say which parts are secure memory
+and which parts are non-secure memory.
+Every SOC has its own thing for that.
+And usually, it's just some sort of range register
+where you say, OK, starting from this offset for this size,
+that memory area is part of secure memory.
+And it's not just memory.
+It's the whole physical address space, actually.
+So also, all the MMIO peripherals,
+you can say that they only belong to the secure world
+and then the non-secure world cannot access that particular
+I2C controller or something like that.
+If we want to figure out why we need this to support Linux,
+we've got to, again, go to the CPU power management stuff.
+So in case you know, in Linux, CPU power management
+called CPU idles, essentially turning off the CPU
+and you don't need it to save power.
+And if you ignore the slide for a second on ARM32,
+this was completely handled within Linux.
+So when Linux decides it doesn't want to use the CPU,
+then it turns the CPU off, turns all the power
+rails off that go to it, and runs the wait for interrupt
+instruction on that CPU.
+And then when the CPU wakes back up,
+it comes back right into Linux.
+And Linux does all the re-initialization for that.
+The problem is, if you have this trust zone on the side,
+you can't really do that, because the trust zone also
+needs the CPU.
+So first of all, you need something.
+When Linux decides, I don't want the CPU right now,
+then you need something else to ask the secure part
+it also doesn't need the CPU right now. Maybe you need to keep the CPU alive because the secure
+parts needs it. And the other thing is, if you turn the CPU completely off and then turn it back
+on, then it has lost all its state, of course. And some of that state is not accessible to the
+kernel. For example, the page table base address register, there's one for the kernel, but there's
+a separate one for the secure monitor. And of course, the kernel cannot write the page table
+base address of the secure monitor because that would violate the security model so in order to
+re-initialize the cpu after it was completely off those parts that belong to the secure monitor also
+have to be re-initialized by the secure monitor and that's why every cpu on off and on cycle
+essentially has to go all the way through the secure monitor and back down to the kernel
+and um has defined an interface a standardized interface for this called psci power state
+coordination interface which builds upon these secure monitor calls which are essentially
+like system calls just going to the secure monitor exception level and now you could ask so one
+one interesting thing is that this trust zone architecture already existed on arm 32 it was sort
+of bolted on in some of the later stages of the iterations of the architecture but you could also
+have it there and you would already have the same problems there but the thing is since this evolved
+alongside linux linux always supported systems that just didn't choose to use it and in core boot
+we just never really had a need for secure so secure applications and that's why we just ignored
+it and used linux ability to work without that but for arm 64 linux essentially decided to have a
+a clean break and now they say all the systems are going to have this trust on stuff anyway so
+we can just rely on it being there and we don't need to implement all this cpu power management
+ourselves anymore so the real reason why arm 64 devices need to provide this psci stuff now is
+essentially because linux just got lazy and they just decided they don't want to implement the cpu
+power management themselves anymore so now we got to give this to them in order to host a full
+linux platform even if we don't want to use the secure part
+now we could implement all of this ourselves in co-boot but before we do all that's where
+that work let's maybe look around to see what other options there are so what is this trusted
+firmware thing anyway for those of you who've been in the previous talk already most of this
+is the same it's a full firmware stack it's sort of a reference implementation by arm for the
+all the firmware you need both booting and runtime firmware and if we look from the core boot point
+of view core boot is already the boot firmware essentially so we don't need that part but we
+are really interested in this runtime part thankfully trusted firmware is already split
+out into these separate stages and the one called b031 is the one that really interests us because
+that is the part where all this runtime power management stuff is hosted that is the secure
+monitor that needs to stay resident across the whole lifetime of the system and if we compare it
+with what core boot already has it has a bunch of these nice features that core boot traditionally
+didn't provide for example right now on core boot in the arm architectures we have no multi-processing
+support at all we just use the one cpu core we boot with and do everything with that which makes
+it really nice and easy for us but of course if you want to provide these services that turn cpus
+off and on you need to do some multiprocessing you need to handle coherency and mutexing and all
+that sort of stuff it also has a lot of nice cpu core support so for every cpu core that arm releases
+a53 a57 a70 whatever they're called um all of these have a lot of their own little quirks and
+they have the little erratas that you need to support so it's really nice to have a code base
+where the cpu vendor itself already programmed all of that stuff so you can just use it for them you
+and you don't have to keep up with all the new Iwata
+as they come out, essentially.
+Actually, more than once on one of our existing ARM systems,
+I've just booted up a new version of Trusted Firmware,
+and then it told me in some log message,
+hey, there's this new Iwata I found
+that your CPU is susceptible to.
+So it's kind of nice to get this thing from the CPU vendors
+who know what they're doing and don't have to do it yourself.
+If we compare this Trusted Firmware architecture
+with Core Boot more closely, we can
+that it's matching up pretty well so the bl1 and bl2 part are the pure boot firmware part of
+trusted firmware which is essentially equivalent to the three stages of core boot that we know
+and then the bl32 and bl33 are actually not part of trusted firmware it's just names trusted
+firmware gives to the other stuff that it loads and it's therefore equivalent to the core boot
+payload which is also not part of core boot but it's a boot loader that is run after core boot
+is finished essentially so if we want a secure monitor and core boot we really don't need to
+care about all this other stuff we can throw all that away all we want is the secure monitor part
+it would be really nice if we could just yank it out of there and smash it in over here which is
+essentially exactly what we did so um we integrate trusted firmware as a git sub module into core
+boot so when you check out this core boot source we automatically have the trusted firmware source
+three there as well and can develop in it and when you build core boot it also builds trusted
+firmware and then picks the right part that b3 run out of it and integrates it into core wood at the
+right place so it all works out pretty nicely and if you're curious about the details of how this is
+implemented in core boot um the nice part of what core wood is that most of it is architecture
+independent right so all this logic about figuring out for example where this payload is and how to
+load it and put it in place that's all independent of the architecture and we don't need to touch
+that the only thing we are touching is really the very last part of the ram stage where it jumps to
+the payload that's an architecture specific callback and all we do for trusted firmware
+there is essentially we're saying if we're running trusted firmware then instead of jumping to the
+payload wait a second let's load this other thing over here first and run it and then we pass trusted
+firmware the information of how to jump to the payload and the payload is already noted so the
+The nice thing is, Trusted Firmware doesn't really
+need to know anything about how to access the flash
+or something like that in these architectures.
+The next stage is already loaded,
+and we just tell it how to move on after it's
+done its thing, essentially.
+This is a quick overview about how
+the Trusted Firmware repository is laid out.
+So my goal here is essentially to give you a rough idea of where
+to look if you have to implement your own SOC for,
+like if you're implementing an SOC in core boot
+want the trusted firmware support to get it working on ARM64. This is just a small excerpt
+of the directories. There are a lot of these. I left the ones out that you don't need to
+care about, essentially, if you only care about core boot. Next to the BL3.1 directory,
+there's also a BL2 and a BL1. You can just ignore those because we are not using those.
+There's a lot of really good documentation. If you're trying to work on trusted firmware,
+my recommendation is really to look at those because they are great, especially this
+This porting guide is essentially your one-stop stop for implementing a new platform.
+It tells you all the macros you need to define, all the functions you need to implement, and
+so on.
+If you're looking for drivers, they're all sorted by vendor.
+If you're looking for the generic interrupt controller, for example, that most SOCs use,
+that is under ARM.
+If you're looking for a standard 16550 UART, which most SOCs use, that is under TI in this
+case.
+And most of the drivers that cannot be reused between SOCs
+are just in the platform part over here.
+So actually, a lot of the framework is pretty lean,
+and a lot of the stuff is just implemented in the platform.
+And every platform does it however it thinks it wants to.
+One of the few things that you still
+have generic for all platforms to use, the CPU stuff
+is pretty great.
+So as I said, they have all the CPUs already implemented.
+And you essentially just need to add the right CPUs
+that your SOC has in the make file.
+And then it builds them.
+And then it can automatically detect which CPU is which.
+So when it brings up a CPU, it reads the identification
+register and searches for all the CPUs you compiled
+and which one this is and which code to use for that.
+And as I said, in the platform, first of all,
+there's a common platform directory.
+So there's a lot of callbacks for things
+which the platform can change if it wants to.
+But usually, most platforms just want
+to do the one thing that makes sense to most of them.
+So there's a bunch of stuff implemented in common
+that you can just link in because it will probably
+work for you.
+Then every platform does its own thing.
+There's usually a plat setup thing that
+is the first thing that runs during boot
+and does all the boot initialization.
+There's a PM thing usually that implements those pesky
+callbacks.
+And a lot of vendors sort of factor out
+some of the common stuff and then the per-SAC stuff.
+And in the end, each platform has a make
+file that defines all it does, essentially.
+So there's no complicated configuration framework here.
+It's not using kconfig or anything.
+All the compile time configuration options you have
+are just options in the make file,
+and then, essentially, which drivers
+you link in the make file.
+So if you want to support a new platform for Corvoo,
+the one thing you really need to implement is this pesky stuff.
+So let's look into that for a bit.
+And the main message here is, essentially, it's very flexible.
+You can do whatever you want, whatever is best for your SOC.
+So each of the things that you can turn on and off,
+essentially, for runtime power management,
+you have these nodes which are in a hierarchy of power levels.
+And then the bottom level, you always have the CPU.
+Or in case of multi-threading, that would be the threads,
+actually.
+And then you can have as many layers above that as you want.
+You don't need to have any layers.
+But most SOCs have their CPUs in some sort of cluster.
+And when you turn off all the CPU in a cluster,
+then you can turn off some extra stuff for the cluster.
+So this power level stuff allows you
+to build the topology of your SOC in the framework,
+essentially.
+And you just tell it which maximum power level you want
+to have, and then it handles all the stuff
+of calling the right functions for each power level
+to turn them on and off, for example.
+And orthogonal to that, you also have power states.
+So there's not just on and off.
+There can be as many as you want in between
+to have a trade-off between exit latency, usually,
+and power draw.
+So rather than just turning it off,
+you can maybe put it into a retention state
+that you can wake up from quickly.
+And there again, you can have as many states as you want.
+You can define all of that inside your platform.
+The only thing you tell the outside framework
+is whether this is an off state or a retention state.
+The difference there is that in the off state,
+it loses all its state.
+And you have to, like the framework
+will reinitialize all of the state for you
+when it comes back up.
+And the retention state, it's expected to keep that.
+And then the only thing you really need to implement
+once you've decided how this hierarchy looks
+is a structure full of function pointers, essentially,
+with all the callbacks for how do I turn off the CPU,
+any of these nodes, actually not just CPUs,
+how do I turn it back on?
+What do I do with it after it's turned back on?
+So that is this finished callback down here.
+And there's a bunch more.
+But the general gist of it is that you just
+have this bunch of functions you need to implement,
+and then the framework knows how to call you correctly.
+That's really all you need for the pesky stuff. Once again, the documents are really great to
+look into how this works in specifics. Also, of course, just look at existing platforms.
+My favorite is always the Rockchip one because the SSCs tend to be really simple. They don't have
+any of the weird hooks and crannies that some of the other more complicated SSCs have, so they
+usually make a good example. Once you have that, you're essentially done supporting Corewood,
+but you can do some more stuff if you want to. One of the common things you might want to do
+is custom smcs of course this pesky also uses smcs and all of those are already implemented
+in the framework so you don't need to worry about those but you can add your own if you want to
+common thing that we need find that we need is one time ddr frequency scaling for example because
+if you do anything that involves memory since memory is used by the whole platform usually
+it needs to go through the highest privilege level to allow that and it's also pretty simple
+they essentially have a macro that you can use to define a handler for a given range of smc
+function ids there's actually this whole big specification from arm that tells you which
+smc function id ranges are allowed to be used by whom usually the one you want to use is called
+the sip range i always forget what it stands for but it's essentially the soc vendor range so if
+you're implementing an soc port that's usually the one you want to use and last but not least
+we have some fun core boot support in there now um one of the problems if with integrating
+core wood is that there's not yet a great way to pass parameters in a generic way from core boot
+into trusted firmware this is something that i think the trusted firmware team is interested in
+making better in the future but right now all that they have is uh essentially you can have one
+pointer of platform specific information and then the platform has to figure out how to deal with
+that so when you the first piece of platform code that's called when you are in trusted firmware is
+usually the function over there which gets that one pointer and then you have to figure out what
+to do with that usually we find that we have to pass a bunch of things from core boot into trusted
+firmware so what we do is we build a sort of primitive linked list with that and then parse it
+when like at the very first thing in trusted firmware um and one of the things you should
+passes the core boot table base address because then you can use this core boot table setup
+function which we have in trusted firmware which gives you all the core boot the generic core boot
+support that we implemented which is right now mostly console support so for example after that
+you have access to the console the uart information over there so you don't have to hard code the uart
+base address anymore you can use the one from core boot and more importantly you essentially
+take over coreboots configuration with that so if you disable the uart and coreboot kconfig then
+it would just not pass that and then trusted firmware will also not use it which is nicer than
+having to disable stuff in every uh every different repository your firmware is made of
+um the other nice thing you get with this automatically is cbmem console support so as
+soon as you like if you have a cbmem console in coreboot then information about that is passed
+in the coreboot table and then trusted firmware automatically register console driver for that
+and then once you boot into user land, you can dump the CBMIM console and see all the
+trusted firmware logs right after the core boot logs. I think this is pretty much all
+I want to talk about about the basic trusted firmware architecture. The one thing I want
+to leave you with is a little anecdote about some of the practical problems we had when implementing
+one of these socs and trusted firmware this is about the rock chip 3399 and um well we essentially
+had some trouble fitting everything there um this story starts very simple with bringing up the chip
+and trying to get suspend resume support working so of course the whole system suspend resume also
+needs to go through the secure monitor because it turns off the whole system so the highest
+privileged never needs to know about it and um you usually turn out like the ddr controller usually
+uses a state during that, so you have to reinitialize it somehow when you come back up.
+And, of course, the code for that can't be in DRAM. So thankfully, we are an ARM SOC. We
+usually have a bunch of SRAMs, so we can put it in there. And we have quite a lot of SRAM
+on this platform, so that's pretty easy to fit. Then we had some other issues about
+we want to do some DDR frequency scaling at runtime. Depending on the SOC, this is sometimes
+pretty easy and sometimes a real chore on this one it was thankfully not that hard because we
+have this little separate microcontroller in the soc like a cortex m0 essentially on the side of
+the normal cpus which had the ability to just stop the cpus in place retrain ddr to a different
+frequency and then kick them off again the main cpus never really knew what did them so this was
+pretty easy to implement but we still needed uh to put some code in like we needed to host that
+code for this M0 in SRAM, of course, because DDR is inaccessible while we're changing frequencies.
+And we had some more fun with trying to work around hardware bugs. So this is a particular
+thing where when it goes into system suspend and it gets a wake interrupt at just the right time,
+like just after you turned off the main CPU, then sometimes it wouldn't wake up again.
+So to work around that, you essentially needed something to sit around and wait until after all
+All the CPUs have been turned off and checked
+for this condition and then cleared.
+So here comes our M0 to the rescue again,
+and we had to implement some code for that.
+All of this still fit pretty nicely into SRAM.
+But then we had a great idea on how to save some more power.
+This is where I wanted to be, which is essentially
+there was one more power rail we could turn off,
+which powered most of the chip.
+And turning it off would have saved us really a bunch of power.
+Unfortunately, it also powered the SRAM.
+So, at that point, we sort of have a problem,
+because we can turn the system off,
+but when we turn it back on,
+we don't have anything to resume from.
+So, the one good thing we had was
+we have this little amount of PMU SRAM,
+which is sort of a separate amount of SRAM
+that's implemented, that's powered by a different power rail,
+and would stay alive even if we turn this off.
+But now we have to start fitting all of this stuff in there,
+which is kind of awful.
+The DDR in it stuff, so it kind of fits.
+one of the problems that we also have here is that the entry point of the cpu when it comes
+back from resume you can essentially only give the soc the top 60 bits so it has to be 64k aligned
+thankfully the pm usrm is 64k aligned but it needs to sit at the very top for that
+and the m0 code also needs to be 4k aligned because that's how the m0 works so
+first of all putting the whole m0 code that we have right now in there doesn't fit at all there's
+no way. Our idea was rather than having one M0 image and giving it an argument of which
+of the two functions it's supposed to do, we could split it up and have two M0 images
+and then just always give the M0 base address for the one we want to use when we kick it
+off. This sort of works, but if you can see between
+these two, it overlaps part of the DDR and its stuff, so it doesn't quite fit, and it
+needs to be in the middle there because it needs to be 4K aligned, so this also didn't
+quite work. But then we realized the DDR on it has to start at 64k. But after that, it's
+really just normal code. So we can really sort of rip it apart and sandwich it carefully
+around the M0 code. And come on. With a lot of, you know, juggling bits and counting instructions,
+we managed to get this all in 8k. You have one problem left if you do all this, which
+which is that since you lose SRAM in S3,
+of course, you lose that DDR frequency scanning stuff,
+so it would be not that great
+if DDR frequency scanning worked after you boot it,
+but then once you suspend resume once,
+it doesn't work anymore.
+So the ugly but obvious solution is to cache it in DRAM.
+I think this thing is dying there.
+And then just copy it back every time we resume, essentially.
+So if you want to look how this madness
+looks in the link to script, I've got it over here.
+Can we switch the slides manually?
+Thanks.
+So the ink bin stuff is essentially the M0 code.
+So you see it needs to be 64K aligned.
+And then even though the other stuff is the same program,
+if we put the data section beyond that,
+it just happens to magically work out.
+And we're just hoping that we never
+have a compiler change or anything
+that messes all of this up again,
+because it's going to be the most awful thing.
+If you want to see some details about how
+you do this sort of thing where you
+build the binary for a completely different chip
+inside the same software as the main,
+inside your main software package,
+and link it all together, it's somehow done like this.
+First of all, you essentially first
+build that M0 code completely separate into a strip binary.
+And then you would define a makefile rule
+for the main software, where that binary
+is another dependency for one of the C files.
+And you also pass the name of that binary
+in as a preprocessor macro.
+And then you can use this weird assembly instruction
+called inkbin, which essentially just tells the assembler
+to, at this point, include a whole other file completely
+and then continue assembling.
+And then you put a label around of it,
+and then you can access it from C code
+and tell the M0-based address, which is to put the address
+in there and then sort of work out.
+And this is the M0 code we run on suspend in the end.
+As you can see, it's really simple and really stupid.
+There's essentially this suspend state,
+which keeps counting upwards as you go through the suspend
+and then again as you go through the resume later.
+As you can see, we had some other issues we also
+had to work around in the end.
+Like as you keep testing more and more on the platform,
+you keep finding more things.
+This is actually where the system is suspended in here.
+So if you take one of these Chromebooks today
+and you close the lid, then even though it's supposed
+to save power, the whole time where the lid is closed,
+you have this little codex M0 saying in a tight loop,
+am I already resumed?
+Am I already resumed?
+Am I already resumed?
+But it turns out that M0s don't eat a lot of power.
+And if you do that on a 32 kilohertz clock,
+it's actually not as crazy as it sounds.
+You just shouldn't know how the sausage is made in that case.
+Yeah, that's all I have.
+So thanks for listening.
+Anyone have any questions?
+All right, thanks so far.
+Questions?
+Why does the DDR3 controller need to be re-initialized after S3 resume?
+Why, for instance, can the hardware put that in self-refresh and that boot, it works basically?
+Right, so this is not the DDR itself, right, so the DDR chip on the board is put into self-refresh,
+but the DDR controller on the SOC needs to know how to talk to the DDR, and that part isn't
+maintained mostly to save power, so we shut off most parts of the SOC when we go into S3 and that's
+That's one of the parts we shut off.
+So after the boot, you need something
+to tell the DDR controller how the DDR chip,
+like how many rows, banks, and columns, and so on,
+you have, and to tell it to take the DDR out
+of self-refresh, and all that kind of code
+needs to live somewhere.
+And second question.
+Why don't you do the initialization part
+like a normal boot, like in core boots on x86?
+Are you asking why we're not reading it from Flash?
+Yes, why aren't you doing it dynamically
+from code that is in Flash?
+Not necessarily saving that on Flash, but.
+You can do that.
+It sort of depends on the SoC.
+So this SoC in particular, I think,
+was designed to resume from SRAM.
+So I'm not sure if starting the boot
+ROM again from Flash would even be possible.
+The other reason you might not want that
+is it sort of depends on how your system is designed.
+In our case, this is a Chromebook.
+So Chromebooks are always designed in a way
+to boot from a read-only partition
+and then do some crypto magic before we jump into the partition
+we can actually update on the flash.
+And we found out in the past that tying the resume path
+to this read-only flash is a very bad idea,
+because that means that if you ever have a problem in your resume
+path, in your early resume path, you can't really fix it.
+So resuming from SOM is very nice,
+because then you can always update it.
+And you're not bound to the stuff you have put on Flash, essentially.
+More questions?
+Sorry.
+Going back to one of your earlier slides,
+you've replaced the early stages of trusted firmware with co-boot code.
+i'm not a trusted firmware architect or expert but i'm sure it would alarm those who are
+because the the whole route of trust derives from the early stages of the trusted firmware
+right i mean so it always depends on what you want to do with the system right so
+trusted firmware has many uh many things it does and many use cases um they do have a system of
+trusted boot where every stage verifies the next but of course you don't have to use that
+um in this case the goal was essentially to get core boot working on arm64 and what we needed was
+a secure monitor so we just took the secure monitor that existed and didn't really care
+about the other things um if you want trusted boot core boot has its own way of trusted boot
+which is derived from the way that chrome os initially did it which is called verified boot
+reboot and um the trusted the b3 one in this case is part of that so the way the core would work uh
+way works is you you boot from a read-only partition of the flash you verify the read-write
+partition of the flash and then you boot from there and trusted firmware is just one of the
+different components that are stored in this read-write partition so we have our own trusted
+boot mechanism essentially and we're just using a component of trusted firmware in there thank you
+So, if you had, like, the ability to tell the SOC guys here how to redesign their SRAM,
+would you just say, don't turn off the SRAM, or did you like having the two partitions
+for power reasons, or what's your feeling on that?
+I'm not a power guy, so I don't know how much SRAM itself actually takes.
+I think in this case, there was sort of a design problem
+of just tying everything to this one big power rail.
+So if you turn that off,
+it was really other components that we wanted to turn off,
+but the SRAM just happened to also hang on there.
+So it would probably be better to put SRAM
+on a separate rail or put it on an always-on rail,
+essentially, that's supposed to stay alive.
+But the problem is what we did on this chip
+is essentially something that the chip
+wasn't really designed for.
+We just figured out afterwards,
+hey, this is something we could, in theory, turn off.
+maybe if we just do it right um i also think the idea of having split sram is not that bad so
+8k is unfortunately not that much so having something like 16k 32k would be much easier
+to work with and then then maybe that's good enough and you can turn off the main sram
+what kind of information are you passing from corvo to the firmware um so the car
+core root table base address for one the other things that we usually pass is
+some information specific to the board so we had this design philosophy when doing this to try to
+not pull board specific information into trusted firmware because most of the stuff trusted firmware
+deals with is only specific to the soc so how to turn off cpus on and off it doesn't really care
+about the rest of the components on the board and if we had a notion of the board in trusted
+firmware essentially would make the whole thing way more complicated because every board that we
+implement with that soc would have its own code in there and it would just become more complicated
+so what we decided to do is in those few cases where trusted firmware needs to know something
+about the board this is for example when it wants to reboot it like it needs a way to reboot and
+on some systems we reboot to through an external gpio on others we use some soc internal mechanism
+so in that case we would have a parameter that tells trusted firmware which
+reboot mechanism to use and that way we can tell it bought specific information and don't need to
+hard code bought specific code in there okay i'm just telling you because uh now in the firmware
+we support uh dynamic configuration which basically consists on passing a device tree between images
+so maybe this is something that you could use in the future right um yeah i've heard about that i
+wasn't sure that if it's finished yet or not but it's definitely something we look into i'm not
+sure how it would work in your case with skipping the first stages of the firmware but yeah i'm
+sure it it could work and we are already using it in some reference code for passing arguments
+between images to for example share memory between different images so yeah i'm pretty
+sure it could work as to pass addresses for a peripheral or something so is it an interface
+between b02 and b031 or right now as far as i know we are using it between bl1 and bl2 but
+there's no reason why we couldn't use it in bl3 one right so i think that is the extension
+essentially that we are still waiting on before we can skip to a better mechanism
+hi what's the boot time penalty now that you have to use um on trusted firmware um it's usually not
+that bad because uh it doesn't do a lot during boot it just sets up so um trusted firmware is
+It's not supposed to do any SOC initialization.
+We have all of that in core boot.
+So really all it does on boot is setting up its own stuff
+and then passing on to the next part.
+And it's really only meant to do these runtime services.
+So it's usually below 15 milliseconds
+to go through the processor for my part.
+Yep, just out of curiosity, I think
+on that Rackchip platform, there was
+a dedicated microcontroller for the DRAM suspend stuff.
+The DCF, can you tell us the story about that
+and why it was replaced by the M0?
+Yeah, I don't think I can remember all the details.
+The DCF was this thing that they implemented specifically
+to do the frequency switching.
+And it was like their own little microcontroller
+with only a couple of instructions
+and really crazy thing, essentially.
+We didn't have an assembler for that.
+We had to ask them for code for it.
+And I don't really remember the details.
+But at some point, essentially, we
+found something that we needed to do
+during the frequency scaling that we couldn't
+with the DCF.
+And then we thought, why are we doing this
+if we just have a full ARM core there that
+can do everything, and it's fully general purpose.
+So we switched to using that.
+Oh, is there room for another two questions, maybe?
+In terms of whether to use the, like, you know, you pulled the one part out, and then
+the question was, you know, what about those earlier parts?
+Do you know their policy on, you know, booting versus bricking?
+In other words, the core boot thing is it'll always come up, and it'll just tell you things
+didn't go well, but do you know what the ARM stuff does?
+In that case, I'm just curious.
+I'm not really familiar, honestly, with those other two parts.
+Okay.
+But the thing is that I think it's a very thin framework,
+so a lot of the stuff is left to the platform,
+and the platform is supposed to figure those kinds of things out,
+like what happens if it fails or something.
+I think the actual generic framework parts for BL1 and BL2
+are very lightweight and don't really do that much.
+All right, if there are no more questions,
+then thanks again very much, Julius.

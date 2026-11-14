@@ -1,0 +1,368 @@
+WEBVTT
+
+00:00.000 --> 00:18.000
+Welcome to this presentation. Hi, I'm Thomas and today I will speak about
+
+00:18.000 --> 00:26.000
+Secure Boot in Embedded Linux systems. But first, I am going to introduce myself.
+
+00:26.000 --> 00:34.000
+I am an embedded Linux engineer and a member of the bootlim team since few months.
+
+00:34.000 --> 00:41.000
+Moreover, I am also a contributor to open source projects.
+
+00:41.000 --> 00:46.000
+I am living in France, close to Toulouse.
+
+00:46.000 --> 00:50.000
+This presentation is divided in two parts.
+
+00:50.000 --> 00:59.000
+The first part introduces Secure Boot as well as some notion about signature process.
+
+00:59.000 --> 01:07.000
+I will also speak about the impact that I can bring.
+
+01:07.000 --> 01:17.000
+The second part is an example of Secure Boot implementation on IMX 8 platform
+
+01:17.000 --> 01:26.000
+which has the particularity of not requiring an initial MFS.
+
+01:29.000 --> 01:42.000
+Thickerboot is a feature to verify the parts used to boot a system, including hardware and software,
+
+01:42.000 --> 01:58.000
+to protect the system against hijacking, to protect users against tampering applications, hardware fault and malware execution.
+
+01:58.000 --> 02:08.000
+Finally, that allows the vendor to meet legal and commercial goals.
+
+02:08.000 --> 02:19.840
+Another name for Seeker Boot is Chain of Trust because the main functionality of this feature
+
+02:19.840 --> 02:32.000
+is Hat Boot. Each stage is able to verify the integrity of the next stage before its execution.
+
+02:32.000 --> 02:49.240
+For it, each stage contains a signature created a build that represents its integrity, as
+
+02:49.240 --> 02:59.440
+well as the public key of the next stage in order to perform the integrity checking.
+
+02:59.440 --> 03:13.440
+Here, I am introducing the notion of asymmetric signature used in the chain of trust.
+
+03:13.440 --> 03:22.920
+Asymmetric signature is a couple of keys, the public keys that will be shared with recipients
+
+03:22.920 --> 03:33.960
+to perform the data integrity checking and the private key that must be secret is used
+
+03:33.960 --> 03:41.240
+by the issuer to send shared data.
+
+03:41.240 --> 03:50.960
+The data is hashed then signed to be shared with recipients in addition to the public
+
+03:50.960 --> 04:02.400
+key. Then recipients are able to verify that the digest of the received data is correct.
+
+04:05.600 --> 04:11.680
+Enable secure boot also involves to be able
+
+04:11.680 --> 04:25.600
+to manage keys, especially to be able to protect private keys, to lock devices during the manufacturing,
+
+04:26.880 --> 04:32.560
+to boot upgrade images including signature and public keys,
+
+04:32.560 --> 04:43.660
+and to accept a raise of the boot time duration because it had some crypto
+
+04:43.660 --> 04:54.340
+operation to perform the checking. Here I will speak about an example of secure
+
+04:54.340 --> 05:10.140
+boot implementation done for a target based on an EMX8. So secure boot can be implemented
+
+05:10.140 --> 05:21.140
+in several ways, depending on requirements. In this example, there are four main parts
+
+05:21.140 --> 05:30.740
+according to the boot process of the target. To check the bootloader integrity there is only one
+
+05:30.740 --> 05:40.820
+choice that depends on the silicon vendor. Here the feature is provided by NXP and called
+
+05:40.820 --> 05:53.540
+advanced height assurance boot. The kernel checking, we show to use an hubboot
+
+05:53.540 --> 06:05.180
+feature named VerifiedBoot. And for the rootFS part, we choose to use DMVerity
+
+06:05.180 --> 06:10.940
+because it is simple and it is able to use hardware offloading.
+
+06:14.700 --> 06:22.620
+The advanced high high surveillance boot is more complex than the secure boot feature
+
+06:22.620 --> 06:33.020
+implemented for previous IMX platform. As for the high high surveillance boot
+
+06:33.020 --> 06:42.440
+of previous EMX platform. It fuses asymmetric keys and one-time program app fuses to store
+
+06:42.440 --> 06:55.520
+hatches of public keys. Bootloader stages our packages into a signed image through code signing
+
+06:55.520 --> 07:07.160
+tool. And the secure statue can be checked from Herboot with the hub statue command.
+
+07:07.160 --> 07:23.000
+But its boot flow is very different because it used a security controller and it's also
+
+07:23.000 --> 07:37.760
+able to start a binary for a SP processor. Then it uses two containers.
+
+07:40.640 --> 07:50.900
+The images contain some binaries. It is divided in two main parts. The first
+
+07:50.900 --> 08:02.900
+The first contains the binaries of security controller firmware and its signature using NXP keys.
+
+08:02.900 --> 08:19.900
+The second contains the SPL, the harm tested firmware, hubboot, and the associated signature using hohohem keys.
+
+08:19.900 --> 08:36.900
+At boot, the system controller unit loads the signature controller firmware, then others bootcoder stage.
+
+08:36.900 --> 08:44.900
+And at each step, the security controller validates the binary.
+
+08:44.900 --> 09:04.900
+When all binaries have been loaded and verified, they are executed each at their turn.
+
+09:05.300 --> 09:14.180
+The first step is to generate OM keys. Keys are built with a script using a file
+
+09:14.820 --> 09:22.580
+that contains trace, passphrase, and some additional parameters to configure the kind,
+
+09:22.580 --> 09:25.860
+the size, the key, and the validity period.
+
+09:25.860 --> 09:42.780
+Here we choose to use elliptic algorithm because there is a limitation in silicon B0 of IMXX8.
+
+09:42.780 --> 09:53.580
+In addition, it is necessary to generate the hash table as well as here checksum that should
+
+09:53.580 --> 10:03.500
+be stored in the one-time programmer fuses. So there is another script for this purpose.
+
+10:05.740 --> 10:14.940
+It is also possible to use the hodi command to check the hash table in order to be sure
+
+10:14.940 --> 10:18.060
+that the values burnt will be correct.
+
+10:21.900 --> 10:31.660
+Once we have the keys, the stables, the bootloader image, then it is now necessary to write a little
+
+10:33.420 --> 10:43.340
+configuration file for coding and tools in order to build the same image.
+
+10:43.340 --> 10:57.140
+Here you can see an example. It contains patches to the Hatch table, to the public key, the
+
+10:57.140 --> 11:08.540
+bootloader binary that should be assigned. But also the offset of the header signature
+
+11:08.540 --> 11:17.720
+block that's depending on the target and that can be found from the datasheet.
+
+11:17.720 --> 11:34.100
+The sign and bootloader will not be verified until the fuses are burned.
+
+11:34.100 --> 11:51.100
+So, here, it is an example of commands performed from Huboot to burn and to read them.
+
+11:51.100 --> 12:01.100
+Before and after burning fuses, it is also possible from Huboot to check the secure boot status.
+
+12:01.100 --> 12:17.100
+In case of issue, the SecureController returns an event that can be print with the HAB Statute command.
+
+12:19.100 --> 12:25.100
+The event code returned corresponds to a kind of issue.
+
+12:25.100 --> 12:32.100
+In addition, events are erased by container.
+
+12:32.100 --> 12:43.100
+Finally, if no event occurs, then the targets can be locked
+
+12:43.100 --> 12:56.100
+Thanks to the command HAB clause that will burn and additional fuse to prevent unsigned boot loader execution.
+
+12:56.100 --> 13:01.100
+Let's move to the kernel signature.
+
+13:01.100 --> 13:07.100
+Here we choose to use a boot feature called verified boot.
+
+13:07.100 --> 13:12.100
+This feature uses fitimage.
+
+13:12.100 --> 13:23.100
+FitImage is a container and which content is described by an image source file.
+
+13:23.100 --> 13:36.100
+Basically, an image source file is a list of nodes representing each element of the FitImage.
+
+13:36.100 --> 13:48.100
+It also uses asymmetric keys with which public key will be stored in a boot binary and the
+
+13:48.100 --> 13:55.100
+private key is used to sign the kernel image had built.
+
+13:55.100 --> 14:05.100
+The kernel image is built and signed in three steps through the DTC and the make image command.
+
+14:06.100 --> 14:16.100
+The build is ensigned. The first step is to build the ensigned kernel image.
+
+14:16.100 --> 14:21.100
+The second step is to build the signed kernel image.
+
+14:21.100 --> 14:29.100
+And finally, the last step is to inject the public key in HuBoot.
+
+14:29.100 --> 14:40.220
+FitImage can contain some images and configurations.
+
+14:40.220 --> 14:50.940
+Images can be a kernel image, a device tree binary, a device tree overlay, a boot script,
+
+14:50.940 --> 14:54.940
+and so on.
+
+14:54.940 --> 15:07.740
+configuration is a combination of these images. From this example, the fit image contains only one
+
+15:07.740 --> 15:21.980
+kernel image, only one kernel device tribunary and only one reboot script, as well as only one
+
+15:21.980 --> 15:28.540
+configuration using a combination of all the provided images.
+
+15:31.660 --> 15:38.860
+Moreover, images and configuration from the fit image are asked.
+
+15:44.140 --> 15:46.060
+There is two ways to send a fit image.
+
+15:46.060 --> 15:57.340
+either send individually each image, either send each available configuration.
+
+15:59.740 --> 16:07.260
+Then a configuration allows to prevent mix and max attack.
+
+16:07.260 --> 16:24.420
+This example uses a second way, then a signature node has been added in the configuration node.
+
+16:24.420 --> 16:39.420
+node. If we have chosen to sign individually each image, then a signature node would have
+
+16:39.420 --> 16:52.340
+been added in each node describing an image. The following commands allow to create a key
+
+16:52.340 --> 16:59.140
+as well as a public key and a certificate that will be used to sign the kernel.
+
+17:02.020 --> 17:10.500
+Now, this is an example of command that will be used to build and sign the kernel
+
+17:10.500 --> 17:16.980
+and allow to inject the public key into the root binary.
+
+17:16.980 --> 17:25.980
+Now, how it meant to care the root interface and take a deep checking.
+
+17:25.980 --> 17:31.980
+Here, there are some available solutions.
+
+17:31.980 --> 17:37.980
+And we choose to use DMVivity.
+
+17:37.980 --> 17:51.180
+Basically, Jam Verity is a virtual file system using a hash tree where each leaf is a hash
+
+17:51.180 --> 18:02.860
+of a block of the file system, then Jam Verity can be only used with block devices like squash
+
+18:02.860 --> 18:17.300
+and so on. In addition, it can be only used for read-only devices. By default, the hash
+
+18:17.300 --> 18:30.860
+tree is stored into a separate block device called hashDevice, but it is also possible
+
+18:30.860 --> 18:43.340
+to concatenate it with the data device. In addition, it is also possible to sign the route fsh.
+
+18:50.060 --> 18:59.420
+Following a few commands to create a DMVRT device, then to check it and to open it.
+
+19:00.860 --> 19:05.860
+As you can see, this is a very hazy.
+
+19:05.860 --> 19:10.860
+Here the hash tree is append at the end of the data image.
+
+19:10.860 --> 19:21.860
+Then we use an additional parameter, hash offset, to specify the end of the data.
+
+19:21.860 --> 19:32.860
+In addition, the integrity can be checked with you knowing the root hash, but it is necessary to want it.
+
+19:36.860 --> 19:45.860
+It is not the case in this example, but it is also possible to sign the root afese hash
+
+19:45.860 --> 19:53.860
+with the key that will be stored in the kernel keyring.
+
+19:53.860 --> 20:04.860
+Finally, one of the requirements of the project was
+
+20:04.860 --> 20:11.860
+we don't need to use a in-itram FS to prepare the real-root FS device.
+
+20:11.860 --> 20:21.860
+To do that, we use dm init that allows from the kernel command line to early mount
+
+20:22.740 --> 20:27.620
+dm-verity device that contains the rootfs file system.
+
+20:27.620 --> 20:40.580
+and in addition we chose to use a boot script stored in the fit image and loaded
+
+20:40.580 --> 20:48.820
+by uboot between the command that load the kernel and the one that boot it.
+
+20:48.820 --> 21:03.820
+As this boot script is a part of the fit image, then it is also assigned.
+
+21:03.820 --> 21:13.180
+script is useful to store parameters that are required by the adminit to early mount the
+
+21:13.180 --> 21:28.460
+DUMVAS MIPER like the root fsh, the block size, so on. Thank you for attending this presentation.
+
+21:29.020 --> 21:30.460
+I hope you like it.
+
+21:32.460 --> 21:42.460
+Do you have any questions?
+

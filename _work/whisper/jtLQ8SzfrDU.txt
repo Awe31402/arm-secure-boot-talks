@@ -1,0 +1,739 @@
+Good morning, everybody.
+Yeah, good morning.
+So thank you for attending our presentation.
+So I'm Milene, and with my colleague, Quentin,
+we will present you the secure boot.
+A short presentation.
+So we are embedded Linux engineer at Bootlin,
+formerly Free Electrons,
+but due to some trademark dispute,
+we changed our company name,
+but that's it. We just changed the company name. We are still the same engineers, the same team,
+and still we have a strong open source focus. For our customer, we implemented a full chain
+of trust on a custom IMX6 board, and we wanted to share it in case it can help other people. So
+So this is what we are going to talk in this presentation.
+Short disclaimer, we are definitely not a security expert.
+And we are presenting you one way to verify both
+on a board based on a specific family of SOCs,
+but some parts can be applied to other boards.
+And a container will tell you when there is some specificity on IAMX SOC.
+So first, in introduction, who wants to verify the boot sequence and why?
+So there is product vendors.
+They want to make sure that the devices are used in the same way they should be and not
+for a different purpose. Also not for running inappropriate software. So for
+example, a company may have some software limitation and would need license for
+customer to have a fully featured software. So it can be used with the
+chain of trust to be sure that the user
+are using the fully-featured software with a license.
+And of course, to protect customers
+without having some malwares on your system.
+There is also end users.
+They may want to make sure that the system has not
+been tampered with.
+So basically, it's to make sure that the binaries you are
+trying to load, boot, or execute by a person that you trust.
+So how does it work?
+Everything is based on digital signature verification, which
+is different from encryption.
+So Quentin will show you in the next slides
+the difference between signature verification and encryption.
+So in fact, the first element in the boot process
+authenticate the second one.
+The second one will authenticate the third one,
+et cetera, et cetera.
+And that's why it's called a chain of trust,
+because you have this chain mechanism.
+And if any element is authenticated,
+but not sufficiently locked down, so for example,
+if you let console access in bootloader
+or with access in user space, the device is not verified anymore.
+And so you will break the chain of trust.
+So this is how the chain of trust looks like.
+So you have the ROM code.
+It has a public key.
+It uses this public key to perform a signature verification
+on the bootloader.
+Then the root loader have a public key
+and it will perform signature verification on the kernel.
+And the kernel will have a digest
+to perform a hash verification on the root file system.
+So every component is verified using
+its digital signature and a public key.
+The root file system integrity is verified
+using a hash mechanism.
+We'll see later in next slides how it works.
+And our experience, so as I said before,
+we implemented it on a custom IAMX6 board.
+Content work on the chain of trust
+from room code to the kernel,
+and I worked on the root file system parts.
+Okay, so now a little bit of, well,
+explanation on what are the differences between encryption
+and signature.
+So as Milan told you, the verified boot sequence,
+or a secure boot, as it's called,
+is based on signature and not encryption.
+These are different things, but they are compatible.
+You can actually have encrypted data that is also signed.
+So here is the monetary Alice and Bob example about encryption.
+So the point of encryption is to be
+able to send some data that is unreadable for anyone else
+that isn't supposed to receive, for example, the mail.
+So here, we want to be sure that the mail Alice is sending
+to Bob when it can only be read by Bob.
+So you have as input the data and the public key of Bob,
+which is the input to a math function.
+So we don't care what is it, but it's math function.
+And then it outputs the encrypted data.
+You send it over the internet.
+Nobody can read it except Bob.
+Bob receives the encrypted data, and it
+put it into a math function along with his private key,
+which is the only one to own.
+Of course, it's his private key.
+into my function, and then you have the decrypted data.
+And you're sure Bob is the only one
+who is able to read this data.
+The next one is actually the signature verification.
+So here is a different purpose.
+Here, you want to be sure that Alice,
+so the one who sent the mail to Bob is actually Alice
+and not somebody else.
+The data is unencrypted, so everybody can read it.
+So basically, Alice will take her private key and her data,
+put it into a math function.
+It will output assigned data.
+It's readable by anyone.
+It's a very important concept.
+Everybody can read it.
+And go through the internet, and Bob receives it.
+He can read it.
+And to attest that Alice is the one who sent the mail,
+Well, it will use the public key of Alice
+to actually verify the signature.
+Goes into a math function again, a different one,
+and, well, the data is verified or not.
+So we can attest it's actually Alice who has sent the mail.
+So that's it for the differences between encryption
+and signature.
+So now you have to know that, well, the secure boot sequence,
+it has consequences, of course.
+It's costly in terms of setting up
+the whole architecture for managing your keys,
+creating your keys, signing all your binaries, et cetera.
+So of course, it's a bit longer to handle all those cases.
+You have some added complexity to your workflow
+for developers, because once your platform is locked down
+and can only boot verified binaries,
+you have to sign those binaries to test them.
+And of course, the boot time is, well,
+increased because, well, you have a bunch of authentication
+along the way to the prompt boot, to the Linux prompt, sorry.
+And well, last but not least, you really
+have to be careful with your private keys
+because if one gets stolen or leaked,
+then, well, you're pretty much screwed up
+because, well, anyone can sign your binaries
+and then it's not secure anymore.
+So that was it for the introduction.
+And now we can go to the first element of the chain
+of trust, the RAM card, or as it's called, the root of trust.
+So this is really the main point of your chain of trust.
+It's very specific to the SOC.
+So it depends on your vendors.
+Not all SOCs support secure booting.
+And well, as I told you before, you
+need the public key to be able to verify the signature
+of binary.
+So you need a way to securely store it somewhere
+that the ROM code can look at.
+And well, that depends on every vendor implementation.
+And it's definitely embedded in the ROM code,
+so you don't have access to it.
+You have to trace your vendor.
+And there are definitely different vendors that
+implement some kind of secure boot.
+So these are the main one, I would say.
+Xilinx, Tegra, NXP, et cetera, and missing some shortly.
+So now you have to have a way to store your public keys.
+So this is very the specific way for NXP
+to handle the public keys.
+So basically, it's a non-volatile memory, of course,
+because you need it to be up when the bootstrum starts.
+NXP uses OTP, so one-time programmable fuses.
+So basically a fuse, eFuse also, is, well, we could illustrate it with a wire.
+And when the current path through the wire, then it's a binary one.
+And you apply a very, very, very high current to it, and it disrupts the wire.
+And then you're going to get a binary zero.
+That's how it works.
+And it's irreversible.
+So once you have blown a fuse, then, well,
+never gets wired again.
+Otifix uses are really, really expensive
+in terms of size occupied on your PCB.
+And whereas the public is already at least 1 kilobyte,
+and sometimes up to 4 kilobytes,
+so maybe a good idea would be to actually store
+the hash of this key, which is way, way smaller,
+into the OTP and have the public key in another place.
+For example, in the binary, you're going to load.
+That way, you just have to check the hash of the public key
+that is embedded somewhere else.
+And if it matches, then you're good to go.
+Well, now we have plenty of space,
+so why not using maybe four keys so that we can actually
+revoke some if some get stolen or, well, lost.
+So that way, you can just revoke one key and just say,
+well, this one, we don't want to use it anymore.
+We can use any of the three remaining ones.
+So that's it.
+For the next slide, yeah, thank you.
+The ROM code, so basically the process
+is to load the bootloader in a secure space
+to avoid physical attacks.
+So the point is here, if you load your bootloader
+and authenticate it from a space that is unsecure,
+the problem is, once you have to actually boot,
+execute the binary, well, this is a time frame
+where an attacker can actually change the binary
+and make it like it was authenticated
+while it was definitely not.
+Then it loads the embedded public key, which is in the bootloader binary, for example.
+It checks the hash of the public key, which is embedded in the binary of the bootloader
+against the one which is in the hash table, made of different OTPs, fuses.
+You check the public key, then you execute the bootloader binary if it matches.
+And on NXP for IMX, et cetera, SOC family, it's called HAB for High Insurance Boot.
+So how do you set it up for your board?
+It's, again, very specific to your vendor.
+Here, you use code signing tools, so CST, for creating the keys, so the private keys
+and certificates.
+You flush the fuses using working and verified uBoot,
+again, using NXP-specific code, which is Fuse Flush or something
+like that, Fuse Prog, I think, with the Fuse table written
+by CST.
+You sign the bootloader using, again, CST,
+and you check the status of the bootloader,
+H-I-B underscore status, from the bootloader,
+so from uBoot, with a signed uBoot, which is also NXP-specific.
+And if you have reached this step successfully,
+then you can decide to lock down your bootloader
+to actually restrict the loading of the bootloader to one
+which is authenticated, so verified.
+And well, if you just screwed one of the previous item
+and you blow the locking fuse, then you screwed up.
+So be sure you are doing the right thing.
+So this is the two examples of the results of HAB status
+from your boot.
+The first example, you have the first line,
+which is secure boot disabled.
+This is because I haven't blown, actually, the locking fuse.
+When it's blown, then it's secure boot enabled.
+If you have any HAB event following this line,
+it means that your bootloader hasn't been authenticated.
+So it failed.
+In the next example, you can see no HAB events found.
+well, you successfully authenticated your bootloader.
+So that was it for the ROM code part,
+to authenticate the bootloader.
+But now you have to authenticate your kernel.
+So trust no one.
+Believe me, trust no one.
+So there is no point of having a secure bootloader
+if it's not authenticated by the ROM code.
+So by that, I mean if you can actually
+switch the bootloader with something that isn't
+authenticated, then there is no point actually
+taking the time to authenticate it.
+Because with a not-authenticated bootloader,
+you can boot whatever you want after that.
+The bootloader has to be sufficiently locked down.
+So it depends on the bootloader binary you're booting.
+And there is a very specific use case,
+Well, example for U-boot in mainline.
+U-boot in mainline has environment variable called
+verify.
+If it's set to no, U-boot stops to verify
+the signature of images.
+And that's, well, not what we want.
+So we definitely do not want any user
+to access the console to set the environment variable from there.
+So you have to disable the console at all.
+Well, very important point.
+You should, under no circumstances,
+trust anything that isn't in an authenticated binary.
+So that means that, well, environments
+are often on other mediums.
+But there, you can trust them, because you cannot authenticate
+them.
+So you should use the one which is definitely
+in the you would binary that was authenticated by the ROM
+code.
+Well, that doesn't really work with update software
+from Linux kernel, because they often interact
+with the uBoot environments to say,
+you should boot this image or this image.
+So I have a pending patch for uBoot
+to only load a handful of variables
+that you can control from the uBoot embedded environment
+binary, and it can load from whichever medium
+you want to load the environment from.
+So yeah, that's it.
+So now, how it actually works, you're
+going to use the device through blob, which is basically
+the same as it's in the kernel.
+It's used to actually embed the public key
+within the uBoot binary.
+And this public key will be used to check the signature
+of the kernel images.
+And because it's appended to the UBoot binary,
+it's also authenticated by the ROM card.
+So you can actually trust the public key, which
+is within the UBoot binary.
+So now, to be a bit more practical and simple to use,
+to check the signature of the different images,
+you have two choices.
+Either you load one image, and then its signature,
+and then the second image, and its signature, et cetera,
+or you use the fit image, which is basically a container
+storing a lot of different binaries and their hashes.
+And MKImage, so the tool to actually compile the fit image,
+has already built-in support for signing in while doing
+the binaries hash.
+So well, we're on luck.
+So better use this tool.
+So well, now in the process to get to the next chain
+in a chain of trust, you have to create actually
+your keys to verify the kernel to actually sign the bootloader.
+Sorry.
+To sign the kernel and verify it from the bootloader.
+So the first line is to create an RSA 4K key, which
+is called my underscore key.
+This is a private key.
+And then you create a certificate.
+Certificates is really close to a public key.
+So it's really MKMitch requires the use of certificates
+and not public keys.
+Well, it's a choice.
+And it's really, really important that your certificate
+and your private key are named the same.
+Otherwise, MKMitch doesn't work at all.
+So this is an example of a source file for the device
+tree used to embed the public key within the UBoot binary.
+So you have the signature device 3 node.
+If your board already has device 3,
+well, you should be able to use it and just add
+the signature device 3 node.
+Something to note is that key name hint and the suffix
+to key dash dt node has to be the same value or name
+as the one you have given to your key.
+So in the previous slide, it was my underscore key.
+You have to use the same.
+There is also a property, which is called required.
+It's either image or configuration.
+It depends on which level you want to actually
+do your signature verification.
+And you can find the explanation in the documentation here
+in the UBoot project.
+So what's a fit image?
+So let's say it's basically a container.
+So you have a set of images, different one, one, two,
+three, kernel, whatever.
+The same for device trees, you have also
+support for other kind of files like scripts.
+And then you have also configurations.
+So configurations are a way to force the user
+to load binaries together.
+So for example, here you have conf at one, so the red box,
+which force the user to load the first kernel, the third
+device tree, and the first .
+So that's a way to force your user
+to boot a certain configuration.
+It supports different architectures, OSCs, image
+types, and a lot of other things.
+And you can find all of them in the source code
+in command slash image.c.
+So this is really a quick example of a source file
+for FitImage. So we have the images device tree or node with all the different binaries
+where you can find them, where you can load your binaries, which key to use to sign each
+of the binaries. And you have the configurations on the right. And there is an important line
+which is default equals conf at one.
+And this will be important in the next upcoming slides.
+And you can see that the conf at one has kernel
+is equal to kernel at one.
+So it will be using the first kernel
+and the device reads, which is also the first one.
+So there is a little bit of tricks
+to do before compiling your uBoot binary.
+you have to actually compile your device which contains
+the embedded public key outside of your UBoot source
+repository.
+And this is because we need to use
+MKMet, which is a tool from UBoot,
+to actually embed the public key before we are going
+to build the UBoot binary.
+So you use DTC to do the first compilation
+of the uBoot public key, the DTB.
+Then you compile all the tools from uBoot.
+You run MKImage to actually build the fit image
+and at the same time embed the public key
+within the device tree.
+And then you compile the uBoot binary
+using the external device tree blob, which
+is called uBoot underscore public key.
+These are the, well, the configuration
+you have to put to enable the fit image signature
+verification in U-boot.
+They say config of control is for embedding, actually,
+using, actually, the device support in U-boot.
+And the first two items are NXP-specific.
+So this is actually what it looks like to boot a fit image
+with all the verification steps, et cetera.
+So provided you have a fit image loaded at 0x15, let's say,
+so you do boot m 0x15 pound conf at 1.
+But since the default in the configurations node
+in the source file of your fit image,
+you know that conf at 1 is the default one.
+So you can actually just keep the part after the pound.
+So bootem XORX 15 is fine.
+You can see that it's using conf at 1.
+It's trying to load the kernel at 1.
+It does all of those things and verify the hash integrity,
+which says, well, it's OK.
+So let's get to the next binary in the fit image,
+which is the .
+It checks it, well, it's fine, so let's get started with the kernel.
+But then, someone touched the device and, well, hopefully, it will get it and stops
+the boot.
+And that's what happened in the lower part of this slide.
+It's verifying the hash integrity.
+They say, no, I cannot verify it.
+So well, I'm stopping there, and I'm crashing you, but you shouldn't stop, stop here.
+So I think that was it for the part up to the root file system.
+So now we will present her part on the root file system.
+So it's the final part of the chain of trust.
+To have a verified root file system, we have chosen the following solution.
+You can have other kind of solution, but this is what we choose.
+So first of all, we wanted to have an unalterable file system.
+So we choose to have a read-only file system, so it's impossible to modify it.
+So we use a SquashFS image, which is a type for read-only file system.
+So this part is not really part of the secure board process, but it was important for us
+and for our customer.
+So the authentication of the root file system, so it's really the part of the chain of trust,
+we use DMVarity.
+So DMVarity, it's an infrastructure to check if the root file system is the one we are
+expecting to have.
+So in fact, it's the authentication of the SquashFS image.
+And DMVarity needs some user space application to authenticate the system.
+And so you need to have these tools available.
+So that's why we choose to have init1fs as a first file system.
+And in this init1fs, you will have the application tools to perform the authentication of the
+root file system.
+The init1fs is built in the kernel.
+So thanks to that, it doesn't break the chain of trust because, as Compton told you before,
+the kernel is already in the chain of trust using the fit image.
+So now DMVVT.
+So DM, it stands for device mapper.
+It's an infrastructure in the Linux kernel to create virtual layers on block devices.
+So device mapper Verity, it provides integrity checking of block devices using kernel crypto
+API.
+Then Verity could hash the whole block device and then compare the hash with an expected
+hash, but it's not doing that.
+Otherwise, the boot time will be very, very long.
+So instead of that, it's use cryptographic hash tree.
+And your block device will be split in small block,
+and each block will have its hash.
+And it will create a hash tree until the last hash,
+which is called root hash.
+we will use this root hash in the authentication mechanism.
+So we will see it in the next slides.
+And this block are hashed only on access.
+So instead of having a longer boot time,
+we will just have a smaller, long access on a block device.
+And as I said before, DMVT needs some user space application.
+So CryptSetup package provides different tools,
+such as VeritySetup.
+So we'll see in the next slide.
+VeritySetup is a tool to create the hash tree
+and also to authenticate the device.
+So DMVT in our case, so we have our kernel.
+DemVarity has some configuration in the kernel,
+so you need to enable this configuration
+to have DemVarity.
+And as I said before, we have a NeetromFS,
+and we created a script that will use a Verity Setup tool
+to perform the verification on our block device.
+For our use case, we use UBI block device,
+but it can be other kind of block device.
+If the verification is successful,
+then you can use mount command, for example,
+to have access of your squashfs that you verified.
+And if it's not the case,
+then it will fail to mount the squashfs
+and it will stop the init here.
+So now let's see how to create the hash tree
+that we have seen in previous slide.
+So Verity Setup can create the hash tree on device or images.
+In this example, it's on images, but you
+can do it on device node.
+So we have our SquashFS image.
+We perform Verity Setup format command.
+The resulting image is a hash image,
+and it's containing the hash tree
+that we will use to authenticate the device.
+And it also prints on your screen the root hash.
+And you need to keep it,
+because we will use it to authenticate the device
+to be sure that the SquashFS image
+that we've created the hash tree right now,
+it's the correct one that we want to authenticate.
+So by default, the DemVerity and VeritySetup expect to have a block device with data in
+there and another block device with the hash tree.
+So the command used is VeritySetup format, then the data device, and the hash device.
+But in fact, in our use case, we wanted to have only one device.
+So our block device will have the SquashFS image
+and also it will contain the hash tree.
+For that, we can contain the hash image
+at the end of the SquashFS image
+to have at the end final SquashFS containing also the hash tree.
+To do that, Verity Setup tool
+as an option, hash offset,
+and to say how to locate the hash area
+in the same device or image.
+So here's the example of the command,
+so verity setup format, then we set the offset,
+so where we can find the hash tree
+in the same device or image.
+Currently, in our example,
+because the hash tree is at the end of the SquashFS image,
+the offset is the size of the SquashFS image.
+And then the data device,
+so in our use case, it's the SquashFS image.
+And the final result, so it's the SquashFS image
+and also the hash image.
+So now we have created our hash tree.
+We have the root hash,
+and we will see how to authenticate the device.
+So now we are on our platform.
+We have flashed all the different images,
+and we have our block device
+that contains the SquashFS and the hash image.
+We use Verity Setup create command
+that we need the offset to know where to find the hash tree
+and also the root hash.
+If the hash corresponds to the one
+that is available in the hash tree,
+then you have a mapper device on the SquashFS verified.
+So at the end, you will have a slash dev, slash mapper, slash something.
+And on this device mapper, you can use the standard mount command to then have access
+to your verified SquashFS.
+So the command you use is a very tight setup create, then the name of the device mapper.
+So in our example, it's a root file system.
+It can be another one.
+Again, we use the hash offset option of Verity Setup
+to say where to locate the hash tree in the device block.
+Then there is a data device and the hash device.
+In our use case, it's the same one.
+and finally, the root hash.
+So because we use the same block device
+and it contains both data and hash image,
+we use UBI block zero twice.
+Of course, if you use a default mechanism,
+so if you have, for example, the data on UBI block zero
+and hash three on UBI block one,
+then you don't use hash offset parameters,
+and you will have block zero and block one
+in your command varity setup create.
+Yeah, so here you can see that we have the offset
+and the hash parameters,
+and we need a way to have it available in the kernel.
+So in fact, we use both args,
+And for that, we created a U-boot environment script.
+But this new component can be attacked.
+So to not again break the chain of trust,
+we add it in the fit image.
+So in the fit image, we have the U-boot environment script
+with the hash,
+which has the signature of the hash of the binary.
+Then u-boot checks the signature of this u-boot environment
+script.
+If the signature is matching, then it can source this script.
+And in this script, we have some variables
+to retrieve the offset and the hash.
+And also, of course, it sets the boot hash.
+Thanks to that, we can retrieve it in the kernel.
+So here, it's the final mechanism.
+So as I said before, we have uBoot.
+It checks the signature of the uBoot environment script.
+If it's not the correct one, it will fail to source it.
+If it's the correct one, it will source the script.
+Thanks to that, in the boot args,
+we will have the offset and the hash.
+Then we have our kernel with DMVVT enabled, our init1FS
+with the init script that will use the Verity Setup command
+to do the verification on the UBI block device.
+Of course, as we have seen before, Verity Setup command
+needs the hash and the offset.
+So thanks to the boot args, it can retrieve it.
+And if the verification is successful,
+then you have a device mapper, and you can do a switch route.
+So in our use case, we use switch routes instead of mount
+because we wanted to switch the root file system
+from the init1fs to the verified squashfs.
+Otherwise, our system will always
+be on the init1fs, and we don't want that.
+And to complete the chain of trust,
+so as we added a new component, so use a U-boot environment
+script, for example, we add it in the fit image
+to not break the chain of trust.
+Thanks, Milan.
+So now we have actually completed our chain of trust.
+So basically, now to summarize what
+has been done yet until now.
+So in the ROM code, you have up to four hash of public keys,
+which are used to verify the public key which
+is embedded in the binary of the bootloader.
+Then when it's verified, the public key,
+then you can use it to verify, actually,
+the signature of the bootloader.
+Once that's done, you have another public key
+in the uBoot binary, which is used
+to verify the signature of the kernel and the DTB,
+Well, basically the fit image, the whole fit image
+with the UBoot script presented just the slides before.
+And once that's done, you have the digest
+within the fit image, which is used to verify
+and authenticate the rootFS.
+So yeah, basically that's done.
+But now we really want some kind of, I would say,
+distribution as a rootFS.
+And we don't want to, well, do it manually.
+We can use build root, Yocto, whatever build system you want.
+But in our case, it was Yocto.
+But Yocto has a really specific way
+to create fit images.
+And currently, it's the kernel recipe
+that actually inherits the kernel fit image class.
+And that means that, well, it's done before the root
+has been created.
+And I think the point is that actually people
+want to have the fit image, the kernel, whatever,
+within the slash boot of the rootFS.
+But our script needs the rootFS to be actually compiled, built,
+so that we can compute the hash and put it in the U-boot script.
+But, well, we want it in the fit image, which
+is created before the rootFS.
+So basically, that's how we end up with a dependency loop
+in Yocto, and that's really hard to debug.
+So while we throw away the kernel feature image class
+and wrote a new image and class recipes
+to work around this issue, it's really, I would say,
+the level of draft or proof of concept.
+But that works, so that was it for us.
+So well, it was a very specific example we presented today.
+to have only read-only file system.
+But you definitely may want to have some read-only file
+system besides your read-only file system.
+So if it stores not critical data,
+well, just mount it alongside your read-only file system.
+That's fine.
+You can store blogs, user data.
+Well, you don't care.
+Well, if it's critical, well, we haven't really looked at it.
+But a hint would be to look at IMA EVM.
+We have provided a bit of toolings to look at it.
+I don't know how it works.
+Just have a look at it.
+So to end this talk, remember I told you to trust no one?
+Well, you cannot even trust the vendor of your SOC.
+So NXP had publicly disclosed about a year ago
+that they had secure boot vulnerabilities in their HAB
+verification code for IMX6 and the other family SoCs.
+But I think right now it should be fixed,
+so you should ask them if you want
+to base your product on it.
+And I attended, well, yesterday, a good talk
+on introduction to reverse engineering
+by Michael Anderson.
+And it was really interesting because, well,
+nothing is 100% secure.
+So what do you want to protect yourself from?
+So I'll end it with this.
+Look at his talk to see what can be done to actually break
+your thing.
+So that was it.
+Thank you for your attention.
+If you have any questions, I'll be in the audience
+to post you the microphone.
+Yeah.
+Thank you.
+Hello.
+Hello.
+How long did it take your team to implement all this?
+So actually, from the beginning
+to actually look at all the software, everything.
+I would say for both of us, it took like six months,
+but not full-time.
+So I would say month is, definitely.
+Two questions.
+One of all, I saw that you're using SHA-1.
+You probably shouldn't use that as a hash algorithm anymore.
+It's totally broken.
+Number two, where is your code that you actually talked about
+that works for doing the switch route thing
+so you don't get the dependency problem?
+Well, it's a bit different.
+The problem with the dependency loop is within Yocto.
+It does not have something to do with the final root of S.
+So it's only when you actually build the root of S
+is the problem. Well, it's a new, well, recipe, so that's how Yocto work. So the question
+is, is the recipe in Yocto yet? No. It's, well, in our Yocto, yeah. Yeah, no. But, well,
+definitely would want to work on it so I have two two questions to firstly how
+many boards do you actually break doing this and secondly is it emulator ball
+and sound like you emu so good question the first one of how many boards are we
+broken yet, so none. Yeah, there are a lot of tutorials on the internet, so luckily,
+we didn't have to break any boards, so, well, we're happy with this. And the next question
+was QMUs support I haven't yeah I don't know sorry you mentioned the performance
+impact of the verification? Did you actually measure how much it affected the boot time
+in your case? So I think there's not really a point
+measuring it because if you need a secure device, well, the latency, you don't care really.
+On the rootFS part, they pretend that the IO takes so much time compared to the hash
+computation that, well, you can ignore it.
+Any reason you do verification of your rootFS and kernel and not U-boot?
+So for example, can U-boot read this block device?
+So the question is where the verification of the rootfs is.
+Why not in your boot?
+There is no support for SquashFS, first.
+And second is that, oh, that was it.
+It's on two different mediums for media for our clients.
+So the first one is used to store the kernel, et cetera.
+And the rootFS is on another medium.
+So there is a really interesting remarks, and I forgot about it.
+It's actually done only on the read access of your data.
+So you cannot actually use the bootloader to verify your rootFS because it's done only
+when you access data, which is done only by the kernel.
+Yep.
+You have four public keys stored in your boot image.
+How do you revoke one if one's bad?
+The same way you actually flash the public key, so you blow a fuse.
+And this fuse just say, well, this one is revoked.
+That's it.
+Oh, from U-boot.
+So within U-boot, with your update scripts or whatever,
+you ask it to blow the fuse.
+But yeah, if it's already too late, then I'll be screwed.
+Anyone?
+No.
+Oh, again.
+I actually have an observation on an earlier comment, one-time verification of the Squash
+FS is not good enough, while Squash FS itself is read-only, it does not cache all your data.
+So if you're sneaky, you can go in and rewrite the data that's in the Squash FS.
+We found this because one of our clients accidentally ran their upgrade system against their currently
+running SquashFS.
+This makes the kernel very unhappy and crashes the system.
+When will the URL work?
+I tried it, and it returns file not found.
+The URL on up there, I tried it.
+Yeah, it's not up yet, but it's on the sked.org website.
+So it's going to be available, hopefully, next week, tops.
+Any other questions?
+Well, thank you, and bon appétit.

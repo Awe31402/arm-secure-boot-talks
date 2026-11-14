@@ -1,0 +1,2009 @@
+WEBVTT
+
+00:00.640 --> 00:02.520
+Thank you for being here.
+
+00:02.520 --> 00:08.820
+I'm quite overwhelmed that this hall is almost full, even if it's short after the lunch.
+
+00:08.820 --> 00:09.820
+Thank you very much.
+
+00:09.820 --> 00:10.820
+I'm Marc Kleinebude.
+
+00:10.820 --> 00:17.520
+I'm with Spangotronics and I will tell you something about how to boot an embedded system,
+
+00:17.520 --> 00:26.640
+an ARM system here from ROM code to user space and in this boot process every single stage
+
+00:26.640 --> 00:33.120
+will be verified so that we can be sure after we've booted completely into the user space
+
+00:33.120 --> 00:38.800
+that we have an untampered system that nobody has done anything about with.
+
+00:38.800 --> 00:44.680
+So why do we want to do a verified boot?
+
+00:44.680 --> 00:54.600
+Because the Linux ecosystem is big, there are a lot of targets on the internet, a lot
+
+00:54.600 --> 01:00.660
+of systems that are very attractive for hacking. Linux systems, for example, have
+
+01:00.660 --> 01:04.980
+you read in the news some weeks ago there was a big DDoS where they used
+
+01:04.980 --> 01:11.980
+some surveillance cameras that run Linux. So Linux systems are critical, they
+
+01:11.980 --> 01:16.980
+control critical stuff on the internet, critical stuff in the industry, medical,
+
+01:16.980 --> 01:24.300
+automotive, you name it, and we want to protect these embedded systems. Compared
+
+01:24.300 --> 01:31.260
+to servers. Traditionally, on embedded systems, they are not that well
+
+01:31.260 --> 01:39.120
+maintenanced as servers, but as I've noticed here on this weekend,
+
+01:39.120 --> 01:43.380
+there are a lot of talks about updating and updating concepts, so I hope it's
+
+01:43.380 --> 01:50.160
+getting better that no old stainless systems with Linux will be out there in
+
+01:50.160 --> 01:56.040
+the wild. And we want to have verified boot because it's a complex software
+
+01:56.040 --> 02:02.280
+system, a Linux, a Linux stack, the user space, the proprietary application that
+
+02:02.280 --> 02:08.760
+might be on top. And it's for sure that they might be some, it's sure that they
+
+02:08.760 --> 02:15.440
+are some undiscovered vulnerabilities in a Linux system. So you want to build
+
+02:15.440 --> 02:20.840
+defense in depth. That means to build different layers, different shells around
+
+02:20.840 --> 02:28.680
+your Linux system to protect it. And a verified system that boots verified and
+
+02:28.680 --> 02:35.500
+nothing is tempered is one part of it. So I will focus on this in this talk. And
+
+02:35.500 --> 02:41.440
+it's quite easy to do this ourselves. We don't have to rely on some vendor or so
+
+02:41.440 --> 02:49.180
+because there are a lot of socks around that have the hardware support for doing verified boot and
+
+02:49.180 --> 02:58.020
+it's at least in some windows it's documented openly and all the software components that
+
+02:58.020 --> 03:05.680
+are needed for verified boot system are available as open source software. So what do we want to
+
+03:05.680 --> 03:12.020
+protect. I expect a lot of you guys have booted an embedded system. Just give a hand sign
+
+03:12.020 --> 03:19.140
+who has booted an embedded systems. Keep your hands up. Who has booted a bootloader that
+
+03:19.140 --> 03:29.640
+is somehow verified or encrypted? Okay. And then next step, the kernel. Yes, okay. It's
+
+03:29.640 --> 03:32.140
+getting less people.
+
+03:32.140 --> 03:36.820
+And then who does verification of the file system?
+
+03:38.460 --> 03:41.080
+And do you do read-write file systems
+
+03:41.080 --> 03:43.080
+that is still verified?
+
+03:43.080 --> 03:44.180
+Okay, not so many.
+
+03:44.180 --> 03:45.760
+This is what this talk is about.
+
+03:46.800 --> 03:48.600
+So we want to protect the whole chain,
+
+03:48.600 --> 03:50.560
+bootloader, kernel, find system,
+
+03:50.560 --> 03:52.600
+programs, configuration, application data,
+
+03:52.600 --> 03:55.440
+and even be able to do read-write stuff
+
+03:55.440 --> 03:56.540
+on this file system.
+
+03:56.540 --> 04:09.540
+because the Attica can, in theory, if he has access to the system, manipulate the data that is stored on the system and we want to detect tempering of this.
+
+04:11.540 --> 04:18.540
+So, as I outlined, the boot stages of a typical embedded system, it starts with a ROM code.
+
+04:18.540 --> 04:23.540
+It's typically burned into, or on the silicon itself.
+
+04:25.200 --> 04:28.960
+So processor, when it gets powered on, it starts,
+
+04:28.960 --> 04:32.460
+executes the ROM code, decides where I want to boot from,
+
+04:32.460 --> 04:36.940
+do I want to boot from eMMC, network, USB, or whatever.
+
+04:37.840 --> 04:38.980
+Then comes the bootloader,
+
+04:38.980 --> 04:42.780
+this is typically U-boot, barebox, something like this.
+
+04:42.780 --> 04:45.140
+Then the device with the kernel,
+
+04:45.140 --> 04:47.160
+and then finally the root file system.
+
+04:47.160 --> 04:52.160
+And we want to secure, verify the whole stages,
+
+04:52.340 --> 04:54.120
+every single stage.
+
+04:54.120 --> 04:58.300
+The first stage on ARM systems is usually vendor dependent.
+
+04:59.240 --> 05:04.240
+For this example, we use Freescale or now NXP, IMX6,
+
+05:04.240 --> 05:07.880
+and the hardware, the proprietary extension they use
+
+05:07.880 --> 05:10.960
+in the ROM code is called High Assurance Boot
+
+05:10.960 --> 05:13.540
+or Short Hub in version four,
+
+05:13.540 --> 05:17.460
+And it uses a standard crypto like SHA and RSA
+
+05:17.460 --> 05:19.560
+to do the secure of the booting.
+
+05:21.940 --> 05:25.700
+For the bootloader, we use barebox.
+
+05:25.700 --> 05:28.580
+So the ROM code will verify the bootloader
+
+05:28.580 --> 05:30.760
+and only start it if it's verified.
+
+05:30.760 --> 05:34.360
+The bootloader comes with another key in it
+
+05:35.460 --> 05:39.820
+and will load the image of the kernel,
+
+05:39.820 --> 05:41.920
+the device in the ROMFS, will check it
+
+05:41.920 --> 05:46.240
+and will only start this if the verification succeeds.
+
+05:46.240 --> 05:50.160
+And in this fit image here,
+
+05:50.160 --> 05:54.680
+there is another public key available
+
+05:54.680 --> 05:58.040
+that will verify the files in the root file system.
+
+05:58.040 --> 06:00.780
+And if you go this chain from top to down,
+
+06:02.000 --> 06:04.360
+the anchor here is in the SOC,
+
+06:04.360 --> 06:06.560
+the next anchor is in the bootloader,
+
+06:06.560 --> 06:10.140
+next anchor for verification is in the RAMFS
+
+06:10.140 --> 06:15.720
+in the kernel and then we booted this, we can be sure that the system is unmodified
+
+06:15.720 --> 06:18.140
+and no one has tampered any files.
+
+06:18.140 --> 06:21.780
+Okay, let's start with the bootloader.
+
+06:21.780 --> 06:25.780
+If you can change the bootloader of your embedded system, you have complete control
+
+06:25.780 --> 06:27.140
+over the system.
+
+06:27.140 --> 06:30.400
+This is usually what is done on the mobile phones.
+
+06:30.400 --> 06:36.080
+If you want to root it, you first put in your own bootloader.
+
+06:36.080 --> 06:44.100
+If you have, it usually comes from a source that is unprotected, like EMMC, NAND, SD
+
+06:44.100 --> 06:48.080
+card, USB, whatever.
+
+06:48.080 --> 06:56.500
+And on modern ARM systems, the bootloader is not started, the very first thing, the
+
+06:56.500 --> 06:58.540
+first thing that runs is a ROM code.
+
+06:58.540 --> 07:05.020
+So the ROM code has to verify the bootloader before it starts the bootloader.
+
+07:05.020 --> 07:16.100
+And this is done on the IMX series by signing the bootloader with a proprietary tool from
+
+07:16.100 --> 07:24.520
+FreeScale and the public key that is used, the corresponding certificate is burned into
+
+07:24.520 --> 07:27.780
+the IMX chip itself.
+
+07:27.780 --> 07:34.600
+So the ROM code verifies first the certificate that comes with the bootloader and then the
+
+07:34.600 --> 07:41.780
+bootloader is verified with a certificate. And the bootloader contains the public key
+
+07:41.780 --> 07:51.100
+for the next stage. So this is how it looks. Here's a SOC. The ROM code runs first. Introduction,
+
+07:51.100 --> 07:58.740
+you burn the fuses into your SOC. And the fuses verify the public key that comes with
+
+07:58.740 --> 08:05.740
+the bootloader. This is a bootloader blob here. First, the fuses or the ROM code verifies
+
+08:05.740 --> 08:12.860
+that the pub key that comes with this is correct. So you are allowed to boot this and the pub
+
+08:12.860 --> 08:20.580
+key verifies, it's used to verify the signature and the signature goes over the bootloader
+
+08:20.580 --> 08:27.580
+itself. So this is our bare box or whatever, but we use bare box in this example. And we
+
+08:27.580 --> 08:33.680
+We have another pub key here in the bootloader that is used to verify the next stage.
+
+08:33.680 --> 08:37.640
+This is a kernel.
+
+08:37.640 --> 08:43.240
+Because we have to do some configuration in the early user space, we make use of the fit
+
+08:43.240 --> 08:44.240
+image.
+
+08:44.240 --> 08:48.020
+This comes usually originally from uBoat.
+
+08:48.020 --> 08:56.820
+This is an image containing a kernel, a device tree or device trees and an initRAMFS.
+
+08:56.820 --> 09:04.140
+And this is all in this one image and in this image there can be several configurations.
+
+09:04.140 --> 09:10.040
+So one kernel and several device trees so that you can use one fit image on a variety
+
+09:10.040 --> 09:11.040
+of boards.
+
+09:11.040 --> 09:15.720
+If your boot loader knows what system you have, it can pick the right configuration
+
+09:15.720 --> 09:21.500
+from that fit tree, from that fit image and boot this.
+
+09:21.500 --> 09:29.680
+And the fit image can be stored on an untrusted media like a separate partition or even in
+
+09:29.680 --> 09:35.060
+the root file system if your bootloader has access to the file system.
+
+09:35.060 --> 09:41.720
+Because the bootloader will first pick the configuration and then check if the configuration
+
+09:41.720 --> 09:48.460
+is valid against the public key that is included in the bootloader.
+
+09:48.460 --> 09:54.200
+And then we'll check the individual parts of the configuration and then boot into the
+
+09:54.200 --> 09:57.580
+kernel and load the initROMFS.
+
+09:57.580 --> 10:06.400
+And the kernel contains the next public key, the key that is used for the root file system.
+
+10:06.400 --> 10:09.480
+Here an overview.
+
+10:09.480 --> 10:15.020
+So the bootloader has been previously been verified by the ROM code.
+
+10:15.020 --> 10:22.240
+The bootloader brings a public key with it and loads this fit image from an untrusted
+
+10:22.240 --> 10:23.240
+media.
+
+10:23.240 --> 10:29.920
+It first checks if the signature of a configuration that it chooses is valid.
+
+10:29.920 --> 10:31.240
+Only if this is valid.
+
+10:31.240 --> 10:39.060
+Here are three hashes of the kernel, the device, and the initromfs.
+
+10:39.060 --> 10:42.900
+It checks the hashes if these are valid.
+
+10:42.900 --> 10:48.420
+So if this is valid, the public key is valid, the signature and the hashes, you know these
+
+10:48.420 --> 10:51.580
+have not been modified.
+
+10:51.580 --> 10:54.780
+And you see here, each configuration is signed.
+
+10:54.780 --> 11:00.560
+So if you have several configurations in your fit image, you cannot pick this kernel, a second
+
+11:00.560 --> 11:06.760
+device tree and maybe leave out the RAMFS, because the configuration is signed and you
+
+11:06.760 --> 11:10.060
+cannot modify this.
+
+11:10.060 --> 11:18.300
+So we boot the kernel with the init ramfs and the device tree.
+
+11:18.300 --> 11:30.220
+Then the kernel comes up, the init ramfs configures the early parts and starts the crypto stuff
+
+11:30.220 --> 11:32.540
+in the kernel.
+
+11:32.540 --> 11:43.420
+We want to secure each individual file of the root file system so you can later in the
+
+11:43.420 --> 11:49.420
+next step do a read-write amount of it.
+
+11:49.420 --> 11:57.740
+The root file system needs to be, or needs support for extended attributes to store some
+
+11:57.740 --> 12:00.620
+signatures.
+
+12:00.620 --> 12:03.180
+In this example, we used ext4.
+
+12:03.180 --> 12:06.320
+For a customer, we used UBIFS.
+
+12:06.320 --> 12:13.800
+So if you have a flash chip, a naked done chip with UBI and UBIFS, you can use it, or
+
+12:13.800 --> 12:19.260
+you have a block media, or an emmc that is represented as a block media, you can make
+
+12:19.260 --> 12:22.400
+use of ext4.
+
+12:22.400 --> 12:28.420
+We want to protect every file in this root file system.
+
+12:28.420 --> 12:38.040
+So what we do, we make use of the integrity measurement architecture, IMA, of the kernel.
+
+12:38.040 --> 12:42.540
+This is mainline in the meantime.
+
+12:42.540 --> 12:47.920
+And the IMA contains a hash of every file.
+
+12:47.920 --> 12:54.760
+So the contents of every file is hashed and then stored onto your disk or your flash chip
+
+12:54.760 --> 13:02.080
+or your media in an extended attribute, it's a security IMA attribute.
+
+13:02.080 --> 13:08.280
+So far, if you change the contents of the file, you can detect modification of that
+
+13:08.280 --> 13:14.200
+file because the signature doesn't match or the hash doesn't match.
+
+13:14.200 --> 13:21.680
+When the kernel accesses a file, open execute or memap or whatever, it will load the extended
+
+13:21.680 --> 13:28.920
+attribute, hash the file, and see if the hashes are the same. So, it can detect modification
+
+13:28.920 --> 13:35.780
+of it. First step. But if an attacker has access to the system, it can modify a file
+
+13:35.780 --> 13:42.400
+and just recalculate the hash and write it to the media. But we want to protect it. We
+
+13:42.400 --> 13:47.700
+don't want to give the attacker a chance to do this. So, the next step is to make use
+
+13:47.700 --> 13:53.060
+of the extended verification module in the kernel, EVM.
+
+13:53.060 --> 14:01.040
+So we create a signature over all security attributes.
+
+14:01.040 --> 14:05.720
+And this is done on your development PC during creation of the image.
+
+14:05.720 --> 14:14.860
+So you take, again, your private key, create your root file system, sign every file, every
+
+14:14.860 --> 14:25.360
+extended attribute which contains a hash and so you can be sure that the file has not been
+
+14:25.360 --> 14:35.040
+modified and the checksum of the file has not been modified. And the EVM has to be verified
+
+14:35.040 --> 14:41.220
+against a public key that comes with the kernel from the first stage. So it looks like this
+
+14:41.220 --> 14:47.580
+in the overview. The kernel has a public key. The public key verifies the EVM signature.
+
+14:47.580 --> 14:53.460
+The EVM signature verifies the IMA hash and the IMA hash verifies the contents of the
+
+14:53.460 --> 15:03.420
+file. So, if you boot in our kernel with a so far trusted and verified system, we can
+
+15:03.420 --> 15:09.480
+see if this EVM signature is unmodified and then see if this hash is unmodified and then
+
+15:09.480 --> 15:17.100
+see if the file itself, the contents of the file itself has not been modified. This is
+
+15:17.100 --> 15:25.860
+the first step. But if you wanted to read right, you cannot recalculate a RSA signature
+
+15:25.860 --> 15:31.520
+because the RSA keys, the private keys, are obviously not on the system. If they were,
+
+15:31.520 --> 15:38.680
+you can, as an attacker, just take the private key from the embedded system, recalculate
+
+15:38.680 --> 15:44.420
+everything and you're in the system, no one will detect it.
+
+15:44.420 --> 15:50.960
+So what EVM then does is make use of a SHA-HMAC.
+
+15:50.960 --> 15:56.440
+This is a clever way of hashing things.
+
+15:56.440 --> 16:06.600
+And you can then guarantee integrity and authentication of contents.
+
+16:06.600 --> 16:11.540
+But you need a different shared secret for this,
+
+16:11.540 --> 16:15.760
+for each system, because if the Etika opens one system,
+
+16:15.760 --> 16:20.760
+does a modification, and the HMAC gets used,
+
+16:21.320 --> 16:24.640
+you don't want, the Etika can transfer a modified file
+
+16:24.640 --> 16:27.020
+from one system to another system.
+
+16:28.640 --> 16:32.500
+So you need a different shared secret
+
+16:32.500 --> 16:34.460
+for the HMAC on every system.
+
+16:34.460 --> 16:41.460
+And we do this on the IMX6 and I tell you later how it is done.
+
+16:41.460 --> 16:56.460
+And the funniest thing is an HMAC, because it's just a bunch of hashes, can be verified faster than an RSA operation.
+
+16:56.460 --> 17:01.460
+This is preferred if you want to boot fast.
+
+17:01.460 --> 17:06.460
+Once the kernel opens every file or touches a file,
+
+17:07.700 --> 17:12.700
+it will recalculate HMAC-based verification
+
+17:13.740 --> 17:16.980
+and write it down because it's much more faster
+
+17:16.980 --> 17:18.400
+than an ARIS-A1.
+
+17:19.800 --> 17:24.600
+And the Attica cannot calculate a new HMAC
+
+17:24.600 --> 17:29.600
+when he has not access to the SQL that is used in the EVM.
+
+17:31.460 --> 17:42.900
+how we do this. So, we have our SOC that has been fused, and on the IMX6, you have access,
+
+17:43.260 --> 17:48.560
+if you have booted your bootloader correctly signed, you have access to a unique key that
+
+17:48.560 --> 17:56.900
+is unique for every IMX6. So, you cannot transfer data with it encrypted from one system to
+
+17:56.900 --> 18:05.180
+another. This only works if you boot your system with a secured and verified bootloader.
+
+18:05.180 --> 18:10.680
+What's that CVM for again? Extended verification module. It's part
+
+18:10.680 --> 18:17.780
+of the Linux integrity subsystem. It's mainline in the meantime.
+
+18:17.780 --> 18:20.820
+Yeah.
+
+18:20.820 --> 18:27.540
+So very beginning, how does it work?
+
+18:27.540 --> 18:33.360
+So you need to burn something in the process,
+
+18:33.360 --> 18:37.620
+and then it's just one time,
+
+18:37.620 --> 18:39.220
+you can change it here.
+
+18:39.220 --> 18:42.880
+Somehow you need to locate your key in there,
+
+18:42.880 --> 18:46.100
+or couple the .
+
+18:46.100 --> 18:47.760
+So how is this done in manufacturing?
+
+18:47.760 --> 18:52.320
+Okay, the question was, what's it about the fuses,
+
+18:52.320 --> 18:54.240
+how it is done in the manufacturing
+
+18:54.240 --> 18:56.980
+and what does the fuses contain?
+
+18:58.860 --> 19:03.860
+The fuses contain a hash of the certificate that's used
+
+19:04.920 --> 19:06.900
+or corresponds to the secret key
+
+19:06.900 --> 19:09.240
+that's used to sign the bootloader.
+
+19:09.240 --> 19:13.340
+So you have a secret key and a public key
+
+19:13.340 --> 19:17.780
+and a digest of the public key is burned into the SOC.
+
+19:17.780 --> 19:21.780
+And then it's secured that you cannot change
+
+19:21.780 --> 19:23.660
+the public key anymore,
+
+19:23.660 --> 19:25.740
+and that the system only boots
+
+19:25.740 --> 19:29.080
+if your bootloader verifies against that public key.
+
+19:30.160 --> 19:31.780
+Does this answer your question?
+
+19:31.780 --> 19:35.000
+Yeah, but is it just possible one time?
+
+19:35.000 --> 19:36.120
+Yes, you can.
+
+19:36.120 --> 19:37.620
+Otherwise, someone could change it,
+
+19:37.620 --> 19:41.020
+so if you have programmed the JIT,
+
+19:41.020 --> 19:49.580
+The question was if you can change the fuses.
+
+19:49.580 --> 19:55.320
+You can only burn the fuses from 1 to 0 or 0 to 1 or whatever, I'm not sure.
+
+19:55.320 --> 19:57.680
+But you can only do it once.
+
+19:57.680 --> 20:03.720
+And then you even have another fuse to disallow the burning of more fuses.
+
+20:03.720 --> 20:07.740
+So you cannot change the remaining bits that can be possibly be flipped.
+
+20:07.740 --> 20:09.180
+You even disallow this.
+
+20:09.180 --> 20:16.720
+So you can only burn that once and even turn off burning of morph uses even.
+
+20:16.720 --> 20:21.980
+And this is done in the production of your board in the first steps of testing or you
+
+20:21.980 --> 20:24.420
+can even automate this in the bootloader.
+
+20:24.420 --> 20:30.040
+Then where does that free scale tool come in to sign your bootloader?
+
+20:30.040 --> 20:34.840
+You sign your bootloader during building of your board support package.
+
+20:34.840 --> 20:42.160
+you need the free scale tool and and access to your private keys you can
+
+20:42.160 --> 20:48.100
+burn the fuses whenever you want you can after you've created a public private
+
+20:48.100 --> 20:52.420
+key pair you create a digest of the public key and burn this into your sock
+
+20:52.420 --> 20:57.940
+so this is no material that needs to be secured only the private key has to be
+
+20:57.940 --> 21:04.480
+secured what's going into the fuses it's just just a public key or digest of a
+
+21:04.480 --> 21:15.240
+public key. So, if we have burned off uses, signed our bootloader, booted with a signed
+
+21:15.240 --> 21:21.040
+bootloader, the system comes up in a secure way and then you can make use of the unique
+
+21:21.040 --> 21:30.000
+key that is unique to each MX6. And with this key, you can encrypt a shared secret that
+
+21:30.000 --> 21:40.180
+is that is used for the EVM. And this is stored somewhere on your media. You can only decrypt
+
+21:40.180 --> 21:46.100
+it on that system that has been used to encrypt it. And you can only decrypt it if you have
+
+21:46.100 --> 21:52.380
+booted with a bootloader that has been signed properly. So, your system comes up in your
+
+21:52.380 --> 21:59.140
+bootloader. System is secure and you have access to this unique key. You can take the
+
+21:59.140 --> 22:06.140
+blob and in the inner DRAMFS, you can decrypt the blob, have access to this EVM secret.
+
+22:06.140 --> 22:14.140
+This EVM secret just stays into the kernel. And the root file system, if you want to do
+
+22:14.140 --> 22:22.700
+read-write, you need this EVM secret that sees if the HMAC is correct, then the IMA
+
+22:22.700 --> 22:27.140
+hash is correct, and then the file is still correct. Yeah?
+
+22:27.140 --> 22:31.240
+One question, how do you secure this blob?
+
+22:31.240 --> 22:35.660
+The blob is, the question was, how do you secure the blob?
+
+22:35.660 --> 22:44.380
+The blob is encrypted with a unique key, and the key is unique to one special IMX.
+
+22:44.380 --> 22:49.380
+You have only access to this if you have booted with a bootloader that has been signed.
+
+22:49.380 --> 23:03.300
+Yes, but as you've said earlier, at, let's say, first access after provisioning, then all the signatures are replaced with HMAC.
+
+23:03.940 --> 23:11.460
+So if I replace this blob to something, then I can modify it.
+
+23:12.020 --> 23:18.120
+The question was, if I can, if you can modify the system, if you have replaced the blob.
+
+23:19.380 --> 23:23.220
+you cannot decrypt the blob.
+
+23:25.240 --> 23:28.340
+Well, if you just use some random data for the blobs,
+
+23:28.340 --> 23:29.680
+you cannot encrypt it,
+
+23:29.680 --> 23:32.260
+because you can only encrypt it with a unique key.
+
+23:33.480 --> 23:35.620
+Yeah, but my question was,
+
+23:35.620 --> 23:39.000
+because at the first boot,
+
+23:39.000 --> 23:41.380
+you replace the original signature.
+
+23:41.380 --> 23:44.220
+Yes, we replace these.
+
+23:44.220 --> 23:46.440
+RSA signature with HMAC.
+
+23:46.440 --> 23:47.580
+Yes.
+
+23:47.580 --> 23:52.580
+So if attacker is somehow able to,
+
+23:52.720 --> 23:56.720
+let's say, reset the file system
+
+23:57.820 --> 24:01.640
+to the state that there is still the RSA,
+
+24:02.700 --> 24:06.580
+then he probably will be somehow able to
+
+24:08.580 --> 24:13.500
+modify this blob so it gets encrypted again and different.
+
+24:13.500 --> 24:16.880
+You, you create the blob in your factory.
+
+24:18.760 --> 24:21.660
+And you only can create the blob if you have a bootloader
+
+24:21.660 --> 24:26.660
+that has been booted on a secured system.
+
+24:27.080 --> 24:29.780
+So there needs to be a bug in the bootloader
+
+24:29.780 --> 24:33.860
+or somewhere else that you have access and can.
+
+24:33.860 --> 24:37.580
+So it's inside, it's inside bootloader, yes?
+
+24:37.580 --> 24:40.500
+In the bootloader, or is it generated, or?
+
+24:40.500 --> 24:44.340
+it's generated in the bootloader and then written somewhere.
+
+24:45.400 --> 24:50.160
+And you cannot recreate it without having a secure system.
+
+24:51.580 --> 24:54.240
+So you cannot just boot over a USB,
+
+24:54.240 --> 24:56.680
+then you cannot write a blob
+
+24:56.680 --> 24:58.960
+because you have not access to this unique key.
+
+25:00.020 --> 25:02.620
+It's only available if you're on a secure system.
+
+25:02.620 --> 25:16.620
+I have to be aware of the ciphertext attack because if you don't secure the block in your
+
+25:16.620 --> 25:23.620
+bootloader or something like that, I'd secure it with the RSA and the hash.
+
+25:23.620 --> 25:30.820
+because i can change it then i can try to uh to use the cypher cypher text attack
+
+25:30.820 --> 25:44.340
+to uh to modify the block to uh to fit um or the ivm secrets i've i've modified it so
+
+25:44.340 --> 25:50.580
+so you have to secure it um the question was how the block is secured or is it secured yes the
+
+25:50.580 --> 25:54.140
+Yes, the blob is secured by the crypto engine of the,
+
+25:55.080 --> 25:56.080
+of the iMix.
+
+25:56.080 --> 25:59.080
+All right, it does not add,
+
+26:01.140 --> 26:04.440
+let's say the other way around.
+
+26:04.440 --> 26:09.440
+So it's, it's encrypted by the unit key, that's okay.
+
+26:11.340 --> 26:13.460
+But here, on the other side,
+
+26:13.460 --> 26:18.460
+you have to secure it via your bootloader thingy
+
+26:18.460 --> 26:20.800
+because you can change it
+
+26:20.800 --> 26:24.640
+and you don't have to know the unique key
+
+26:24.640 --> 26:27.140
+because you can look at it
+
+26:27.140 --> 26:30.360
+and have a ciphertext, ciphertext attack.
+
+26:30.940 --> 26:32.660
+So there are some possibilities.
+
+26:32.900 --> 26:34.380
+So you need to secure it.
+
+26:34.720 --> 26:35.540
+It is secured.
+
+26:35.700 --> 26:38.960
+You can only access it if you have...
+
+26:38.960 --> 26:40.060
+Yes, but...
+
+26:40.060 --> 26:40.540
+You cannot...
+
+26:40.540 --> 26:45.100
+For example, if attacker accesses somehow your file system,
+
+26:45.100 --> 26:50.100
+then he probably will be able to replace this blob.
+
+26:51.600 --> 26:53.220
+Okay, whether it's-
+
+26:53.220 --> 26:55.780
+You cannot recreate the blob that is-
+
+26:55.780 --> 26:57.200
+No, but you can replace it
+
+26:57.200 --> 27:02.200
+with some special blob of your own.
+
+27:02.420 --> 27:07.420
+No, because the blob itself is encrypted with a unique key.
+
+27:07.580 --> 27:10.140
+Yes, but, okay, so what you do-
+
+27:10.140 --> 27:12.540
+It's not a, it's not a RSA.
+
+27:12.540 --> 27:15.020
+It's not a AES encryption.
+
+27:15.860 --> 27:18.020
+It's more complicated.
+
+27:19.220 --> 27:23.560
+Okay, so my question is, okay, you have this blob,
+
+27:23.560 --> 27:28.560
+and then what you do is you constantly replace this blob.
+
+27:30.140 --> 27:33.360
+Then it gets decrypted each time you put.
+
+27:33.360 --> 27:34.200
+No.
+
+27:36.080 --> 27:38.120
+It's not secure, it's not.
+
+27:38.120 --> 27:40.300
+It is secured by the hardware crypto.
+
+27:40.300 --> 27:42.040
+It's verified somehow.
+
+27:42.040 --> 27:42.880
+Yes.
+
+27:42.880 --> 27:45.460
+By some mechanism or not?
+
+27:45.460 --> 27:46.300
+It's.
+
+27:46.300 --> 27:47.140
+That was my question.
+
+27:47.140 --> 27:48.100
+Is the blob.
+
+27:48.100 --> 27:49.280
+The blob itself is.
+
+27:49.280 --> 27:54.280
+Is it cryptographically signed like the bootloader or.
+
+27:54.280 --> 27:58.480
+I think it uses an HMEC that runs with a.
+
+28:00.220 --> 28:03.900
+No, I can't help you to answer this question.
+
+28:03.900 --> 28:04.740
+Okay.
+
+28:04.740 --> 28:09.740
+So in the process of encryption using this data,
+
+28:09.740 --> 28:12.600
+which is encrypted by a unique key,
+
+28:12.600 --> 28:17.320
+you are using ISCCN, so in this.
+
+28:17.320 --> 28:22.320
+No, it's used as the red blob or black blob message.
+
+28:23.380 --> 28:24.540
+No, no, no.
+
+28:24.540 --> 28:26.340
+Isn't that just implementation dependent
+
+28:26.340 --> 28:29.060
+on what the good lawyer decides to do with it?
+
+28:29.060 --> 28:32.720
+This is done by the ROM code or by the crypto engine.
+
+28:32.720 --> 28:36.120
+So you cannot, if you switch a single bit, for example,
+
+28:36.120 --> 28:40.380
+in your blob, the crypto engine would say,
+
+28:40.380 --> 28:41.840
+you have tampered with this blob,
+
+28:41.840 --> 28:43.400
+it's not a valid blob anymore.
+
+28:43.400 --> 28:46.320
+Okay, so it is signed, somehow.
+
+28:46.320 --> 28:47.160
+Yes.
+
+28:47.160 --> 28:48.000
+Okay.
+
+28:48.000 --> 28:52.240
+The ASC in CCM decrypt and verified.
+
+28:52.240 --> 28:56.120
+Okay, so that was my question, because there was only.
+
+28:56.120 --> 28:57.760
+So it's not an AS.
+
+28:57.760 --> 29:00.680
+It was encrypted, not verified.
+
+29:00.680 --> 29:03.800
+I was asking, it says somehow verified.
+
+29:03.800 --> 29:04.640
+Yes.
+
+29:04.640 --> 29:15.400
+We can look at the data sheet after the talk of the crypto engine of the Freescale.
+
+29:15.920 --> 29:17.600
+So it's not just AES encrypted.
+
+29:17.600 --> 29:25.880
+It's even if you encrypt with the same keys, the same secret data, the blob looks different each time.
+
+29:30.840 --> 29:31.760
+Yes, yes.
+
+29:31.940 --> 29:33.080
+I had to be more precise.
+
+29:33.360 --> 29:33.680
+Thank you.
+
+29:33.680 --> 29:37.680
+Yeah, that was the only question, whether there is some verifications.
+
+29:37.680 --> 29:40.680
+Yeah, yeah.
+
+29:40.680 --> 29:48.680
+It's both.
+
+29:48.680 --> 29:56.680
+You have access to the blob, but you cannot access the unique key.
+
+29:56.680 --> 30:03.680
+You can only tell the crypto engine, please use this unique key to encrypt or decrypt stuff.
+
+30:03.680 --> 30:07.020
+Yeah, but if you get the block, you cannot read it,
+
+30:07.020 --> 30:08.420
+so it's really encrypted,
+
+30:08.420 --> 30:11.100
+so it has not only a signature at the end,
+
+30:11.100 --> 30:14.260
+you can verify it, but you cannot access the data
+
+30:14.260 --> 30:15.800
+because it's really encrypted.
+
+30:15.800 --> 30:17.340
+Yes, it's encrypted and.
+
+30:17.340 --> 30:20.340
+Okay, so what's the point of encryption?
+
+30:22.000 --> 30:22.980
+To encrypt the block?
+
+30:22.980 --> 30:25.700
+Yeah, why, I mean, why is signing not enough?
+
+30:27.760 --> 30:29.480
+Signing is just.
+
+30:29.480 --> 30:31.880
+Because it is a secret.
+
+30:31.880 --> 30:34.860
+It's not bubbling key.
+
+30:34.860 --> 30:38.040
+This blob is then used as a.
+
+30:38.040 --> 30:40.720
+The shared secret of the,
+
+30:40.720 --> 30:45.060
+so we decrypt the blob and get the EVM secret.
+
+30:45.060 --> 30:47.760
+It's a shared secret for this HMAC.
+
+30:52.880 --> 30:54.860
+My application is hacked.
+
+30:54.860 --> 30:57.460
+It can write data to the file system.
+
+30:58.520 --> 30:59.360
+Yes.
+
+30:59.360 --> 31:08.900
+Then the HACC application has written its attack to the file system, and afterwards the whole system will boot happily up and execute all of this.
+
+31:08.900 --> 31:11.460
+Yes, this mainly protects against offline modification.
+
+31:12.260 --> 31:22.700
+So programming properly your application on doing user space hardening is a different aspect of the defense in depth.
+
+31:22.700 --> 31:29.420
+but if you have physical access to the system you usually just replace your
+
+31:29.420 --> 31:34.400
+bootloader and are happy and you can store a secret data with this
+
+31:34.400 --> 31:48.400
+Yes, with making use of a hardware random generator,
+
+31:48.400 --> 31:55.400
+hardware random number generator. And it's done in the factory still, so.
+
+31:55.400 --> 32:09.400
+And the same concept, having a blob and this unique key to decrypt something, you can put
+
+32:09.400 --> 32:14.020
+this together and make use of eCryptFS.
+
+32:14.020 --> 32:19.840
+FFS is used to do file-level encryption.
+
+32:19.840 --> 32:30.900
+This has the aspect that it works on both NAND storage, Naked NAND, with UB and UBIFS,
+
+32:30.900 --> 32:38.920
+as well as on block devices because it works in an upper layer when it's working with
+
+32:38.920 --> 32:41.120
+the files.
+
+32:41.120 --> 32:43.960
+So every file in the encrypted system,
+
+32:45.560 --> 32:48.360
+in the encrypted file system corresponds to a file
+
+32:48.360 --> 32:51.160
+in the unencrypted to the lower file system.
+
+32:52.840 --> 32:56.380
+The file names and the file contents is both encrypted,
+
+32:58.560 --> 33:01.320
+but the directory layout and the permissions,
+
+33:01.320 --> 33:02.800
+they are in clear text.
+
+33:04.300 --> 33:07.980
+And this requires two different shared secret
+
+33:07.980 --> 33:12.980
+for each system because of the same aspects with HMAC.
+
+33:13.820 --> 33:17.320
+You don't want to transfer encrypted data
+
+33:17.320 --> 33:19.340
+from one system to another.
+
+33:21.060 --> 33:26.060
+And IMA and EVM is not needed because we use,
+
+33:27.540 --> 33:29.520
+the E-CryptFS uses AES in
+
+33:33.080 --> 33:37.120
+Galo counter mode where you have both integrity
+
+33:37.120 --> 33:40.680
+and encryption in one thing.
+
+33:41.560 --> 33:45.760
+So this almost looks the same as the fuses,
+
+33:45.760 --> 33:48.020
+the unique key, a different blob.
+
+33:48.020 --> 33:51.340
+This creates your encryptFS, a encryptFS secret.
+
+33:54.180 --> 33:59.080
+Then the encryptFS does the AES of the files
+
+33:59.080 --> 34:01.600
+in the unencrypted file system,
+
+34:01.600 --> 34:06.600
+and this generates you on a subtree,
+
+34:06.600 --> 34:10.780
+your encrypted files, and you can, for example,
+
+34:10.780 --> 34:14.480
+store your proprietary application, your configuration,
+
+34:14.480 --> 34:18.140
+or your database, or whatever, or even secret keys
+
+34:18.140 --> 34:22.320
+that you don't want to have in your system lying around.
+
+34:22.320 --> 34:23.320
+Question?
+
+34:23.320 --> 34:27.400
+Is this possible to encrypt using
+
+34:27.400 --> 34:31.600
+a cryptFS whole PI system, and for example,
+
+34:31.600 --> 34:36.580
+switch root to the encrypted PI system?
+
+34:36.580 --> 34:39.060
+The question was if you can use E-CryptFS
+
+34:39.060 --> 34:41.480
+for your whole file system.
+
+34:41.480 --> 34:43.640
+Yes, it is possible.
+
+34:43.640 --> 34:46.920
+You can do this in the early user space
+
+34:46.920 --> 34:48.700
+in your inner DRAMFS,
+
+34:48.700 --> 34:53.700
+and then switch to your unlocked unencrypted file system.
+
+34:54.080 --> 34:55.480
+Yes, it's possible.
+
+34:57.380 --> 35:02.380
+You have to talk to your lawyer about GPL aspects of this,
+
+35:03.980 --> 35:05.900
+but it's possible, yes.
+
+35:06.580 --> 35:13.580
+Can you tell us something about the effect of the boot time?
+
+35:13.580 --> 35:23.580
+Yes. It's an overhead. The slower your system, the bigger is the overhead.
+
+35:23.580 --> 35:31.580
+We make use of the crypto engine of the IMX6 here. It brings, I think, in boot time, like
+
+35:31.580 --> 35:36.580
+10% overall, but you get probably more CPU cycles
+
+35:38.160 --> 35:39.520
+left when you use a hardware.
+
+35:41.720 --> 35:46.720
+On an MX-25, we did some analysis and it was like,
+
+35:50.160 --> 35:52.700
+how much was it, 10 seconds from 30.
+
+35:53.980 --> 35:56.600
+On an MX-6, it's not that bad.
+
+35:56.600 --> 36:01.600
+And when you have re-signed your system from RSA
+
+36:02.100 --> 36:04.940
+to HMAC, it's even faster.
+
+36:04.940 --> 36:08.560
+But you have an overhead, because you boot first
+
+36:08.560 --> 36:11.220
+in a DRAMFS and then switch to your root.
+
+36:12.720 --> 36:14.220
+When you can directly boot in your root,
+
+36:14.220 --> 36:19.220
+the system is faster, so it takes some time doing boot.
+
+36:22.120 --> 36:25.440
+You get a lot of I.O. because if an application,
+
+36:25.440 --> 36:34.320
+for example system destarts and just maps in your all the libraries because the kernel
+
+36:34.320 --> 36:42.160
+accesses this library normally nothing not much would happen but with the ima every file that is
+
+36:42.160 --> 36:49.280
+touched gets completely written completely read in into the ram and then checked so booting takes
+
+36:49.280 --> 37:07.520
+takes longer, yes. But we haven't done measurements on IMX6. Now I want to show you how it's
+
+37:07.520 --> 37:21.940
+working on this system here. And here have my riot board. Hope it's big enough, everybody
+
+37:21.940 --> 37:36.980
+can see. And I just plug it in. And for simplicity, I've put these blobs just here in the environment
+
+37:36.980 --> 37:52.660
+of the system and I can boot it. It boots the system and what we see here, this is now
+
+37:52.660 --> 38:04.980
+the initRAMFS and the blobs are read and put into the kernel for decoding. And then here
+
+38:04.980 --> 38:09.980
+we configure the IMA and EVM.
+
+38:11.680 --> 38:12.660
+So we say,
+
+38:17.020 --> 38:20.140
+please measure, don't measure this FS,
+
+38:20.140 --> 38:21.400
+don't measure debug FS,
+
+38:21.400 --> 38:25.620
+so don't check security attributes on all the file systems
+
+38:25.620 --> 38:27.140
+that are exported by the kernel.
+
+38:28.480 --> 38:32.980
+And then we say at the end,
+
+38:32.980 --> 38:34.640
+please appraise and measure.
+
+38:34.640 --> 38:39.640
+So check everything and if a signature doesn't match,
+
+38:40.280 --> 38:44.560
+please do not allow access to the file.
+
+38:46.540 --> 38:51.540
+Then the system boots and then we can log in.
+
+38:53.500 --> 38:57.020
+And what I've done, I've created a root file system,
+
+38:57.020 --> 39:01.080
+an X4, X4 file system and there is a application
+
+39:01.080 --> 39:05.020
+called zip on it, and I've tempered it offline,
+
+39:05.020 --> 39:08.660
+and I've modified the copyright string.
+
+39:08.660 --> 39:11.100
+And when I want to execute it,
+
+39:11.100 --> 39:13.480
+here's some debug enabled, it says,
+
+39:13.480 --> 39:18.480
+oh, the hash is invalid, the command was my sh,
+
+39:20.500 --> 39:23.640
+that tries to execute it, and it says here,
+
+39:23.640 --> 39:28.000
+user bin zip, and on which file system it was,
+
+39:28.000 --> 39:30.580
+and it says, oh, the hash is invalid,
+
+39:30.580 --> 39:33.620
+and then you get just the permission denied.
+
+39:33.620 --> 39:36.260
+You can configure what to do here.
+
+39:36.260 --> 39:38.340
+For a customer we implement here,
+
+39:39.340 --> 39:41.820
+it marks the system as compromised
+
+39:41.820 --> 39:46.220
+that we don't try to boot it again,
+
+39:46.220 --> 39:51.220
+and then we just reboot and try a different system.
+
+39:51.340 --> 39:55.700
+This is what the customer thought it would be nice to do so.
+
+39:55.700 --> 40:15.420
+And here's a mounted EcryptFS.
+
+40:15.420 --> 40:22.880
+So encrypted is as well the name of the unencrypted and as well the encrypted stuff and this is
+
+40:22.880 --> 40:33.640
+the equipped fs and here, here's my file and it's called bar. This contains foo. And if
+
+40:33.640 --> 40:50.640
+I unmount it, here's the file. The content is bigger because it has private keys. There's
+
+40:50.640 --> 40:52.640
+some, I'm not sure what's in there,
+
+40:52.640 --> 40:54.680
+it's standard decrypt devs stuff.
+
+40:56.960 --> 41:01.960
+It's blown up to somehow you cannot
+
+41:04.060 --> 41:07.420
+get to the original file size to the byte.
+
+41:07.420 --> 41:09.400
+The file name itself is encrypted
+
+41:09.400 --> 41:12.260
+and the contents as well.
+
+41:20.640 --> 41:33.220
+No, I cannot, I cannot access it even because it's, it has no IMA hashes.
+
+41:33.220 --> 41:50.480
+When I encrypted, let's see if we can start it again.
+
+41:50.480 --> 41:59.480
+So it's been mounted again and the file is still there.
+
+41:59.480 --> 42:05.420
+Yeah, that's so far for the demo.
+
+42:05.420 --> 42:06.420
+Now it's up to you.
+
+42:06.420 --> 42:08.880
+You can try it yourself.
+
+42:08.880 --> 42:13.480
+Get an iMX 28, it should basically work on this.
+
+42:13.480 --> 42:21.960
+And IMX 53, it should work or get a cue box or a write board.
+
+42:21.960 --> 42:25.620
+This is the one I used here.
+
+42:25.620 --> 42:30.240
+And try to get it yourself working.
+
+42:30.240 --> 42:35.240
+For a customer, we have it working on an IMX 25 and an IMX 26.
+
+42:35.240 --> 42:40.240
+MX-28 is, they decided to not do it.
+
+42:41.680 --> 42:43.640
+Maybe it comes back again.
+
+42:43.640 --> 42:47.440
+The bootloader we used is just normal barebox,
+
+42:47.440 --> 42:49.180
+current version.
+
+42:49.180 --> 42:52.640
+Maybe the maintainer has released another one
+
+42:52.640 --> 42:57.640
+because it's already 2016-10, maybe.
+
+42:57.880 --> 43:02.540
+It's all mainline, you just have to tell the barebox
+
+43:02.540 --> 43:04.600
+that your bootloader should be signed.
+
+43:05.240 --> 43:10.920
+and you need to download the proprietary pre-scale tools to do the actual signing.
+
+43:12.120 --> 43:20.760
+The kernel is a 4.0 with some patches on it and for offline signing of the image
+
+43:21.720 --> 43:31.640
+I used e2 of sprox plus patches for the ext4 and ima evm utils these are the tools and you need
+
+43:31.640 --> 43:33.740
+you need some patches for these too.
+
+43:33.740 --> 43:38.320
+The patches for the MTD utils, if you do UBIFS,
+
+43:38.320 --> 43:40.580
+are already mainline.
+
+43:40.580 --> 43:43.880
+And all this stuff is integrated with PTX-Dist,
+
+43:43.880 --> 43:46.760
+but you can do it with your own
+
+43:48.040 --> 43:49.820
+with your own board support package generator,
+
+43:49.820 --> 43:54.400
+like Yocto or other components are freely available.
+
+43:55.520 --> 43:56.520
+Yeah, what's missing?
+
+43:58.820 --> 44:01.100
+There have been patches around, or they are still around,
+
+44:01.100 --> 44:04.680
+but not mainline, to protect directories.
+
+44:04.680 --> 44:09.680
+What you can now do with imaevm is you can take a file
+
+44:09.680 --> 44:11.960
+from one location of this system
+
+44:11.960 --> 44:14.280
+and move it to another location of this system
+
+44:16.420 --> 44:20.200
+because the directories itself are not protected.
+
+44:20.200 --> 44:22.540
+These patches are somewhere on the mailing list
+
+44:22.540 --> 44:24.200
+but not mainline.
+
+44:24.200 --> 44:29.200
+If you want to pursue it, contact us or try it yourself.
+
+44:29.200 --> 44:32.880
+Then we have to do the mainlining of the image creation process,
+
+44:32.880 --> 44:39.840
+the patches for the E2 of S-procs and the EV, the IMA EVM utils,
+
+44:41.520 --> 44:49.280
+and the drivers to decrypt and encrypt the blobs on the IMX6, they are not yet mainlined.
+
+44:50.480 --> 44:58.720
+And support for IMX53 is missing, should be possible as well because it's generally compatible.
+
+45:00.060 --> 45:05.060
+And maybe some other vendors have crypto extensions
+
+45:05.160 --> 45:07.920
+or a secure boot extension like this.
+
+45:07.920 --> 45:09.880
+Maybe we need some more documentation.
+
+45:09.880 --> 45:12.580
+You can probably use it on the TI.
+
+45:14.820 --> 45:15.660
+Yeah.
+
+45:17.520 --> 45:21.380
+We have been in this project for, I think, two years,
+
+45:21.380 --> 45:23.120
+and the lessons learned.
+
+45:26.160 --> 45:27.680
+Just for development's sake,
+
+45:27.680 --> 45:30.120
+put your development keys in your board support package
+
+45:30.120 --> 45:32.420
+that everyone can build a root file system
+
+45:32.420 --> 45:34.560
+and a bootloader and just play with it,
+
+45:34.560 --> 45:36.060
+every developer that wants to.
+
+45:39.620 --> 45:42.440
+The keys that are used in production,
+
+45:42.440 --> 45:47.440
+you can not put it into your BSP
+
+45:48.120 --> 45:52.120
+because these have to be protected,
+
+45:52.120 --> 45:55.780
+but you can make use of cryptographics,
+
+45:55.780 --> 46:04.780
+standard API PK-CS11 that all the tools can use to read them.
+
+46:04.780 --> 46:10.480
+You can put them on a smart card or even on a hardware security model that's somewhere
+
+46:10.480 --> 46:20.380
+on the network or make use of some vendors that have software, hardware security models
+
+46:20.380 --> 46:25.740
+that you can access over the internet with complicated schemes or whatever.
+
+46:25.740 --> 46:36.100
+And what's really handy for development is that you have some packages in two configuration.
+
+46:36.100 --> 46:37.860
+For example, the bootloader.
+
+46:37.860 --> 46:44.840
+You want to have the bootloader that you can log into, have shell access, maybe even can
+
+46:44.840 --> 46:53.440
+read out the log from the kernel and do booting from NFS root, just that the developers can
+
+46:53.440 --> 46:59.280
+work and the guys who want to debug and just have a different bootloader a different bootloader
+
+46:59.280 --> 47:05.840
+configuration that's all secured no interaction no state no environment with your production keys
+
+47:06.800 --> 47:12.640
+just keep that separate that you can that your developers still can can work and still can be
+
+47:12.640 --> 47:22.640
+happy and are not hindered by the bootloader and you can do this also for the kernel maybe one
+
+47:22.640 --> 47:29.440
+kernel that reboots as soon as a security violation is detected and another kernel that
+
+47:29.440 --> 47:38.240
+just says oh sorry permission denied there was a problem with the security and during integration
+
+47:38.240 --> 47:45.760
+what turned out to be really good is that we regularly turn for every release some of the
+
+47:45.760 --> 47:52.260
+the security features on just step by step by step just increase the security
+
+47:52.260 --> 48:00.000
+level of the BSP that was used by our customers and because once activated
+
+48:00.000 --> 48:05.320
+when you get a field return it's really pain in the ass to debug these you have
+
+48:05.320 --> 48:11.660
+to be you have to keep this in mind it's it's really makes no fun if the
+
+48:11.660 --> 48:15.660
+system is all locked down and you cannot access it anymore.
+
+48:15.660 --> 48:20.660
+And what we've seen that UBIFS with EMA and EVM,
+
+48:21.220 --> 48:24.380
+it really doesn't like when you have sudden power loss.
+
+48:24.380 --> 48:28.220
+If your customer says, oh, my clients,
+
+48:28.220 --> 48:33.060
+they just turn off the power UBIFS in read-write mode.
+
+48:33.060 --> 48:33.900
+Doesn't like it.
+
+48:33.900 --> 48:36.880
+Maybe it's a bug in the old kernel in the 4.0.
+
+48:36.880 --> 48:39.600
+We have to, we have to do updates
+
+48:39.600 --> 48:41.980
+and tell our customers to do so.
+
+48:43.360 --> 48:45.340
+Yeah, that's it.
+
+48:45.340 --> 48:46.500
+Do you have any questions?
+
+48:49.140 --> 48:53.560
+Just curious, this fuse mechanism, I know about it,
+
+48:53.560 --> 48:57.720
+but it sounds a little bit like a poor man's TPM.
+
+48:57.720 --> 48:59.180
+Yes, it's an ARM system.
+
+49:02.360 --> 49:04.400
+When TPM was introduced, the chip vendor said,
+
+49:04.400 --> 49:06.480
+oh, it's just a few cents cost.
+
+49:06.480 --> 49:08.900
+So I would expect that some vendors also,
+
+49:08.900 --> 49:10.700
+let's say it's considered?
+
+49:10.700 --> 49:14.880
+Maybe on the ARM 64 series,
+
+49:14.880 --> 49:17.720
+that there are more server-grade hardware,
+
+49:17.720 --> 49:20.120
+maybe they have integrated TPM there.
+
+49:21.840 --> 49:26.840
+You can still put a TPM on your board, but.
+
+49:26.840 --> 49:30.160
+But you wouldn't know about any board
+
+49:30.160 --> 49:32.060
+having a TPM chip on it?
+
+49:32.060 --> 49:33.380
+No ARM board.
+
+49:33.380 --> 49:35.320
+But I'm just wondering why it never
+
+49:35.320 --> 49:37.960
+has made its way into the small system.
+
+49:37.960 --> 49:42.140
+I have an ARM32 TI board that has a TPM on it.
+
+49:42.140 --> 49:43.600
+I was gonna ask about TPM.
+
+49:43.600 --> 49:45.240
+Okay, yes.
+
+49:45.240 --> 49:48.620
+This IMA EVM was originally introduced
+
+49:48.620 --> 49:52.200
+with support for TPM.
+
+49:53.140 --> 49:55.360
+So it was the first that,
+
+49:55.360 --> 49:57.560
+it came first up with TPM support
+
+49:57.560 --> 50:00.280
+and then all the other stuff that you need
+
+50:00.280 --> 50:03.920
+when you have no TPM was added.
+
+50:03.920 --> 50:08.080
+You still need a proprietary key to sign the bootloader,
+
+50:08.080 --> 50:10.500
+but I guess, to some extent,
+
+50:10.500 --> 50:11.920
+the rest of what you were talking about
+
+50:11.920 --> 50:16.760
+is to replace the blob .
+
+50:16.760 --> 50:18.500
+Yes, you can do this.
+
+50:18.500 --> 50:23.000
+At least Freescale offers this proprietary method to do so.
+
+50:23.000 --> 50:26.400
+We take what we get there, and the tools are proprietary.
+
+50:28.800 --> 50:30.120
+And the mechanism is,
+
+50:30.120 --> 50:35.880
+maybe ship windows will listen to us someday hopefully
+
+50:35.880 --> 50:52.600
+we have not debugged it yet
+
+50:52.600 --> 51:01.540
+okay so a customer is very let's say cost sensitive and therefore decided to use a naked
+
+51:01.540 --> 51:07.640
+NAND not a managed NAND like EMMC then it would be some other's fault if the file system
+
+51:07.640 --> 51:17.220
+degrades on power loss there's a question the 10 second penalty you talked about I guess it's
+
+51:17.220 --> 51:20.240
+Dependent on the root, the size of the root file system.
+
+51:20.480 --> 51:22.060
+How big is your root file system?
+
+51:23.380 --> 51:32.760
+It's not dependent on the root file system, the delay, because you only check the files that are used or opened or touched.
+
+51:33.900 --> 51:39.880
+So you can have a terabyte of root file system, but if you don't access the file, it's not checked.
+
+51:41.260 --> 51:43.100
+So it's not checked.
+
+51:43.300 --> 51:46.860
+The whole file system is not checked on a pair block level on booting.
+
+51:47.220 --> 51:52.560
+from start to end, but only the files, the kernel checks them when opening them
+
+51:52.560 --> 51:55.780
+or accessing them.
+
+52:05.560 --> 52:10.500
+Sorry, for the crypto?
+
+52:10.500 --> 52:13.280
+there's a framework you can use to...
+
+52:13.280 --> 52:18.760
+Yeah, in the kernel, we make only use of the,
+
+52:20.260 --> 52:23.780
+or the EVM, and IMA uses the crypto framework.
+
+52:23.780 --> 52:27.760
+And we plug in the, well, it's already mainline.
+
+52:27.760 --> 52:30.300
+The crypto engine is plugged into the crypto framework,
+
+52:30.300 --> 52:33.140
+and if you enable it, it magically just makes use
+
+52:33.140 --> 52:34.460
+of the crypto engine.
+
+52:34.460 --> 52:37.780
+Okay, because you said it wasn't ready for IMX53 yet,
+
+52:37.780 --> 52:40.140
+but that IMX53 does have that in...
+
+52:40.140 --> 52:45.140
+The Sahara is partly supported.
+
+52:49.900 --> 52:51.600
+If it's not supported, it will just fail back
+
+52:51.600 --> 52:56.140
+to the software for SHA and RSA and stuff.
+
+52:59.140 --> 52:59.980
+Yeah?
+
+52:59.980 --> 53:02.900
+I've got one more question about
+
+53:02.900 --> 53:06.260
+isn't it possible to move the blob
+
+53:07.540 --> 53:09.460
+to a crypto engine?
+
+53:10.140 --> 53:11.140
+To what?
+
+53:11.140 --> 53:17.920
+To the crypt engine, so, you know, to some kind of, let's say, or something like that.
+
+53:17.920 --> 53:18.920
+It's.
+
+53:18.920 --> 53:23.420
+Here you have the secret in your.
+
+53:23.420 --> 53:24.420
+In your blog.
+
+53:24.420 --> 53:27.080
+User space, so it's somehow.
+
+53:27.080 --> 53:32.080
+No it's, it's not in the user space, the blob is put.
+
+53:32.080 --> 53:35.380
+No, I mean the secret.
+
+53:35.380 --> 53:36.380
+Yes.
+
+53:36.380 --> 53:38.080
+It's in kernel space.
+
+53:38.080 --> 53:39.080
+It's in kernel space, yes.
+
+53:39.080 --> 53:48.140
+Yes, but on these platforms, can you move it to secure key storage because usually those...
+
+53:48.140 --> 53:51.180
+In runtime, so that you cannot scan the RAM.
+
+53:52.360 --> 53:57.080
+No, actually, I mean, okay, if you load this, yes, then you decrypt the blob.
+
+53:57.260 --> 53:57.580
+Yes.
+
+53:57.580 --> 54:07.580
+And some socks have the ability to, when they decrypt the blob, to put it directly into their...
+
+54:07.580 --> 54:07.940
+Okay.
+
+54:07.940 --> 54:26.540
+to just pass around a handle and then make a shortcut in hardware I think this
+
+54:26.540 --> 54:32.180
+is possible but you need first supports in your crypto engine and crypto
+
+54:32.180 --> 54:37.620
+hardware. It's not supported, I think, but would be fine. Yes.
+

@@ -1,0 +1,1580 @@
+WEBVTT
+
+00:00.640 --> 00:06.680
+So welcome everyone to our talk about implementing UAV-based secure boot and
+
+00:06.680 --> 00:14.080
+over-the-air update for embedded ARM devices. So first of all who are we? So my
+
+00:14.080 --> 00:19.120
+name is Jan Kiska, this is Christian Storm. Let's start with a common part. We are
+
+00:19.120 --> 00:24.640
+both working for Siemens Technology. We are embedded Linux consultant and
+
+00:24.640 --> 00:30.960
+developers targeting in-house means not wherever but in quite a few cases where Siemens is using
+
+00:30.960 --> 00:37.200
+embedded Linux. We are involved at various levels and trying to get things the right way done or a
+
+00:37.200 --> 00:43.040
+better way done. We are also involved in the civil infrastructure platform project.
+
+00:44.080 --> 00:51.600
+Christian is part of the CIP work group on software update. I'm leading the kernel work group and I'm
+
+00:51.600 --> 00:55.540
+also maintaining the ESA-CIP core layer, what that is, we'll talk a little bit about later.
+
+00:56.620 --> 01:01.340
+We are both contributing to open source, whatever this is possible during our work.
+
+01:01.940 --> 01:05.580
+Also maintaining, I'm doing some other stuff, maintenance from time to time.
+
+01:06.240 --> 01:08.320
+So yeah, it's all about open source here.
+
+01:10.400 --> 01:17.440
+Regarding the topic of our talk, well, if you've joined, virtually at least, a talk of us two years ago,
+
+01:17.440 --> 01:21.800
+There was something about secure boot and over-the-air update or something like this as well.
+
+01:23.320 --> 01:25.200
+So, again, the same story.
+
+01:26.080 --> 01:30.340
+That was basically showing the concept and the X86 implementation.
+
+01:31.320 --> 01:32.880
+Today, we want to look further on that.
+
+01:34.120 --> 01:35.440
+So, where are we coming from?
+
+01:35.680 --> 01:36.760
+Well, the old story.
+
+01:37.000 --> 01:38.380
+The old days were the ROM firmware.
+
+01:39.100 --> 01:41.600
+Nowadays, we do that more flexible.
+
+01:42.040 --> 01:44.540
+We've come a long way because, well, connectivity is everywhere.
+
+01:45.200 --> 01:46.100
+Security is standard.
+
+01:46.900 --> 01:54.020
+secure updates are well no longer discussable even mandated in some of our domains by standards
+
+01:54.900 --> 01:58.900
+and you obviously want to do these updates not by sitting besides of this and
+
+02:00.180 --> 02:06.180
+picking up the pieces after it went wrong but you won't do it unattendedly and that also means you
+
+02:06.180 --> 02:10.580
+have to do it in a robust way when something really goes wrong and your testing failed for
+
+02:10.580 --> 02:14.820
+whatever reason you want to roll back and you get all your devices into a consistent state in the
+
+02:14.820 --> 02:23.460
+field so having all of that integrated and also presented in form of a reference implementation
+
+02:23.460 --> 02:28.740
+via our cip core layer that has been done in the past years and obviously also a couple of
+
+02:29.300 --> 02:36.820
+projects before for x86 based on uefi and now as i said today it's about looking beyond that
+
+02:36.820 --> 02:40.100
+what do we have to do on the arm side to come to something similar
+
+02:40.100 --> 02:49.220
+so a recap where are we on x86 well x86 for practical reason means today you are booting
+
+02:49.220 --> 02:56.520
+from uefi firmware wherever that comes from um you are booting into a bootloader which is uefi
+
+02:56.520 --> 03:02.480
+based and if you want to do it securely obviously um the firmware is validating um your chain of
+
+03:02.480 --> 03:09.040
+trust that the artifacts you are booting via uefi have been signed properly um for the purpose of
+
+03:09.040 --> 03:15.440
+our embedded systems doing a b update um we are running primarily with a bootloader which does
+
+03:15.440 --> 03:21.360
+the ab switching control you could rely on uefi for that but well if you are more skeptical or
+
+03:21.360 --> 03:26.080
+if you're dealing with a lot of various implementation of uefi um you better go with
+
+03:26.080 --> 03:31.440
+with a known bootloader and that also has the task of enabling a watchdog which is essential
+
+03:31.440 --> 03:36.800
+if you want to do a rollback when some of pieces of your boot chain um got south and are no longer
+
+03:36.800 --> 03:42.700
+reacting, that watchdog has to be started. That's not the service of your EFI. So that comes with
+
+03:42.700 --> 03:50.360
+our EFI bootguard firmware for X86. Continuing the secure boot chain there, what you normally do
+
+03:50.360 --> 03:55.260
+is booting assigned kernel image. Well, if you only boot the kernel image that way, you have a
+
+03:55.260 --> 04:02.040
+problem, as we've learned before in other talks with the initRD, for example. You may also have
+
+04:02.040 --> 04:07.480
+problem with the kernel command line therefore the common practice is to use a unified kernel
+
+04:07.480 --> 04:13.720
+image so combining the kernel and the command line and possibly the init rd into one binary
+
+04:13.720 --> 04:20.360
+and one uafi binary sign that and then boot up from there and then you hand over to the operating
+
+04:20.360 --> 04:27.000
+system domain um where you want to obviously also validate um that your file system you're booting
+
+04:27.000 --> 04:34.840
+from the root file system is as you shipped it um so the the read-only part of it um you may verify
+
+04:34.840 --> 04:41.320
+and as we learned this is a good choice um with the severity um and the persistent part that you
+
+04:41.320 --> 04:47.480
+want or have to change in the field um you may have to encrypt um and that's usually done with
+
+04:47.480 --> 04:52.840
+the encrypt um so then you have all the pieces together well for the encrypt you also need a
+
+04:52.840 --> 04:59.320
+a platform key and on x86 this is normally done with some form of tpm may it be physical or
+
+04:59.320 --> 05:06.800
+implemented via the firmware so to get some platform specific secret and decrypt this and
+
+05:06.800 --> 05:14.180
+well then you basically have all the pieces for a common secure boot system together which can be
+
+05:14.180 --> 05:21.140
+also updated a b wise in the field so that's the situation x86 we've done it a couple of times it
+
+05:21.140 --> 05:23.380
+works quite nicely, no rocket science,
+
+05:23.380 --> 05:26.340
+obviously a lot of pulling of pieces together.
+
+05:26.340 --> 05:30.700
+Now, how can we benefit from this pattern also on ARM side?
+
+05:31.880 --> 05:35.180
+So if you look at ARM today,
+
+05:35.180 --> 05:36.920
+and I know there are other bootloaders as well,
+
+05:36.920 --> 05:39.740
+but the common piece you often get on the embedded side
+
+05:39.740 --> 05:43.720
+is some U-Boot enablement,
+
+05:43.720 --> 05:44.980
+which can do quite a lot of things
+
+05:44.980 --> 05:47.380
+and basically can allow you to do the same thing,
+
+05:47.380 --> 05:49.940
+just with a different pattern here.
+
+05:49.940 --> 05:52.840
+and with a lot of more custom engineering needed
+
+05:52.840 --> 05:53.820
+to get things done.
+
+05:53.820 --> 05:55.760
+Well, every SOC vendor has a different way
+
+05:55.760 --> 05:59.780
+of validating the artifacts you're booting early,
+
+05:59.780 --> 06:01.020
+so the Firmberg here.
+
+06:02.620 --> 06:06.180
+You also have a different way of validating
+
+06:06.180 --> 06:10.860
+the OS images afterwards, or the kernel image better,
+
+06:10.860 --> 06:14.220
+typically done with a fit image, signed fit image here.
+
+06:16.260 --> 06:18.820
+You can use U-boot for quite a few things,
+
+06:18.820 --> 06:22.900
+is one example you can also do there the ab switching there's a scripting inside it's
+
+06:22.900 --> 06:26.740
+possible that to do it that way i think there's a talk these days also about this approach
+
+06:27.540 --> 06:32.820
+you can use you would obviously also as a driver for watchdogs um and and start up your watchdog
+
+06:32.820 --> 06:38.180
+there which is a good thing to do um but yeah there's a lot of customized engineer needed
+
+06:38.740 --> 06:45.060
+and furthermore you also need it um for um the getting out the the platform secrets um so
+
+06:45.060 --> 06:51.060
+mentioning the secrets to get in the end your decryption done so that's the situation today
+
+06:51.060 --> 06:56.580
+and while we could do it we were thinking about it but in the end the ideal case would be reusing
+
+06:56.580 --> 07:02.980
+much more from the previously shown x86 side so and if you look at how arm is evolving today we
+
+07:02.980 --> 07:10.180
+are rather looking into also having UEFI there as well you just think of system ready specification
+
+07:10.180 --> 07:16.500
+there so it's upcoming and with this inside but also with the motivation to unify not just for
+
+07:16.500 --> 07:22.500
+secure wood but rather just for booting um the right side more um alex raf quite a couple of
+
+07:22.500 --> 07:28.100
+years ago started the idea of having um you would as an ufp provider and that was one of the kick
+
+07:28.100 --> 07:34.420
+offs for also developing in that direction um that we have more unified infrastructure there
+
+07:34.420 --> 07:39.540
+available still from that point to where we are today that has been a long way but if we have it
+
+07:39.540 --> 07:46.340
+that way what could be done now so the pattern we see here basically if we have an embedded
+
+07:46.340 --> 07:53.060
+uefi provider is that everything after that provider basically can be the same as we have
+
+07:53.060 --> 07:57.940
+done before with x86 and we will look into further details on the right side later on
+
+07:58.900 --> 08:06.500
+what you also see if you look into the the infrastructure for trusted platform module
+
+08:06.500 --> 08:11.620
+you have also some sanitization approaches there so with opti being around for more and more of
+
+08:11.620 --> 08:17.940
+the modern platforms and even some of the 30-bit platforms that's now an option to host um the
+
+08:17.940 --> 08:23.700
+the platform secrets and manage basically the platform specific trusted storage there as well
+
+08:23.700 --> 08:28.420
+so there's also option to optimize and to unify that on that area as well
+
+08:28.420 --> 08:39.280
+so um the key element here is as i said then looking into who can provide you uefi um for
+
+08:39.280 --> 08:46.360
+your embedded device um so they're basically for nlexis six two key providers right now on the
+
+08:46.360 --> 08:51.640
+market as far as we see on the open source market well the standard one you may come into mind and
+
+08:51.640 --> 08:58.280
+say oh my gosh um edk2 is it's a uefi reference implementation and very commonly used or at
+
+08:58.280 --> 09:02.960
+least a common base on x86 firmware so even if you get a commercial one in the end there's often
+
+09:02.960 --> 09:11.580
+EDK2 bits included and it does have support for ARM and ARM64 as well however it doesn't
+
+09:11.580 --> 09:16.400
+commonly it doesn't commonly supported by your SOC vendor there are some exceptions for that
+
+09:16.400 --> 09:21.740
+but in the end you end up with something which is not yet directly fitting on your board in
+
+09:21.740 --> 09:27.020
+contrast to what you get via the BSP for your board and there's also very limited driver support
+
+09:27.020 --> 09:33.780
+upstream at least to what we've analyzed so far so also regarding how do I enable my watchdog now
+
+09:33.780 --> 09:38.760
+even if it's a simple task the infrastructure isn't there so this is something if you want
+
+09:38.760 --> 09:44.400
+to put it in the UEFI provider there's nothing like that. On the other side as I said UBoot
+
+09:44.400 --> 09:50.760
+by now is well it's the de facto standard for firmware if you look for your common
+
+09:50.760 --> 09:55.980
+silicon vendors they will probably provide you some enablement for that or someone else with
+
+09:55.980 --> 09:57.180
+in a nice way.
+
+09:57.740 --> 09:58.760
+So it's vendor-backed.
+
+09:58.760 --> 10:01.940
+It has plenty of drivers for all bits that you may need
+
+10:01.940 --> 10:04.540
+or to bring up coprocessors, stuff like that,
+
+10:04.600 --> 10:06.100
+which may also, in some scenarios,
+
+10:06.200 --> 10:07.860
+be interesting for the features you need
+
+10:07.860 --> 10:08.680
+for secure boot here.
+
+10:10.420 --> 10:11.420
+That is all there.
+
+10:12.180 --> 10:15.520
+What is maybe not recognized by anyone
+
+10:15.520 --> 10:17.820
+or by some people is that there is also
+
+10:17.820 --> 10:19.480
+fairly advanced UAV support by now.
+
+10:20.440 --> 10:22.400
+The only issue is it's, as I said,
+
+10:22.500 --> 10:23.020
+not recognized.
+
+10:23.020 --> 10:26.360
+it's likely not broadly used yet.
+
+10:29.120 --> 10:33.960
+So what do you do if you want to use U-Boot for your AFI
+
+10:33.960 --> 10:36.440
+and for booting secure AFI?
+
+10:36.440 --> 10:39.040
+So one of the first, well, anecdote to say basically,
+
+10:39.040 --> 10:41.340
+we were shipping an embedded board
+
+10:42.580 --> 10:44.780
+which was booting from U-Boot
+
+10:44.780 --> 10:47.140
+and was doing the classic distro boot,
+
+10:47.140 --> 10:49.220
+so fit image booting.
+
+10:49.220 --> 10:53.340
+And we're using default config of the vendor for that.
+
+10:53.340 --> 10:56.160
+And after a while, when we looked into what's possible
+
+10:56.160 --> 11:00.020
+with UAV, I said, oh, it's default on.
+
+11:00.020 --> 11:02.900
+Let's just flip in our image, the bootloading process
+
+11:02.900 --> 11:05.800
+with Grub, Grub UAV, and it just booted.
+
+11:05.800 --> 11:07.620
+So we were accidentally basically shipping already
+
+11:07.620 --> 11:11.020
+UAV enabled system in the field without knowing it.
+
+11:11.020 --> 11:13.220
+It's an open platform, it's nothing that you close down
+
+11:13.220 --> 11:14.340
+and configure to the minimum.
+
+11:14.340 --> 11:17.980
+So it was working as supposed.
+
+11:17.980 --> 11:21.080
+And, yeah, at least non-secure booting was already working.
+
+11:21.940 --> 11:25.360
+Now, if you look at what is needed for booting securely,
+
+11:25.620 --> 11:27.920
+well, you need to continue your chain of trust.
+
+11:28.460 --> 11:30.920
+Again, remember the early stage,
+
+11:30.920 --> 11:34.660
+the piece basically from the ROM loader to your U-boot
+
+11:34.660 --> 11:37.540
+or whatever comes before U-boot or in the middle of U-boot,
+
+11:37.960 --> 11:40.120
+that is usually remaining vendor-specific.
+
+11:40.280 --> 11:42.940
+But this is what you get usually pre-integrated by your vendor
+
+11:42.940 --> 11:45.000
+and you can just build upon.
+
+11:45.520 --> 11:54.540
+Now, when you're talking further, what UBoot wants to load or should load via the UEFI mechanism and should validate, you need some train of trust for that.
+
+11:54.540 --> 12:01.460
+So, the easiest way to do that is to pre-compile the public keys into the UBoot binary.
+
+12:01.800 --> 12:03.000
+So, you have a static train of trust.
+
+12:03.060 --> 12:07.600
+You could do the same with fit images, obviously, and this is now done with UEFI.
+
+12:08.040 --> 12:08.680
+That's one way.
+
+12:08.940 --> 12:14.340
+The other way, it's also interesting, but still under development and has dependency, is doing this via the UEFI variables.
+
+12:14.340 --> 12:17.040
+and having the IFI variables in the secure storage.
+
+12:17.460 --> 12:20.100
+Then you can actually also update the keys in the field
+
+12:20.100 --> 12:23.860
+without completely replacing your firmware binary.
+
+12:25.300 --> 12:27.220
+So it's one of the first steps you have to do.
+
+12:27.380 --> 12:28.580
+Go one way or the other.
+
+12:29.180 --> 12:31.940
+So then look into hardening.
+
+12:32.080 --> 12:33.360
+Well, this is a general recommendation.
+
+12:33.500 --> 12:36.160
+It doesn't only apply to your IFI-based secure boot
+
+12:36.160 --> 12:38.620
+and many of the patterns are generic.
+
+12:38.620 --> 12:40.360
+But anyway, look into that.
+
+12:40.360 --> 12:45.140
+I didn't find anything like this described in that form so far.
+
+12:45.240 --> 12:47.340
+There were some indications what to do in general,
+
+12:47.460 --> 12:50.760
+but this actually is something that we've compiled over the past years
+
+12:50.760 --> 12:52.580
+for actually practical doing it.
+
+12:53.320 --> 12:56.960
+So one of the obvious things is you have to make your boot chain
+
+12:56.960 --> 13:02.420
+no longer interactive, lock down any kind of interaction with the bootloader,
+
+13:02.920 --> 13:05.760
+because this usually opens up the door for doing something else
+
+13:05.760 --> 13:07.460
+than non-secure and security booting.
+
+13:07.460 --> 13:15.460
+you have to or you should limit your boot to the UEFI part.
+
+13:15.460 --> 13:18.460
+I mean, if you're just keeping on the legacy boot,
+
+13:18.460 --> 13:21.460
+that usually means that you don't boot securely anymore
+
+13:21.460 --> 13:24.460
+unless you've done special metal on that path as well.
+
+13:24.460 --> 13:27.460
+But, well, if you decide to go one way, log out the others,
+
+13:27.460 --> 13:31.460
+so limit your boot procedure to UEFI.
+
+13:31.460 --> 13:34.460
+Another general security recommendation is
+
+13:34.460 --> 13:36.520
+turn off features you don't need.
+
+13:36.520 --> 13:39.460
+That specifically is interesting regarding file systems.
+
+13:39.460 --> 13:43.360
+So if the user can, or the attacker can replace
+
+13:43.360 --> 13:45.580
+some of the storage, which is one of the physical
+
+13:45.580 --> 13:49.200
+attack vectors, and place some nice file system on it,
+
+13:49.200 --> 13:50.720
+and you would have an implementation,
+
+13:50.720 --> 13:52.320
+but it's probably not that commonly used
+
+13:52.320 --> 13:54.180
+and may have some bugs, yep.
+
+13:54.180 --> 13:56.240
+You just open up the door.
+
+13:56.240 --> 13:57.920
+Obviously also network is something that you want
+
+13:57.920 --> 13:59.520
+to turn off if you don't use network booting
+
+13:59.520 --> 14:00.360
+on that stage.
+
+14:00.360 --> 14:07.240
+Another important thing to remember, well, either do a read-only environment, because
+
+14:07.240 --> 14:12.200
+the environment keeps all the variables that could also be used for booting, and booting
+
+14:12.200 --> 14:17.700
+in a different way, so either make it read-only, or if you have some variables that should
+
+14:17.700 --> 14:25.200
+be writable still for whatever reason, there are mechanisms now in uBoot, not that handily
+
+14:25.200 --> 14:30.160
+to describe but there are some reference i can point to you and to make only those variables
+
+14:30.160 --> 14:35.120
+writable and nothing else so there has been some work we've done in the past years to enable that
+
+14:35.120 --> 14:42.320
+scenario and yeah as i said this is just a brief list on that if you want to look into some examples
+
+14:42.320 --> 14:49.040
+we compiled the generic ones but not completely secure ones in the isa cfp core layer and there's
+
+14:49.040 --> 14:56.000
+also practical examples for a ti-based processor this is from this id 2050 device of us so have
+
+14:56.000 --> 15:01.360
+a look there if you are interested in some examples so next step obviously is then to
+
+15:02.000 --> 15:06.000
+sign and lock the firmware artifacts that is again the vendor specific mechanism
+
+15:07.440 --> 15:12.880
+don't forget to start the watchdog as i said um that is in the end then taken over by linux once
+
+15:12.880 --> 15:19.040
+it's running so that starting point should be in u-boot and not later otherwise you may have some
+
+15:19.600 --> 15:25.200
+black hole there yeah and another very important indication on that obviously test don't trust the
+
+15:25.200 --> 15:31.040
+whole thing and as i said this is still fresh i'm not saying it's instable but it can happen
+
+15:31.040 --> 15:35.280
+and it happened unfortunately there was some bug that we found during the testing recently
+
+15:35.280 --> 15:38.160
+it's fixed by now so if you take the latest u-boot version you have it fixed
+
+15:38.960 --> 15:43.000
+But it's always good to have at least these basic mechanisms
+
+15:43.000 --> 15:45.020
+also checked by your system test intensively
+
+15:45.020 --> 15:48.320
+regarding if there are security holes remaining on that level.
+
+15:51.240 --> 15:52.320
+So next step.
+
+15:54.820 --> 15:58.620
+After U-boot, basically, there is the UEFI payload starting.
+
+15:58.620 --> 16:03.620
+And the UEFI payload for us is our A-B switching bootloader,
+
+16:03.620 --> 16:10.500
+if you would got um which is quite easily or was quite easily enableable for for arm and
+
+16:10.500 --> 16:17.540
+arm 64 builds so that's available checkpoint um however what is now the challenging part
+
+16:17.540 --> 16:22.180
+is or what turned to be a bit more challenging part was the unified kernel image so so far in
+
+16:22.180 --> 16:28.340
+x86 we used the pattern um that systemd was introducing um the little kernel little loader
+
+16:28.340 --> 16:34.340
+stub which then forms together with the kernel and with init id and the command line string
+
+16:34.900 --> 16:41.140
+and on arm also a device tree blob that unified kernel image and that whole thing is being pulled
+
+16:41.140 --> 16:47.220
+together with object copy um it's a pe binary so it's a windows binary an elf binary and an
+
+16:47.220 --> 16:52.420
+yoifi binary in the end and the object copy tools you currently get from common
+
+16:52.420 --> 16:57.540
+toolchain releases you get via your distributions they are not ready for that so you can work around
+
+16:57.540 --> 17:02.100
+obviously by taking the latest boot chain or latest tool chain if you're on yokto what an issue if
+
+17:02.100 --> 17:08.820
+you're on distribution based build system that can be an issue um there's hope as i said it's fixed
+
+17:08.820 --> 17:13.380
+but the current situation was a little bit of problematic first from a from a handling perspective
+
+17:14.100 --> 17:19.220
+what turned out to be more problematic to our scenarios was this single device tree story so
+
+17:19.220 --> 17:24.820
+ideally the device tree comes in the system ready model from the firmware and it's perfectly fine
+
+17:24.820 --> 17:30.980
+describing all bits you want to have on your device practically well there is a life cycle of
+
+17:31.540 --> 17:36.900
+that piece of the firmware piece of the kernel from when you're having your device a longer
+
+17:36.900 --> 17:41.220
+time in the field you may start with a bsp kernel you may later on end up with a mainline kernel
+
+17:41.220 --> 17:46.420
+ideally you may start with unofficial device rebinding you may up in the end starting or
+
+17:46.420 --> 17:50.740
+using official binding so there is a certain thing that you have to plan for at least if you want to
+
+17:50.740 --> 17:57.940
+do a long-term updatability of your system. In other words, this kind of bundling option of the
+
+17:57.940 --> 18:03.860
+kernel and the device tree, which is unfashionable, but it's unavoidable practically still for a
+
+18:03.860 --> 18:08.740
+foreseeable future. Now, if you have one device tree for one device, no problem,
+
+18:08.740 --> 18:13.380
+checkpoint, you can use this pattern. However, if you have an image which is supposed to have only
+
+18:13.380 --> 18:18.180
+minor variant of devices covered with one image, you suddenly have a problem. There's only one
+
+18:18.180 --> 18:23.300
+device tree and you want to address them all so we need support for multiple of
+
+18:23.300 --> 18:27.120
+those device trees some kind of matching mechanism that's what we did well we
+
+18:27.120 --> 18:32.160
+first of all solved for us the unified kernel image generator problem and by
+
+18:32.160 --> 18:37.200
+doing a Python based approach pulling this Python these sections together for
+
+18:37.200 --> 18:41.520
+the PE binary and then we simply implemented a mechanism to choose from
+
+18:41.520 --> 18:45.660
+the option of a list of device trees which were embedded in this embedded
+
+18:45.660 --> 18:51.280
+this unified kernel image, choose the one which matches what the firmware was providing before.
+
+18:52.200 --> 18:53.020
+Pretty simple thing.
+
+18:53.220 --> 18:55.240
+Eventually, we will also continue to system debut.
+
+18:56.760 --> 18:59.200
+That's basically the needed step for that.
+
+18:59.700 --> 19:04.120
+The precondition for that, to have this kind of device tree replacement,
+
+19:04.980 --> 19:12.740
+is that the firmware allows you to forward transport certain dynamic information
+
+19:12.740 --> 19:15.160
+that the firmware implants into the device tree
+
+19:15.160 --> 19:16.520
+via a fix-up protocol.
+
+19:17.360 --> 19:19.800
+So there's a fix-up UIFE protocol being defined
+
+19:19.800 --> 19:21.040
+and implemented in U-Boot.
+
+19:22.860 --> 19:24.540
+U-Boot is working just fine.
+
+19:24.700 --> 19:25.900
+SystemdBoot supports it.
+
+19:26.200 --> 19:27.300
+UIFE BootGuard supports it.
+
+19:29.040 --> 19:30.640
+I think that was currently the situation.
+
+19:31.520 --> 19:33.540
+EDK2, unfortunately, does not support it yet.
+
+19:34.220 --> 19:38.340
+It's ongoing work to get this into the EVBR specification.
+
+19:39.040 --> 19:40.720
+So it's an open issue on that topic.
+
+19:40.880 --> 19:42.520
+So eventually maybe it becomes standard
+
+19:42.520 --> 19:47.000
+and we become also available for other firmware providers.
+
+19:48.560 --> 19:51.560
+So with that, we basically leave the UEFI domain
+
+19:51.560 --> 19:54.520
+and I would also hand over at this stage.
+
+19:54.880 --> 19:56.060
+Yeah, thanks Jan.
+
+19:58.200 --> 20:00.240
+So now what do we have actually?
+
+20:00.420 --> 20:03.900
+We do have cross-architecture commodity in the UEFI domain,
+
+20:04.320 --> 20:08.240
+which means you do deploy the very same components across architectures,
+
+20:08.240 --> 20:11.920
+maybe with a bit of minor configuration, for example,
+
+20:11.920 --> 20:18.680
+enabling watchdogs or not. Next is the US domain here on the right side and I
+
+20:18.680 --> 20:23.740
+want to focus on on three things here. First is how does a unified kernel
+
+20:23.740 --> 20:28.840
+image first find and then mount its rootFS. The second is how to integrate
+
+20:28.840 --> 20:34.760
+integrity protection to this process and the third one is obviously as the title
+
+20:34.760 --> 20:43.240
+the dog says firmware update so starting with firmware update um in modern times updatability
+
+20:43.240 --> 20:50.200
+is probably the most important product feature and commonly what we see is an ab scheme which means
+
+20:50.200 --> 20:56.680
+you do have two copies of your root file system and one is actually selected for being the current
+
+20:56.680 --> 21:03.080
+boot path so this is the currently running system while running you update the spare copy and when
+
+21:03.080 --> 21:08.440
+you're done you're just test booting into this if this has worked and the image has booted up
+
+21:08.440 --> 21:14.840
+perfectly fine then this becomes your default image and this select switch is over if not you
+
+21:14.840 --> 21:21.320
+get a rollback and again you add firmware 1 which was the initial one and can continue or report
+
+21:21.320 --> 21:29.080
+the failure or whatever to your backend in terms of an ota update um this of course needs support
+
+21:29.080 --> 21:34.200
+from the bootloader as Jan just said which is available for if you boot guard as well as for
+
+21:34.200 --> 21:39.800
+wood and for other bootloaders as well but it needs a very deep integration in terms of arming
+
+21:39.800 --> 21:45.480
+the hardware watchdog which you need for having the rollback in case you for example deployed an
+
+21:45.480 --> 21:51.480
+x86 kernel on an arm system won't boot so you rely on the watchdog you need the ap switching
+
+21:51.480 --> 21:58.320
+and most probably other features as well this whole stuff in terms of using SW
+
+21:58.320 --> 22:03.960
+update here for example is the flow how it works is pre-integrated into SIP core
+
+22:03.960 --> 22:10.560
+so you can just clone it don't play with it it's a pre-integration asset and what
+
+22:10.560 --> 22:14.460
+you can also do with this mechanism is once you have it available means you
+
+22:14.460 --> 22:18.480
+have a general way of deploying artifacts whatever this means to a
+
+22:18.480 --> 22:22.800
+device so it must not always only be firmware in terms of for root file
+
+22:22.800 --> 22:28.200
+systems you can also use this mechanism to update packages or contain images or
+
+22:28.200 --> 22:34.920
+what else as you have one channel down to your device for this so now having
+
+22:34.920 --> 22:40.140
+done an update how does this unified kernel image find its actual root file
+
+22:40.140 --> 22:46.240
+system the assumption here is that a kernel and its root file system is one
+
+22:46.240 --> 22:51.840
+package that belongs together so meaning you have deployed a kernel and it belongs to exactly one
+
+22:51.840 --> 22:58.320
+of the two a or b root for systems of course there is a kernel option you can simply specify
+
+22:58.320 --> 23:05.680
+root is dev partition whatever but this doesn't unfortunately work in the a b update case
+
+23:05.680 --> 23:10.640
+because you cannot know without asking the device in the field what its current boot path is
+
+23:10.640 --> 23:16.640
+so it has to be a B agnostic and in case of secure boot you also have the
+
+23:16.640 --> 23:19.940
+problem that you don't want to feed untrusted information into the boot
+
+23:19.940 --> 23:24.560
+chain which means you cannot rely on some configuration lying around somewhere
+
+23:24.560 --> 23:30.680
+so essentially there are a few options left you can use the file system UIDs
+
+23:30.680 --> 23:35.440
+so in the internet romfs while booting you scan the disk and search for the
+
+23:35.440 --> 23:40.340
+file system UID that matches your kernel because it's engraved embodied in the
+
+23:40.340 --> 23:47.540
+ID and then boot it. Fine, may work but not all file systems support this and so
+
+23:47.540 --> 23:51.620
+it's out of the game for a general solution. Next one is you can use
+
+23:51.620 --> 23:57.500
+partition UIDs. Works the same way but it's also not always available and you
+
+23:57.500 --> 24:01.160
+have the the problem that you have to write the partition table on each
+
+24:01.160 --> 24:06.380
+update which you should avoid which is not that good. So in the end we came to
+
+24:06.380 --> 24:12.840
+the idea that we add a custom tag image UID to the root file system's ETCOS release and
+
+24:12.840 --> 24:20.560
+then in the image ID iterate over all file systems, mount them, look into the ETCOS release,
+
+24:20.560 --> 24:24.660
+look if it matches the image UID engraved in the unified kernel image.
+
+24:24.660 --> 24:29.620
+If yes, we have found our root file system and we can continue booting.
+
+24:29.620 --> 24:37.180
+So as the UUID is engraved also in the unified kernel image means it's signed.
+
+24:37.180 --> 24:44.580
+So both find a match and the UUID is protected by secure boot in the unified kernel image.
+
+24:44.580 --> 24:49.620
+Now you have booted a root file system and this root file system is not protected against
+
+24:49.620 --> 24:50.620
+modification.
+
+24:50.620 --> 24:57.180
+So it happens to satisfy our mechanism of finding the UUID in EDCOS release, but you
+
+24:57.180 --> 25:02.700
+are free to tinker with it and as long as you keep this mechanism intact you can boot anything
+
+25:02.700 --> 25:07.100
+so what you want to have here is some kind of root file system integrity protection
+
+25:07.740 --> 25:14.300
+and for this you need authenticity enforcement and most probably a read-only root file system
+
+25:15.420 --> 25:21.340
+as we've heard from jan you can integrate the emeriti here which is kind of a layering approach
+
+25:21.340 --> 25:28.460
+you can use device member for layering block devices and the severity gives you the integrity
+
+25:28.460 --> 25:35.100
+protection in terms of mercury means if you modify the lower bits here the changes trickle
+
+25:35.100 --> 25:39.740
+up to the root hash and then you get a different root hash so what you do is you prepare your
+
+25:39.740 --> 25:46.860
+for system you calculate the root hash and then this root hash you actually embody into the end
+
+25:46.860 --> 25:51.300
+ID, which then gets put into the unified kernel image.
+
+25:51.300 --> 25:56.800
+And while booting, you again scan the disks and you scan the metadata of the file system
+
+25:56.800 --> 26:03.080
+of the Deem Verity block device and find a match between the root hash embodied in the
+
+26:03.080 --> 26:07.100
+unified kernel image and the root hash in Deem Verity's metadata.
+
+26:07.100 --> 26:09.740
+Well, congratulations, you found it.
+
+26:09.740 --> 26:16.360
+And the bonus is that you don't have to actually try to mount each file system you find along
+
+26:16.360 --> 26:23.620
+the way because you can read it out from the metadata so as you've seen there are
+
+26:23.620 --> 26:28.540
+many things here involved that you have to align proper in order to make this
+
+26:28.540 --> 26:35.620
+work so in essence it's not that big of a rocket science but you have to bring
+
+26:35.620 --> 26:41.620
+those pieces in a line and doing this upstream is kind of a codified
+
+26:41.620 --> 26:47.700
+description of the big shared picture it's shared knowledge you bring upstream so to not make this
+
+26:47.700 --> 26:54.580
+tribal knowledge bring it out to the open and as it happens to touch many of the core concepts or
+
+26:54.580 --> 26:59.620
+working groups of the civil infrastructure platform it's a natural fit to bring this stuff
+
+27:00.260 --> 27:05.620
+up upstream first to the SIP project which we have done and you can find it in the ISA SIP core layer
+
+27:05.620 --> 27:12.220
+this is an implementation more or less done with the help of the ISA metabill
+
+27:12.220 --> 27:17.800
+system but the idea scripts context configurations whatever can just be
+
+27:17.800 --> 27:25.620
+copied over to any other metabill system yokto whatever I said multiple times so
+
+27:25.620 --> 27:29.700
+we do have a reference integration which is ISA sub-core that you can find here
+
+27:29.700 --> 27:35.380
+there are pre-integrations of those concepts presented along the line it's
+
+27:35.380 --> 27:41.260
+It's not fully integrated because, for example, SecuBoot is on the technical side, the realization
+
+27:41.260 --> 27:42.620
+on the box.
+
+27:42.620 --> 27:46.880
+On the process side, you have to do key management, whatever.
+
+27:46.880 --> 27:49.880
+Those things are obviously not to be found there.
+
+27:49.880 --> 27:52.140
+But the box side, the technical side is there.
+
+27:52.140 --> 27:58.400
+You can just take it and hook it up into your company's process and be done with it, hopefully.
+
+27:58.400 --> 28:03.940
+There is a demo available on QEMO, obviously, for all architectures and one physical target.
+
+28:03.940 --> 28:09.940
+And on top of this, in terms of eat your own dog food, we prepared a layer, Meta IoT 2050
+
+28:09.940 --> 28:13.180
+for the Zymatic IoT 2050 boxes.
+
+28:13.180 --> 28:19.380
+And this is essentially the device-specific difference between the ISA-SubCore and this
+
+28:19.380 --> 28:22.080
+one to get this box up and running.
+
+28:22.080 --> 28:26.820
+So there you can see what it takes to bring a new box or what the difference is, how much
+
+28:26.820 --> 28:34.860
+work it would be to base on ISA-SIP core for a final product.
+
+28:34.860 --> 28:41.360
+So in sum, this whole stuff, combining Secure Boot and firmware update over the years and
+
+28:41.360 --> 28:46.140
+rocket science, but it's maybe too much for Casual Friday if you don't want to ruin your
+
+28:46.140 --> 28:52.860
+weekend, so take your time to implement it.
+
+28:52.860 --> 28:56.580
+Most of the puzzle pieces are open source, so they are available.
+
+28:56.580 --> 29:02.300
+You just have to find them, qualify them and bring them in line.
+
+29:02.300 --> 29:06.440
+And this is what we have done in terms of the civil infrastructure platform to give
+
+29:06.440 --> 29:11.140
+you blueprints, documentations or even pre-integrations.
+
+29:11.140 --> 29:15.980
+So documentation in terms of code, which you can use and just run.
+
+29:15.980 --> 29:20.380
+And the more important part here is the testing and long-term maintenance.
+
+29:20.380 --> 29:26.400
+So it's not just a one-shot that is out there to be copied or to take inspiration from.
+
+29:26.400 --> 29:32.580
+But instead, it's meant to be a long-term thing that's tested and measured there.
+
+29:32.580 --> 29:38.080
+So with this, join us at the mailing list and let's make this stuff even more a commodity
+
+29:38.080 --> 29:40.080
+than it is nowadays.
+
+29:40.080 --> 29:41.080
+Thanks.
+
+29:41.080 --> 29:46.080
+Now we have time for questions, I guess.
+
+29:46.080 --> 29:47.080
+Yep.
+
+29:47.080 --> 29:48.080
+Yeah.
+
+29:48.080 --> 29:50.080
+Slide 13.
+
+29:50.080 --> 29:51.080
+Yep.
+
+29:51.080 --> 30:03.620
+this one here so what we did here is we
+
+30:03.620 --> 30:06.440
+embedded this custom tech into the TCO3
+
+30:06.440 --> 30:10.040
+right and this UID is generated so it's
+
+30:10.040 --> 30:13.580
+some random UID and while booting you
+
+30:13.580 --> 30:16.700
+iterate over all file systems mount them
+
+30:16.700 --> 30:19.280
+look into this when you have found it
+
+30:19.280 --> 30:25.200
+you have found your matching rule for system of your kernel as you are now and this is essentially
+
+30:25.200 --> 30:32.560
+a shortcut of this mechanism so the root hash is actually kind of a uuid and with this you don't
+
+30:32.560 --> 30:39.040
+need to mount a dm verity block device or prepare it open it and mount the file system and look into
+
+30:39.040 --> 30:46.480
+etc us release instead you can take the root hash as this uuid and do the shortcut
+
+30:49.280 --> 30:58.280
+you can also use this mechanism with the severity but then you have to open the
+
+30:58.280 --> 31:03.920
+block device or the root hashes need to mesh when they don't you cannot open it
+
+31:03.920 --> 31:07.880
+so you go to the next one this is also possible so it's kind of a shortcut
+
+31:07.880 --> 31:15.860
+optimization. How long does it take to just mount every partition? You can call a premature
+
+31:15.860 --> 31:23.980
+optimization. It doesn't take long. Yeah. How do you update your bootloader? The bootloader is just an
+
+31:23.980 --> 31:31.300
+EFI binary sitting on the ESP and of course you can update it. So using SW update, replacing it
+
+31:31.300 --> 31:35.340
+with the file, a new bootloader, a new AP bootguard.
+
+31:35.340 --> 31:38.340
+But that's a sensible operation to do, obviously.
+
+31:38.340 --> 31:43.340
+If you crash the bootloader, well then, you're out of luck.
+
+31:45.640 --> 31:48.140
+No, there's no AP in the bootloader in this case,
+
+31:48.140 --> 31:49.760
+not in the general concept here.
+
+31:51.540 --> 31:54.620
+You need to have one core bootloader,
+
+31:54.620 --> 31:56.480
+which you don't touch.
+
+31:56.480 --> 31:59.520
+On top of this, you can chain boot, for example,
+
+31:59.520 --> 32:04.960
+EFI boot girls, two if you want to have two. But updating this call, this single point,
+
+32:05.760 --> 32:11.680
+is then still the problem. So you don't solve it by putting two there. You always have one single
+
+32:11.680 --> 32:19.120
+point of failure. Except for the case that you have support in the EFI bios, wherever, to have
+
+32:19.120 --> 32:24.400
+two different ESPs or something. But this is not the general case. So yeah, there are solutions,
+
+32:24.400 --> 32:28.260
+but not the general one, not the one you buy from the typical ender.
+
+32:28.260 --> 32:31.600
+And you mentioned one thing about not updating the GPT habits.
+
+32:33.440 --> 32:34.840
+Yeah, this one here.
+
+32:35.440 --> 32:38.880
+So if you write to a partition a new update package,
+
+32:39.180 --> 32:40.520
+which is a partition image,
+
+32:41.260 --> 32:45.820
+you may write a new UID to this.
+
+32:47.000 --> 32:51.020
+And in order to recognize this, for example, in the GPT,
+
+32:51.620 --> 32:54.380
+you may modify the GPT, depends on the implementation.
+
+32:54.400 --> 33:03.400
+This is bad. And except for, apart from this, it's not always available. If you don't have a GPT formatted block device, then it's out of the game anyway.
+
+33:03.400 --> 33:07.400
+I mean, there's a version of GPT that you have to, so it's AB.
+
+33:07.400 --> 33:08.400
+Sorry?
+
+33:08.400 --> 33:11.400
+You have two of them. I mean, it's pretty AB.
+
+33:11.400 --> 33:16.400
+Yeah, but if you ruin your partition table, then you again have a problem.
+
+33:16.400 --> 33:19.400
+You have two. You have two and it's...
+
+33:19.400 --> 33:27.400
+Right. You have two if it works, it's good. If not, it crashes. Better don't touch it.
+
+33:27.400 --> 33:31.400
+And with this mechanism here, you don't have to touch it.
+
+33:31.400 --> 33:40.400
+Again, so what we didn't tell is that EFI BootGuard also has two partitions where it holds this configuration.
+
+33:40.400 --> 33:48.400
+And the idea is that you don't touch, under all circumstances, you're currently known to work a boot path.
+
+33:48.400 --> 33:54.440
+So, you always write to the spare other partition, right?
+
+33:54.440 --> 33:59.160
+And following this idea, you don't want to write GPTs or something, so you simply don't
+
+33:59.160 --> 34:02.020
+want to touch single point of failures here.
+
+34:02.020 --> 34:04.020
+That's the idea.
+
+34:04.020 --> 34:08.360
+Yeah, could be.
+
+34:08.360 --> 34:15.220
+So we also thought about having the configuration EFI variables like SystemDeboot does.
+
+34:15.220 --> 34:21.860
+opted for not doing this because we do not know how reliable the lacking storage for the IFI variables
+
+34:21.860 --> 34:27.780
+are so we said okay better do it on disk if the disk has failed then it's broken anyway
+
+34:28.980 --> 34:37.540
+don't rely on other things you cannot influence so it's kind of doing it really hard
+
+34:37.540 --> 34:44.540
+I have another question about a quite constructed example.
+
+34:44.540 --> 34:47.540
+So you did an update where you just changed the device here.
+
+34:47.540 --> 34:50.540
+The root hash is the same.
+
+34:50.540 --> 34:53.540
+How would you do that update?
+
+34:53.540 --> 34:57.540
+Because after you install the new image, you have the same root hash in both images.
+
+34:57.540 --> 35:01.540
+Yeah, if you do have the same root hashes in both images,
+
+35:01.540 --> 35:03.540
+then both images are available.
+
+35:03.540 --> 35:05.540
+So you can use both.
+
+35:05.540 --> 35:11.340
+So that's, I said it here, that a kernel plus root for a system is one update package.
+
+35:12.160 --> 35:15.820
+That depends on the wiring of your update procedure if this works.
+
+35:16.280 --> 35:20.840
+So for example, if you have kernel A and root for a system A, you have kernel B and root for a system B.
+
+35:21.420 --> 35:28.020
+And you now update kernel B and this one probes the disks and finds this root for a system.
+
+35:28.800 --> 35:30.920
+Although it should use this one.
+
+35:31.440 --> 35:32.660
+Then you have X.
+
+35:32.660 --> 35:40.900
+them this can be a problem too that depends on how we wire up the update system but in terms of
+
+35:40.900 --> 35:46.420
+integrity protection it doesn't matter because both root hashes are equal so both partitions
+
+35:46.420 --> 35:54.420
+are eligible for being used you said you had problems with the unified kernel
+
+35:54.420 --> 35:57.300
+it's not supporting more than one device tree.
+
+35:57.300 --> 36:01.500
+Couldn't you use the fix or the image for the Unifo kernels?
+
+36:01.500 --> 36:03.900
+Then you are leaving again the UEFI domain.
+
+36:03.900 --> 36:05.880
+Then you're back in the classic boot chain of UEFI.
+
+36:05.880 --> 36:08.340
+Yes, you can do that, and it has this mechanism,
+
+36:08.340 --> 36:11.220
+and it has these options, but that's not the goal.
+
+36:11.220 --> 36:14.940
+As I said, we want to be on the UEFI side just the same,
+
+36:14.940 --> 36:16.900
+and that's what we're achieving now.
+
+36:16.900 --> 36:18.440
+Maybe even think beyond that arm.
+
+36:18.440 --> 36:20.220
+You could think of RISC-V and things like this.
+
+36:20.220 --> 36:22.860
+So that's basically the idea behind it,
+
+36:22.860 --> 36:23.980
+having that standardized.
+
+36:23.980 --> 36:25.260
+I mean, it comes with a cost, obviously.
+
+36:25.380 --> 36:29.320
+You don't do this sub-multi-second boot time optimization this path.
+
+36:29.860 --> 36:31.160
+There has to have a complexity in it.
+
+36:31.600 --> 36:33.260
+But that's also in our domain.
+
+36:33.380 --> 36:34.380
+It's not the primary driver.
+
+36:35.060 --> 36:37.300
+We are more interested in having that path more commodity
+
+36:37.300 --> 36:41.600
+and more robust and more unified than having it more optimized.
+
+36:42.160 --> 36:45.920
+So different problems to solve, different sweet spot where you optimize.
+
+36:45.920 --> 36:48.460
+And this is basically the generalization optimization.
+
+36:51.080 --> 36:51.680
+Kostovic.
+
+36:53.980 --> 37:07.740
+essentially this mechanism works for example rock as well just have to
+
+37:07.740 --> 37:12.360
+implement it we happen to choose SW update to implement it as the blueprint
+
+37:12.360 --> 37:19.380
+and zip but you can use anything else for the purpose so this is quite
+
+37:19.380 --> 37:27.340
+agnostic so you have this one here and the communication to the bootloader so
+
+37:27.340 --> 37:32.640
+arming the watchdog a B switching this stuff so the update agent communicating
+
+37:32.640 --> 37:37.380
+with the bootloader this has to be done this is perfectly fine integrate into SW
+
+37:37.380 --> 37:43.740
+update if you have this in other or even proprietary update agents that works as
+
+37:43.740 --> 37:48.820
+well so there is nothing that binds you to SW update if you want to have the
+
+37:48.820 --> 37:53.260
+pre-integrated route in terms of the zip call then you get a stably update but
+
+37:53.260 --> 37:59.260
+you can of course swap it then you have to re-implement the features but it's
+
+37:59.260 --> 38:03.480
+nothing that locks you into this
+
+38:12.860 --> 38:17.860
+device please come into the unified kernel image this is kind of the new
+
+38:17.860 --> 38:23.780
+bits on that piece. So the unified kernel image has a header stub which is a UEFI binary which
+
+38:23.780 --> 38:30.180
+loads, finds out what artifacts are in this binary blob, the kernel init ID, and then a number of
+
+38:30.180 --> 38:35.840
+device trees. And then it matches from that number of device trees the fitting one and boots that up
+
+38:35.840 --> 38:41.060
+the classic way. So this is outside of the UEFI domain already. But as the whole thing, the unified
+
+38:41.060 --> 38:46.600
+kernel image is a UEFI binary, we benefit from the firmware validating that whole binary as being
+
+38:46.600 --> 38:53.320
+integral or not. That's the story behind it. So I think we have a short question, the last one.
+
+39:16.600 --> 39:25.560
+Yeah, so the suggestion is to put everything into the kernel.
+
+39:25.760 --> 39:26.600
+There are mechanisms for that.
+
+39:26.680 --> 39:27.860
+Maybe we can evolve on that.
+
+39:27.980 --> 39:30.620
+I'm not sure how then the kernel command line is addressed.
+
+39:31.040 --> 39:32.900
+So I'm not saying that this is the only way to go forward.
+
+39:33.120 --> 39:35.240
+But it's one way that we practically choose right now.
+
+39:35.320 --> 39:38.740
+And I'm happy to remove pieces from our chain, obviously, in the future.
+
+39:39.300 --> 39:40.580
+Also regarding the firmware.
+
+39:40.580 --> 39:45.840
+So if our bootloader eventually becomes superseded, fine, drop it, do it simpler.
+
+39:46.600 --> 39:55.280
+So this one here, the AB switching logics, can as well be implemented in the UEFI firmware as well, if it has support for it, meaning extending the specification.
+
+39:56.220 --> 39:59.760
+The watchdog enablement is currently done with the hardware watchdog.
+
+39:59.900 --> 40:03.740
+UEFI does have this software watchdog, which is essentially a timer.
+
+40:04.420 --> 40:11.420
+If you would bring this to the specification, every system would have it, and we are happy to ditch UEFI boot guard on this one.
+
+40:12.420 --> 40:20.320
+You can now do the same, very same thing in terms of writing DXEs, so UEFI drivers that do the job,
+
+40:20.780 --> 40:26.020
+but those tend to be specific to the UEFI implementation you get for a board.
+
+40:26.680 --> 40:33.700
+So you better offload this to some special thing, which we currently do with UEFI BootGuard,
+
+40:33.840 --> 40:37.200
+but eventually we'd love to get rid of this.
+
+40:38.160 --> 40:40.320
+It's just for the transition.
+
+40:41.420 --> 40:45.020
+But for this, you obviously have the need and do need this.
+
+40:52.820 --> 40:56.360
+Not yet, internally, but it's not yet published.
+
+40:56.360 --> 40:59.580
+So the D-encrypt part will come, definitely,
+
+41:00.560 --> 41:01.980
+but currently not yet.
+
+41:02.940 --> 41:05.140
+The problem is not so much on the technical side,
+
+41:05.140 --> 41:06.640
+the problem is on the process side.
+
+41:06.640 --> 41:10.080
+As I said, how do you hook up your whole signature
+
+41:10.080 --> 41:16.240
+management key management whatever into this process so doing it on the technical side is
+
+41:16.960 --> 41:22.640
+soft but having the integration and doing this as a blueprint or pre-integration
+
+41:22.640 --> 41:28.160
+is the hard part so it's not a question of is it possible but instead how do you
+
+41:29.920 --> 41:36.240
+prepare it for being upstreamed in a way that's reusable for others in terms of not
+
+41:36.240 --> 41:39.120
+imposing our solutions to the whole world, so to say.
+
+41:43.200 --> 41:51.200
+Okay, I think we are out of time. So thank you for your attention. We are around still.
+

@@ -1,0 +1,180 @@
+Secure Boot on Arm Systems
+        Protecting your embedded devices
+
+
+                         Alexandre Vicenzi
+About me
+●   Software Engineer @ SUSE
+     ○ Container ecosystem
+     ○ Previously automotive
+●   openSUSE
+     ○ Package maintainer
+     ○ Community moderator (Portuguese language)
+     ○ Mirror administrator (South America)
+Agenda
+●   What
+●   Why
+●   How
+●   UEFI Secure Boot
+●   TF-A Trusted Board Boot
+What is secure boot?
+●   Standard developed by PC industry
+●   Authenticity
+     ○ Ensure that the image is from a trusted source
+●   Integrity
+     ○ Ensure that the image has not been tampered with
+●   Each component of the boot process is digitally signed
+●   Each component of the boot process gets verified
+     ○ Verification failure aborts the boot process
+●   Secure boot? Trusted boot? Chain of Trust?
+Why we need it?
+●   Security
+     ○ Boot verified and trusted images only
+     ○ Image has not been tampered with
+●   Compliance
+     ○ Cyber Resilience Act (EU)
+How it works?
+●   Images are signed
+     ○ Firmware
+     ○ Bootloader
+●   Each image is verified before execution
+●   Keys for validation and verification are stored safely
+     ○ On the SoC or NV-RAM
+●   Process often varies by architecture and manufacturer
+     ○ UEFI Secure Boot
+         ■ Standard for x86
+         ■ Often found on Arm hardware for data centers
+     ○ Trusted Firmware-A Trusted Boot
+         ■ For embedded applications
+UEFI Secure Boot
+●   Verification mechanism from UEFI
+     ○ Each program loaded is validated and trusted
+●   shim is an EFI application
+     ○ First stage bootloader
+     ○ Used by most distros
+●   shim opens, verify and execute another application
+     ○ e.g., GRUB
+●   shim is signed by Microsoft UEFI CA
+●   GRUB is signed with your key
+     ○ The shim validates GRUB signature
+UEFI Secure Boot Sequence
+●   SB verification sequence
+     ○ UEFI loads and verifies shim
+     ○ shim loads and verifies GRUB
+●   System panics if the verification fails
+●   shim allows user managed keys
+     ○ Also known as Machine Owner Key (MOK)
+     ○ Keys can be added or removed by the user
+     ○ Separate from the distro CA key
+
+
+
+
+    UEFI             SHIM             GRUB        Kernel
+Trusted Firmware-A Trusted Board Boot
+●   Based on Arm Trusted Board Boot Requirements (TBBR)
+     ○ ARM DEN0006D
+●   Establishes a Chain of Trust
+     ○ Using Public-Key-Cryptography Standards
+●   Each component trusts the next
+●   Authenticates all firmware images up to a regular bootloader
+●   The process vary across platforms and manufactures
+●   CoT requires
+     ○ BL1 residing in the ROM
+     ○ Self-signed certificates
+     ○ Signing of firmware images
+     ○ Key provisioning
+         ■ Burning the keys
+         ■ Locking the keys
+         ■ Enforcing secure boot
+TF-A Trusted Board Boot Sequence
+ ●     Chain of Trust verification sequence
+        ○ BL1 loads and verifies BL2
+        ○ BL2 loads and verifies BL3x
+ ●     System panics if the verification fails
+
+
+ARM Trusted Firmware
+                                                BL32
+                                           Secure Payload    Kernel
+                                              (OP-TEE)
+
+
+
+                                                               BL33
+          BL1               BL2                 BL31
+                                                            Bootloader
+     Trusted ROM        Trusted Boot          Runtime
+                                                             (U-Boot)
+Hardware support
+●   Platforms compliant with Arm SystemReady
+     ○ e.g., Ampere, NVIDIA, NXP, Xilinx
+     ○ UEFI Secure Boot
+●   NXP i.MX 6/7/8/9
+     ○ High Assurance Boot (HABv4)
+●   NXP Layerscape
+     ○ QorIQ Trust Architecture
+●   Marvell Armada
+●   STM32
+●   and more
+Creating an image
+●   Generate key pair for signature
+●   Prepare binaries
+     ○ Vendor firmware
+     ○ Kernel, Initramfs, Device Tree (dtb)
+     ○ Trusted Firmware-A, U-Boot
+●   Signing binaries
+     ○ TF-A handles it during build time
+     ○ On some platforms it requires proprietary tools to sign
+●   Bundle everything
+Preparing TF-A
+●   Build requires a few dependencies
+     ○ U-Boot
+     ○ OP-TEE (Optional)
+     ○ Signing keys
+     ○ In some cases
+         ■ Proprietary initialization firmware
+         ■ Proprietary signing tools
+●   Enabling extra build arguments
+     ○ TRUSTED_BOARD_BOOT=1
+     ○ GENERATE_COT=1
+●   Signature is embedded into each image
+     ○ BL2, BL31, BL32, BL33
+Building TF-A
+$ make PLAT=lx2160ardb \
+       TRUSTED_BOARD_BOOT=1 \
+       CST_DIR=/cst \
+       BOOT_MODE=sd \
+       RCW=/rcw/rcw_2200_750_3200_19_5_2.bin \
+       BL33=/boot/u-boot.bin \
+       all fip pbl
+
+           Compile
+          FIP and PBL
+Bundling all together
+●   Create a rootfs
+     ○ Kernel, Initramfs, DTBs, Bootloader
+     ○ User-space applications
+●   Write firmware files to their respective offsets
+     ○ Offset can vary by platform and storage type
+Open Build Service
+●   KIWI can be used to build images
+●   User defined scripts can perform many actions
+     ○ Most Arm images already use user scripts
+         ■ To write U-Boot
+         ■ To perform partition changes
+●   pre_disk_sync.sh is used to change the root tree contents
+     ○ Copy files to their proper location
+     ○ Firmware, bootloaders, device tree, etc
+●   editbootinstall.sh is used to write binaries into disk offsets
+     ○ Each firmware file has its own offset
+     ○ Offset varies by board and media storage (eMMC, SD, etc)
+●   The private key used to sign needs to be stored in OBS
+     ○ Can't be hosted on public instances
+References
+●   TF-A Trusted Board Boot
+●   openSUSE UEFI
+●   NXP Layerscape Software Development Kit User Guide
+●   NXP Code Signing Tool
+Thank you
+

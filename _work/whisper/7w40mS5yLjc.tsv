@@ -1,0 +1,469 @@
+start	end	text
+0	5340	The talk right now that you're in is reflections on trusting trust zone by Dan Rosenberg. Sorry,
+5340	13340	Rosenberg. Thank you. All right. So as you said, I'm Dan. And today we're going to be talking
+13340	18760	about attacking trust zone. So hopefully if you're in this room you've heard of trust zone
+18760	24200	before or have some idea of what it is. But just in case, trust zone is a system wide approach
+24200	29300	to security implemented on ARM devices which enjoy a sort of majority market share, especially
+29300	35300	among mobile devices. And Trustzone allows these devices to implement a fairly wide range
+35300	42300	of security related tasks. It accomplishes this by segregating all software and hardware on the
+42300	47180	device into what are referred to as the normal world and the secure world. So in the normal
+47180	52720	world you have all of the components of your traditional operating system including your
+52720	57100	standard applications, system services, and the operating system kernel. Now today we're
+57100	60940	going to be talking exclusively about an implementation on Android. So this will include the
+60940	66720	Linux kernel for example. Then in contrast on the other side we have the secure world. Now
+66720	71300	there are a number of different design models for implementing a secure world. But the most
+71300	77220	popular in practice is having a secure operating system kernel or a trust zone kernel under which
+77220	83060	a number of potentially independent trusted applications or trustlets may run. And these can
+83060	88260	run concurrently and are frequently written by third parties to implement various modularized
+88260	94400	pieces of security technology. Now, access between the normal world and the secure world is
+94400	100360	mediated by a monitor component. And the secure world has complete access to all of the hardware
+100360	105860	and software on the device. But the normal world does not. It can only communicate with the
+105860	111400	secure world via carefully defined channels. So the secure world is capable of designating
+111400	116900	certain regions of memory for example as secure only and the normal world even with higher
+116900	122740	privileges like kernel privileges cannot access those secure memory segments. So it's acting
+122740	130740	much like a hypervisor in this case. In my experience the most common usage of trust zone is for
+130740	137780	DRM, digital rights management, where the basic use case is protected media content can be sent
+137780	143980	to a user's device and then decoded exclusively in the secure world. So even if the user has
+143980	150480	full control over their own operating system, all of this decoding takes place in a protected
+150480	156160	environment that the user does not have access to to prevent piracy. Additionally, trust zone
+156160	161320	is used frequently for other secure key storage applications such as for DM verify which is the
+161320	166240	Linux kernel's full disk encryption technology. It may also be used for storing sensitive
+166240	172240	information related to mobile payments and for creating protected hardware components such as
+172240	177520	a secure keypad that only communicates with the secure world such that if the operating system
+177520	183520	is compromised perhaps elements of pin entry may remain secure. Additionally, many vendors
+186820	192700	choose to implement secure boot in such a way that it relies on software programmable fuses such
+192700	198540	is Qualcomm's QFuse technology. And because TrustZone has the ability to read and write these
+198540	203460	software programmable fuses, frequently TrustZone plays some sort of role either directly or
+203460	209040	indirectly in actually managing secure boot itself on mobile devices. And then finally a
+209040	214120	number of device manufacturers, most notably Samsung, have implemented their own security
+214120	219240	solutions that rely on TrustZone. As part of their Knox security suite, Samsung has
+219240	224580	implemented TEMA which is the trust zone based integrity measurement architecture. Among other
+224580	230940	things, this subsystem runs in the secure world and periodically scans the device kernel in
+230940	235900	memory to verify that no tampering has taken place. And if it detects any sort of compromise or
+235900	240160	suspicious activity, it will raise some sort of security exception or potentially reboot the
+240160	247120	phone. Prior to today, there's actually been very little public research on attacking trust
+247120	253120	zone. Thomas Roth gave a talk in 2013 I believe at CanSec West called next generation mobile
+254200	260000	rootkits in which he described using trust zone as a platform for surreptitiously spying on a
+260000	265580	user and noted that it's a particularly good choice for this kind of activity because even if a
+265580	270700	user has the ability to control the kernel, the kernel does not have the ability to look into
+270700	276580	trust zone to see if any sort of malicious activity is going on. And while he described the
+276580	282040	existence of specific vulnerabilities in trust zone as a potential vector to install such a
+282040	286460	root kit, to my knowledge he didn't talk about specific vulnerabilities, much less exploitation
+286460	292040	of them, which is what I'm going to be mostly focusing on today. Next, also in 2013, I
+292040	297040	published a post on the Azimuth security blog called unlocking the Motorola boot loader in
+297040	301820	which I described a Motorola specific trust zone vulnerability that allowed me to defeat
+301820	308900	secure boot on these devices. Next, a number of exploits published by the sort of Android
+308900	314160	routing and modding community, like XDA developers and the like, specifically for HTC
+314160	320160	phones, have used trust zone related attacks in the past, but these exploits have all been not
+322060	327240	only undocumented but obfuscated and not publicly analyzed, so very little public insight has
+327240	333240	been gleaned by this research. And then most recently, perhaps a month or two ago at
+333240	337860	recon, Nathan Keltner and Charles Holmes gave a talk called here be dragons where they
+337860	344620	described vulnerabilities specific to HTC's trust and implementation. And I should thank these
+344620	350860	guys for communicating with me while they were doing this research and sharing their findings.
+350860	354660	So looking back at the previous couple slides, we can begin to paint a picture of why this may
+354660	359900	be an interesting research target. Firstly, it's clearly a high value target to a number
+359900	365160	of different parties. You have content providers who rely on trust zone to prevent piracy of
+365160	371500	their media. You have OEMs like Samsung who implement security services to protect their
+371500	376820	users and gain advantage especially in enterprise markets. And then we have users who rely on
+376820	382320	the same security features to protect themselves and as is the case with groups like XDA
+382320	388160	developers and other ROM and rooting enthusiasts frequently want to defeat trust zone to defeat
+388160	393440	things like secure boot to install their own software on their phones. This coupled with the
+393440	396740	fact that there's been very little public research and as a result very little public
+396740	401360	scrutiny to support the, you know, sort of lofty claims of security that marketing
+401360	407240	literature has put forward makes this a compelling target. So for this research in
+407240	412120	particular, I chose to focus on Qualcomm's implementation of a trust zone kernel, which is
+412120	416700	called the Qualcomm Secure Execution Environment, or QSEE. And the reason behind this was
+416700	422120	fairly simple. Qualcomm enjoys a sort of majority market share, especially among mid to
+422120	428440	high end Android phones, especially in North America and Europe. Basically, if you have
+428440	435320	heard of a flagship model by Samsung, LG, Motorola, HTC, and it's for sale in Europe or North
+435320	439860	America, chances are it's running a Qualcomm chipset and as a result is using Qualcomm's
+439860	445860	trust zone kernel. So it's by far the most popular trust zone kernel in the market today.
+445860	451860	For actually performing this research, the tool chain requirements are fairly minimal.
+451860	457620	Obtaining trust zone images is incredibly straightforward. If you just spend the time
+457620	463200	Google searching, you can find huge archives of firmware images for dozens and dozens of
+463200	469000	Android devices. And frequently these are just simple archive formats like tar balls or zips.
+469000	474820	And you can pull out the trust zone images directly from those full firmware file formats.
+474820	479580	Additionally if you have root access on a live device you can use a Linux utility like DD to
+479580	485320	simply pull the trust zone image directly from disk. And once you have a trust zone image in
+485320	490620	hand analysis is really just as straightforward as pulling up your favorite disassembler in my
+490620	497320	case IDAPRO and going to work reverse engineering. Now earlier trust zone images actually rely on
+497320	503580	a proprietary Qualcomm header format which is a 40 byte header that dictates where in memory
+503580	509080	certain sections of trust zone are loaded which is fairly easy to sort of guess the meaning of
+509080	512740	and I think some people have gone out of their way to provide third party documentation on
+512740	518000	that. But nowadays the more recent trust zone kernels are actually ELF binaries so you can
+518000	523000	load them up in IDA pro and it will handle loading things in memory for you and then you can go to
+523000	530000	work. Now I find it's a useful exercise whenever beginning any sort of vulnerability research
+530660	535660	endeavor to enumerate the attack surface that's present on the target. In this case by far the
+535660	539660	most lucrative piece of attack surface was a software exception mechanism called the secure
+539660	545660	monitor call or SMC. So SMC is an ARM instruction which is a privileged instruction meaning it can
+545660	551280	only be executed by the kernel. That is somewhat analogous to a system call. So much like a
+551280	556700	normal application will issue a system call to request the operating system kernel provide
+556700	563160	some sort of service for it, the operating system kernel can issue an SMC request to request
+563160	568160	that trust zone do something on its behalf. Additionally, trust zone may be tasked with
+568160	572360	handling various hardware exceptions such as interrupts and external aborts. But this is a
+572360	576440	much more narrowly defined interface so I suspect it's less likely to have vulnerabilities.
+576440	582060	Qualcomm's implementation doesn't rely on this so much but other trust's own implementations
+582060	587660	most notably mobile core rely fairly extensively on shared memory segments to pass information
+587660	592740	back and forth between the secure and non-secure worlds. So that's a potentially interesting
+592740	598440	target on those implementations. Next, it's possibly interesting to note that the contents
+598440	604940	of the disk, EMC flash on the devices, is a potential attack factor to attack the secure
+604940	609600	world. When you consider the fact that in many cases TrustZone will actually read the contents
+609600	614480	of disk and do some amount of parsing, for example, to verify the contents of disk for secure
+614480	619820	boot, any vulnerabilities in that reading from disk and parsing could potentially be exploited
+619820	625940	by pathological disk contents to exploit these vulnerabilities. And then finally, there may
+625940	630820	actually be vulnerabilities in the individual trustlets, these trusted applications that are
+630820	636020	frequently authored by third parties. And I did spend some time looking at a number of these and
+636020	642020	found that there was a high amount of sort of low hanging fruit, somewhat trivial and easy to
+642020	646740	exploit vulnerabilities in these trustlets. Probably because the vendors that are authoring
+646740	650820	them likely don't have the same kind of security engineering culture as an organization like
+650820	656820	Qualcomm might. But unfortunately, or fortunately, these trustlets are isolated from one another on
+659660	664160	later trust zone kernels. So even if you're able to compromise an individual trustlet with a
+664160	668700	vulnerability in it, you don't necessarily gain access to other trustlets, much less the trust
+668700	673700	zone kernel. So it's a somewhat more limited attack. Having enumerated this attack surface, I
+673700	679860	having enumerated this attack surface I wanted to be clear about what my sort of assumptions
+679860	683940	were about the capabilities an attacker would need to possess to perform an attack on trust
+683940	690320	zone. So for today's research I wanted to assume that we had arbitrary code execution on the
+690320	694820	device already. And this is really just for practical reasons because there's essentially
+694820	699620	no remote attack surface for most real trust zone implementations. It's very difficult to
+699620	705120	imagine a sane use case where the trust zone kernel on a phone needs to receive data directly
+705120	711320	remotely. That having been said we also want to assume that the attacker has kernel privileges
+711320	716420	on the device. Whether that be because the attacker is the owner of the phone who actually
+716420	722420	physically owns it or an attacker that has gained access to a device and escalated privileges
+722420	727740	via a kernel exploit which is a somewhat well understood process. The reason for this
+727740	732040	assumption is that we really want the ability to issue these SMC instructions because this
+732040	737500	provides by far the broadest attack surface. And if we don't have kernel privileges there's
+737500	742200	practically no ability to interact with trust zone at all. You can sort of imagine a scenario
+742200	748240	where some sort of unprivileged application may be able to request that a privileged application
+748240	753360	make a call to trust zone on its behalf that exploits a vulnerability in trust zone. But as
+753360	759120	you can probably guess this is seeming less and less likely to happen in real life. The last
+759120	764980	thing that's important to note is that in this threat model crashes and denial of service
+764980	770240	bugs in trust zone are not considered security relevant to us. Because we're assuming that we
+770240	775200	already have the ability to run code as the kernel, we already have the ability to not
+775200	781200	only reboot the device but also probably do irreparable harm to it. So having the kernel
+781200	786580	trigger something that causes trust zone to crash doesn't actually result in gaining any sort of
+786580	792660	privileges that we didn't already have. Next we're going to be moving on to the actual
+792660	799240	implementation details of QSE itself specifically. So QSE as a trust zone kernel is closed
+799240	804360	source. So all of the information presented here on QSE has been reverse engineered in IDA
+804360	812360	Pro. However, the kernel side of things that actually communicates with TrustZone is open
+812360	820240	source as part of the forum GitHub tree that's available online. So actually looking at these
+820240	825600	kernel drivers and how they talk to TrustZone gave some insight on some of the ways of
+825600	833820	communication. So the interface that Qualcomm provides as a kernel driver is called SCM which
+833820	837860	is the secure channel manager which I found very confusing considering the fact that it
+837860	844860	actually uses the SMC instruction as the way of communication. And the way it issues these
+844860	849820	requests is via two calling conventions. There is a call by register convention and a
+849820	855740	convention that relies on using a request and response structure. So the call by register
+855740	862120	convention is fairly straightforward. In this convention the kernel loads the R0 register
+862120	866700	with this ORD value that contains the SMC command number, which you can think of as a system
+866700	870620	call number. It's just sort of the ID of the command that the kernel is requesting of trust
+870620	875960	zone. Various flags and then the number of arguments that it should expect. And then the
+875960	881960	individual arguments to the SMC request go in subsequent ARM registers R1, R2 and so on.
+884000	891000	Much more interesting is the second convention which relies on these command structures. So in
+891000	895500	in this convention the R0 register is loaded with the physical address corresponding to a
+895500	900920	command buffer and then the SMC instruction is issued. Now these command buffers feature a
+900920	906920	request header, a request buffer containing essentially arbitrary input data, a response
+906920	912760	header, and then a response buffer containing arbitrary output data. The request header is
+912760	917380	described by this SCM command structure in the kernel tree that's available as open
+917380	923580	source. And it features a length field which describes the length of the entire command buffer.
+923580	928920	A buffer offset field which is the offset of the input data from the beginning of the command.
+928920	932620	The response header offset which is the offset of the response header from the beginning of the
+932620	939000	command. The ID which is this ORD value that encapsulates the SMC request number flags and so
+939000	944380	on. And then the actual input data. And this is expected to be populated by the kernel before it
+944380	951380	issues the SMC request to TrustZone. Then when TrustZone has finished processing the request
+953380	959040	it is expected to populate the SCM response structure which contains a length field, a buffer
+959040	962880	offset field which is the offset from the beginning of the response header to the output
+962880	969880	data and then this is complete flag which is just set to 1. Now because this request structure
+969880	976880	now because this request structure is populated entirely by the kernel and in our threat model
+976880	981460	from the perspective of trust zone we're considering the kernel as untrusted as a potential
+981460	988080	attacker then trust zone needs to perform some sanity checking or validation of this request
+988080	992580	structure to ensure that the kernel is not trying to trick trust zone into doing something
+992580	998880	malicious into perhaps writing into secure memory and corrupting something. Now in particular
+998880	1004720	there are five sanity checks that they perform to make sure that the request structure is
+1004720	1009920	sane. The first of these is that the length of the command buffer is greater than or equal to
+1009920	1015540	16 which is the size of the request header. Next they confirm that the buffer offset which is
+1015540	1020000	the offset from the beginning of the command buffer to the input buffer resides somewhere
+1020000	1025920	inside the command buffer. All of these make sense so far. Next they check that the buffer
+1025920	1030620	offset is greater than or equal to 16, which is the size of the request header. To guarantee
+1030620	1036260	that the input data doesn't overlap with the request header. Next, they confirm that the
+1036260	1041000	response header offset is less than or equal to the command length minus 12, where 12 is the
+1041000	1045880	size of the response header. So this is a check to actually guarantee that the response header
+1045880	1052000	fits inside the command buffer. And then finally, perhaps most importantly, there is an
+1052000	1057620	invocation of a function that I called QSEE is non-secure memory. There's no simple support
+1057620	1063120	available in trust zones so all of these functions I just named appropriately for convenience
+1063120	1069080	sake. And what this function is designed to do is guarantee that the entire command buffer
+1069080	1074040	being provided by the kernel resides in non-secure memory. And when you think about it, this
+1074040	1079880	makes sense. This is an important security assumption. Because if the kernel were to, for
+1079880	1085580	example provide an address residing in secure memory and then issue an SMC instruction,
+1085580	1090460	it's possible that TrustZone would then go ahead and perform operations, either read from or
+1090460	1095460	write to that memory in secure memory and potentially allow for a compromise. The way
+1099260	1105300	these secure memory checking functions work, they're actually a series of functions that are
+1105300	1110720	designed to check if a range of memory is considered protected. And the way they implement this is
+1110720	1115340	entirely in software using a hard coded list of regions with various flags that indicate
+1115340	1123340	various memory attributes. So when this top level secure range checking function is called, QSE
+1123340	1128180	iterates over this list of regions and checks that the specified region doesn't overlap with
+1128180	1133340	anything that's considered protected and returns a value appropriately. And this is somewhat
+1133340	1137640	analogous to the Linux kernel's use of the access okay macro for those of you who are
+1137640	1142420	familiar with Linux programming. Where the question that's being asked is, is this memory
+1142420	1147580	safe for trust zone to operate on? Or is the kernel potentially trying to trick trust zone
+1147580	1154720	into doing something malicious? Now, this is pseudocode that I put together that roughly
+1154720	1160300	approximates what goes on when QSE performs these checks. You have this top level function,
+1160300	1165800	QSEE is non-secure memory that takes arguments of an address, meaning the start of the region
+1165800	1170000	that's going to be checked and a size field indicating how big the region that they want to
+1170000	1177000	check is. Next, they call down to a secondary function that I called QSEE range not in region
+1177000	1181460	where they provide the address of this linked list of protected regions that resides in secure
+1181460	1187720	memory and then they provide the address again and then they attempt to calculate the end of
+1187720	1193420	the region that they want to check by adding the address plus the size of the region. Now
+1193420	1198420	interestingly in this function this secondary function actually checks that if the end of the
+1202480	1206420	region that's going to be checked is less than the start of the region that's going to be
+1206420	1211140	checked they assume that the caller has made some kind of an error and they reverse the
+1211140	1215980	arguments for you. And this immediately jumped out at me as something that's potentially a
+1215980	1222860	a very bad idea. So some of you probably have already spotted the bug having looked at that
+1222860	1230400	code. Just in case, quick review of the concept of an integer overflow. So on ARM devices or
+1230400	1235220	other 32-bit devices in general, integers are represented as 32-bit numbers which is the
+1235220	1241900	maximum size of a single standard register. So integers have a maximum range of zero to
+1241900	1247800	hex F F F F F F F F which is 2 to the 32 minus 1. So for what
+1247800	1251580	during arithmetic operations if this maximum value of an integer
+1251580	1255640	is exceeded then the resulting value will wrap back around to
+1255640	1260220	zero. So in this case if you add the largest integer possible
+1260220	1266360	with one you get zero. So applying this idea to the
+1266360	1268620	invocation of the secure memory checking that's used to
+1268620	1276620	validate this SCM command structure, they invoke this is not secure memory with an attack
+1276620	1281660	a kernel provided or attacker provided in our case address of a command and the length of that
+1281660	1287660	command. Now what happens if the address of the command plus its supposed length both of which
+1287660	1293660	are attacker provided values is greater than the maximum representation of a 32 bit integer?
+1293660	1300700	in this case the answer is fairly clear. So this secondary function will be called with the start
+1300700	1308080	of the command buffer and then this address plus size field will actually be will wrap around and
+1308080	1313320	result in an address that is lower than the starting address. And then in the secondary
+1313320	1320040	function end will be less than start and it will reverse these arguments. So this allows us to
+1320040	1326920	create a pathological command buffer that does evil things. So in this example, say that this
+1326920	1333920	region here is the actual QSEE image which is secure memory. It's considered protected. Now we can
+1333920	1339920	place our command start perhaps over here and then provide an extremely large command length such
+1341920	1347700	that the sum of the address of the command and command length wraps all the way around and ends
+1347700	1353940	up here. Then in the range checking function these arguments will be reversed so that the
+1353940	1359940	range that is checked to guarantee that it is in non secure memory is this region here rather
+1359940	1364580	than the region starting at command and extending all the way to the end of memory which is what
+1364580	1370580	it intended to do. As a result we can actually set a response buffer offset to be anywhere in
+1370580	1377580	offset to be anywhere in this region of memory. Including on top of the QSCE image itself.
+1381080	1385540	So looking through these five sanity checks once more it's clear that with this pathological
+1385540	1390420	command buffer all of these conditions are satisfied. The command length is significantly
+1390420	1394880	greater than 16. The buffer offset is less than the command length. The buffer offset is
+1394880	1399640	significantly greater than 16. The response header offset is our sort of arbitrary offset
+1399640	1402840	to point into the secure memory is less than our command length
+1402840	1406380	which is really massive. And then because of this integer
+1406380	1410060	overflow and the subsequent reversal of these start and end
+1410060	1413860	values for range checking, this check that is designed to
+1413860	1418520	guarantee that this range is not secure returns true even though
+1418520	1423200	it clearly should be returning false. Now the result of this
+1423200	1427700	bug is that we can craft an SMC request that exploits this
+1427700	1432500	integer overflow and causes QSEE to write a response header to
+1432500	1436900	arbitrary secure memory. And this is clearly a serious
+1436900	1439740	vulnerability that can result in compromise. And the goal from
+1439740	1442980	this point forward is to achieve arbitrary secure code
+1442980	1448320	execution on these devices. The first thing to look at is
+1448320	1450820	clearly what gets written to a response header. What kind of
+1450820	1454820	data can we cause QSEE to write to arbitrary secure memory. And
+1454820	1459820	turns out that the response header is hard coded in all cases. It
+1459820	1463620	writes the length as 12 which is just the size of the response
+1463620	1468060	header. The buffer offset is 12 and then this is complete is set
+1468060	1471060	to one. So the final result is that we can write these three
+1471060	1478480	words 12, 12, 1 to arbitrary secure memory. Exploiting this is
+1478480	1482020	somewhat of a challenge but a few things make it easier. The
+1482020	1485660	first of these is the memory layout of QSE is almost entirely
+1485660	1489520	known to the attacker. Because the trust zone image sits on
+1489520	1492360	disk and we're assuming we're running as the kernel, we can
+1492360	1495760	read that image from disk and because it is loaded at a known
+1495760	1500380	constant physical address in memory, we essentially know
+1500380	1503400	every, we know the entire layout of the trust zone image in
+1503400	1506340	memory even though we can't explicitly read the secure
+1506340	1510340	memory where it resides. Next, it's helpful that most of RAM
+1510340	1513640	is actually non-secure memory so we have a somewhat large sort of
+1513640	1516480	scratch pad to work with when we're trying to do things in
+1516480	1520420	memory. Now the sort of classic approach that you would take if
+1520420	1524280	you were approaching this like a traditional kernel exploit maybe
+1524280	1527100	to find some sort of function pointer that lives in secure
+1527100	1531060	memory and then use our write primitive to overwrite some of
+1531060	1534740	the bytes of that function pointer so that it now points to
+1534740	1537540	an address residing in non-secure memory. Then we
+1537540	1540920	could put a payload at that non secure address and cause that
+1540920	1544280	function pointer to be invoked by trust zone and then the result
+1544280	1546880	would be trust zone running our non secure payload and that would
+1546880	1552780	be victory. Unfortunately, this doesn't actually appear to work.
+1552780	1556500	So I suspect that QSEE actually has some sort of mechanism in
+1556500	1559200	place that prevents trust zone from executing code from non
+1559200	1562700	secure pages. Sort of analogously to how user land
+1562700	1568700	applications have NX or DEP or more recently the Linux kernel
+1568700	1575640	on ARM or X86 have PXN and SMEP respectively. And I suspect it
+1575640	1578540	may have to do with the XPU which is memory management
+1578540	1581880	component that handles marking regions as secure. But this is
+1581880	1585720	an undocumented black hole. It's very difficult to understand
+1585720	1588620	what's going on here and I don't have the capabilities to look
+1588620	1590660	at the hardware close enough to actually understand what's
+1590660	1594260	going on. So this is the part of the talk where I coyly ask if
+1594260	1597000	there are any Qualcomm or ARM employees in the audience who
+1597000	1600700	want to answer this question as to whether this is the case but
+1600700	1602740	I'll let them off the hook because I assume they can't
+1602740	1608880	say. So we need to take another approach to actually
+1608880	1611080	gaining arbitrary code execution because it's clear
+1611080	1613480	that at least from experimentation it's not
+1613480	1615980	going to work. We're not going to be able to cause trust zone
+1615980	1619160	to execute non secure code. We need to find a way to cause
+1619160	1622660	trust zone to execute secure code in a way that allows us to
+1622660	1628660	win. Now the fact that this is a 12-byte memory write with
+1628660	1632040	where we don't control the contents makes exploitation
+1632040	1635440	somewhat difficult. So the first thing that's a little bit
+1635440	1638380	tricky is that because it's a 12-byte write, if we want to
+1638380	1641620	overwrite one word in memory, then we're necessarily
+1641620	1645320	clobbering two adjacent words to that which could potentially
+1645320	1649860	lead to instability depending on what the target is. And then
+1649860	1653460	additionally, probably more importantly, we have very minimal
+1653460	1656500	options in terms of what we can do because we have this very
+1656500	1660140	limited vocabulary of what we can cause to be written in secure
+1660140	1665340	memory. We only have zeros, a 12, and a 1. That's fairly
+1665340	1670280	limited. So the challenge here is actually coming up with a way
+1670280	1673820	of using this first exploit primitive to build a more
+1673820	1680820	flexible one that allows us to achieve our goals. Now, revisiting these secure memory
+1682820	1688820	protection functions, so we recall that QSE checks the status of memory regions by iterating
+1690900	1697820	over this linked list which has hard coded regions and each of these regions is encapsulated
+1697820	1703820	by a structure that is similar to this. This is just what I reverse engineered. Each region
+1703820	1707820	structure has an ID which is just an incremental identifier.
+1707820	1710660	Flags that indicate the actual protection attributes of that
+1710660	1716500	region and then the start and end of these regions. So what I
+1716500	1720100	came up with was that we can actually use our 12 byte right
+1720100	1724340	to overwrite the flags start and end addresses of the region
+1724340	1728720	entry corresponding to the QSEE image. So the result of this
+1728720	1733820	is anytime QSEE goes to check the safety of a pointer provided
+1733820	1737460	the kernel to guarantee that it's safe for it to assume that it's
+1737460	1739860	non-secure and that it can read from it and write to it without
+1739860	1744500	consequence. If that pointer resides in the address space
+1744500	1748000	reserved for the QSE image it's going to say it's fine. It's
+1748000	1753400	safe. And at this point this gives us the ability to write to
+1753400	1757580	arbitrary secure memory with any value that QSE writes as output
+1757580	1762480	at any point. Here we can basically choose a new write
+1762480	1766020	primitive. We've expanded our vocabulary for what we're able to
+1766020	1769520	write to secure memory. So at this point I enumerated all of the
+1769520	1773320	SMC handlers, eliminated those that don't write any output at
+1773320	1777900	any point. And now we've got a list of things that we can write
+1777900	1781100	to arbitrary secure memory. And we can, depending on how we
+1781100	1784100	design the rest of the exploit, just pick the one that suits the
+1784100	1788180	task at hand. And now the only missing piece here is actually
+1788180	1791380	finding a way to win. You know, we have a more flexible write
+1791380	1797780	primitive but how do we actually get code execution? Well,
+1797780	1802520	revisiting how QSE actually handles SMC instructions. So
+1802520	1806620	when an SMC instruction is issued, QSE will parse the
+1806620	1811240	command structure and it will iterate over a table with these
+1811240	1815280	variable length entries where each entry corresponds to an
+1815280	1820180	SMC handler, sort of like a system call handler, where each
+1820180	1824180	entry contains an SMC number which is just the identifier of
+1824180	1828980	the SMC request. A pointer to a string describing the handler
+1828980	1831620	which was incredibly useful when trying to figure out what each
+1831620	1836120	of these handlers actually did. Various flags. And then a
+1836120	1839540	function pointer to the actual function that gets invoked by
+1839540	1844580	QSE when this SMC request matching this ID is issued. A
+1844580	1848140	number of arguments field and then a variable length array
+1848140	1851180	whose length depends on this number of arguments field because
+1851180	1856840	this variable length array is actually contains one entry for
+1856840	1859460	each argument and each entry corresponds to the length of
+1859460	1866460	each argument. So I ended up using the ability to write
+1868600	1874100	essentially arbitrary data to arbitrary QSE memory to create
+1874100	1878240	what I call an SMC table extension attack. So I actually use
+1878240	1882500	arbitrary secure memory to modify the number of arguments field
+1882500	1888180	in one of the SMC tables. Table entries rather. Now what I did
+1888180	1892660	was I actually expanded the size of one of these SMC entries so
+1892660	1897460	that it's particularly massive and that when QSE is iterating
+1897460	1902160	through this table and tries to find the location of the next
+1902160	1907240	SMC entry it will actually jump way into non secure attacker
+1907240	1912000	controlled memory. At which point we can put a fake entry
+1912000	1916840	there and at this point we control an SMC handler. We can
+1916840	1921780	make up an SMC ID, point the function pointer anywhere we want
+1921780	1928020	in secure memory and craft any sort of arbitrary arguments and
+1928020	1932200	basically call any function in trust zone at whim with any
+1932200	1935600	arguments we want which in my opinion is a fairly elegant way
+1935600	1941460	to gain total control of trust zone. At this point we have
+1941460	1946880	arbitrary trust zone code execution and we have one. One
+1946880	1949240	of the fun things you can do is actually find the mem copy
+1949240	1952940	implementation in the trust zone kernel and actually just
+1952940	1956340	invoke that to copy all of secure memory to a non secure
+1956340	1962040	buffer. So this would allow you to steal any DRM or secure key
+1962040	1965480	storage related stuff. Any sensitive data stored in secure
+1965480	1969160	memory now becomes available to the attacker. You could disable
+1969160	1971780	TEMA. You could disable any piece of security related
+1971780	1975020	functionality and trust zone. You have full control. And then
+1975020	1979160	perhaps the flashiest thing you can do is invoke OEM specific
+1979160	1981600	functionality to do things like permanently unlock a boot
+1981600	1986340	loader of a device. So that's what I'm going to do right now.
+1986340	1992340	So I have on stage a Verizon branded Moto X. So the way that
+1992340	1998340	Motorola implements secure boot is by featuring a manufacturer
+1998340	2004340	sponsored mechanism to unlock the boot loader which would allow
+2004340	2007340	users to install custom operating systems and so forth.
+2007340	2012340	And the way they do that is the user actually sends Motorola a
+2012340	2016820	request token that they got from their device. If that token
+2016820	2020480	matches a device on an approved carrier, then Motorola will send
+2020480	2023460	a token in response that the user can then issue to the
+2023460	2026160	boot loader and the boot loader will make a request of trust
+2026160	2032060	zone to unlock permanently by blowing a QFuse. Now, for
+2032060	2037060	Verizon and AT&T, they just won't give you a response token
+2037060	2039900	back, so there's no way to unlock your boot loader, except
+2039900	2044580	if you have a single vulnerability you can actually do it yourself by just invoking the
+2044580	2050580	functionality that they would do if you gave them the response token. So here I've got
+2050580	2056580	we've got a Verizon Moto X running Android 4.4. As you can see it is not unlocked and the
+2056580	2062580	running Android 4.4. As you can see it is not unlocked. And the
+2064820	2070820	warranty is still present. So I need to continue booting. This
+2070820	2075700	will take just a moment. So this is an incredibly risky demo
+2075700	2078960	because first of all it's live which is always a bad idea but
+2078960	2083140	additionally you can only do this once to a phone because
+2083140	2088140	you're permanently blowing a fuse. So I obviously have never tested it on this phone. So who knows
+2088140	2092800	what's going to happen. I think it's the second riskiest thing I did in this talk. The first
+2092800	2099800	was using open office to make my slides. Okay. So just using ADB, we have a shell. I'm going
+2101900	2107900	to use an implementation of the recent Linux vulnerability to escalate privileges to root.
+2107900	2114900	and then I'm going to cross my fingers and hope that this works. Well, it didn't break.
+2114900	2120900	Well, it didn't break. And we're going to pull up the
+2120900	2124900	Well, it didn't break. And we're going to pull up the
+2137040	2139660	boot order variables again and we can see that the device is now
+2139660	2149660	unlocked. So at this point you can actually use fast boot
+2149660	2153500	use fast boot which is built into the boot loader to flash any
+2153500	2157000	software you would like on this phone. So as far as I know this
+2157000	2160580	is the only or one of the only Verizon Moto X's in the world
+2160580	2166040	that's unlocked. So a few lessons can be learned from this
+2166040	2169340	research. One of the most practical ones is that analysis
+2169340	2173820	and exploitation of trust zone was made much easier due to the
+2173820	2176680	fact that there's no sort of protection or encryption of the
+2176680	2182760	trust zone image itself. You can compare this to iOS where trust zone is stored encrypted on disk
+2182760	2190760	and as a result without either a leak of firmware from Apple or exploiting trust zone itself
+2190760	2195260	which is basically impossible if you've never had a trust zone image to analyze in the first
+2195260	2200380	place. You need an iBoot vulnerability to actually gain access to a decrypted trust zone
+2200380	2208380	image to analyze in the first place. Next, parsing of complex data structures, in this case these
+2208380	2214380	command buffers seem like a fairly obvious point of failure. So as a vulnerability researcher
+2214380	2220380	places like this are really good targets for scrutiny. The next thing is as a researcher
+2220380	2226380	it's important to learn to develop a spider sense and learn how to trust your gut. If it looks
+2226380	2232260	sketchy it very likely is. In this case the minute I saw in the assembly code this reversal of
+2232260	2236920	arguments in the case of an erroneous call that seemed to yell out at me as something that was
+2236920	2241260	potentially bad even though I didn't know immediately what that would be and it turned
+2241260	2248260	out to be a very critical vulnerability. Next just looking at for example boot order design
+2248260	2253140	single points of failure are a bad idea. When you look at Samsung's implementation of secure
+2253140	2255880	boot, for example, there's no single point of failure, there's
+2255880	2259440	no off switch that allows you to exploit something and unlock
+2259440	2263220	the boot loader. In contrast to Motorola, which made a design
+2263220	2265680	decision that makes it easier for them because now they don't
+2265680	2268820	have to ship different software or hardware for different
+2268820	2273160	carriers, but they also included a mechanism by which any single
+2273160	2276400	trust zone vulnerability will result in a permanent unlock of
+2276400	2279700	Motorola boot loader. Which is great if you're like me and you
+2279700	2283040	like installing stuff on your phone but not so good for Motorola's
+2283040	2289040	customers. Next, I think the basic idea and design of trust zone
+2289040	2295580	is excellent. Having hardware enforced security boundaries and
+2295580	2299380	a minimal core operating system component that is considered
+2299380	2305500	trusted is a great idea. But unfortunately what I think we've
+2305500	2309500	been seeing here is that so many vendors are so jazzed about
+2309500	2314000	trust zone that there has been so much feature bloat that the
+2314000	2317580	attack surface in trust zone itself has widened substantially
+2317580	2320080	and that sort of eliminates one of the big advantages of having
+2320080	2323680	a system like trust zone which is designed to be small. And then
+2323680	2326560	finally I think everyone in here already knew this but the best
+2326560	2329020	marketing team in the world will not change the fact that
+2329020	2331620	software is written by humans and humans occasionally make
+2331620	2334860	mistakes. So despite the fact that something may be billed as
+2334860	2339360	100% secure. And no joke I have actually seen that in media
+2339360	2343200	reports about trust zone. That does not mean that it's not
+2343200	2345440	worthy of attention and scrutiny and there aren't bugs
+2345440	2351440	there. That's it. So I had a contact slide. But that's all
+2351440	2354940	right. That's the end of my talk. Thank you.
+2364860	2394840	Thank you.
